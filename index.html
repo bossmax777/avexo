@@ -366,6 +366,8 @@ table.data tr:last-child td{border-bottom:0}
 .mt-val1{left:373px;top:193px;font-size:32px}
 .mt-lbl2{left:36px;top:244px;font-size:32px}
 .mt-val2{left:373px;top:244px;font-size:32px}
+.mt-demo{right:36px;bottom:34px;font-size:22px;font-weight:700;letter-spacing:.18em;
+  color:#fff;background:#E07C00;border-radius:8px;padding:8px 18px}
 .acct-pick tr{cursor:pointer}
 .acct-pick tr.on{background:var(--accent-soft)}
 
@@ -395,7 +397,7 @@ table.data tr:last-child td{border-bottom:0}
 
 <header class="site-head">
   <div class="wrap head-in">
-    <div class="logo"><span class="logo-mark">A</span> Avexo<span style="color:var(--muted);font-weight:400">Trade</span></div>
+    <div class="logo"><span class="logo-mark cfgMark">A</span> <span class="cfgBrand">Avexo</span><span style="color:var(--muted);font-weight:400" class="cfgBrand2">Trade</span></div>
     <nav class="nav">
       <a href="#markets">Рынки</a>
       <a href="#platforms">Торговые платформы</a>
@@ -414,14 +416,14 @@ table.data tr:last-child td{border-bottom:0}
 <section class="hero">
   <div class="wrap hero-in">
     <div>
-      <span class="eyebrow">Учебный демонстрационный проект</span>
-      <h1>Брокер, который работает<br>на скорости рынка</h1>
-      <p class="lead">2 100+ инструментов, исполнение от 12 мс и спред от 0 пунктов. Один счёт — валюты, металлы, индексы, фьючерсы, акции и ETF.</p>
+      <span class="eyebrow" id="cfgEyebrow">Учебный демонстрационный проект</span>
+      <h1 id="cfgH1">Брокер, который работает<br>на скорости рынка</h1>
+      <p class="lead" id="cfgLead">2 100+ инструментов, исполнение от 12 мс и спред от 0 пунктов. Один счёт — валюты, металлы, индексы, фьючерсы, акции и ETF.</p>
       <div class="hero-actions">
-        <button class="btn btn-primary btn-lg" data-open="signup">Открыть торговый счёт</button>
-        <button class="btn btn-ghost btn-lg" data-demo>Войти в демо-кабинет</button>
+        <button class="btn btn-primary btn-lg" id="cfgHeroBtn1" data-open="signup">Открыть торговый счёт</button>
+        <button class="btn btn-ghost btn-lg" id="cfgHeroBtn2" data-demo>Войти в демо-кабинет</button>
       </div>
-      <p class="hero-note">Торговля с кредитным плечом сопряжена с высоким риском убытков. Все данные на этой странице вымышлены.</p>
+      <p class="hero-note" id="cfgHeroNote">Торговля с кредитным плечом сопряжена с высоким риском убытков. Все данные на этой странице вымышлены.</p>
     </div>
     <div class="hero-card">
       <div class="hero-card-top">
@@ -446,8 +448,8 @@ table.data tr:last-child td{border-bottom:0}
 <section class="band" id="markets">
   <div class="wrap">
     <div class="sec-head">
-      <h2>Торгуйте тем, что движет рынком</h2>
-      <p>Котировки обновляются в реальном времени. Выберите категорию, чтобы увидеть инструменты.</p>
+      <h2 id="cfgMarketsH">Торгуйте тем, что движет рынком</h2>
+      <p id="cfgMarketsP">Котировки обновляются в реальном времени. Выберите категорию, чтобы увидеть инструменты.</p>
     </div>
     <div class="tabs" id="qTabs"></div>
     <div class="q-wrap"><div class="q-scroll">
@@ -462,7 +464,7 @@ table.data tr:last-child td{border-bottom:0}
 <!-- Преимущества -->
 <section class="band alt">
   <div class="wrap">
-    <div class="sec-head"><h2>Почему трейдеры выбирают Avexo</h2></div>
+    <div class="sec-head"><h2 id="cfgBenefitsH">Почему трейдеры выбирают Avexo</h2></div>
     <div class="grid-4" id="benefits"></div>
   </div>
 </section>
@@ -470,8 +472,8 @@ table.data tr:last-child td{border-bottom:0}
 <!-- Цифры -->
 <section class="band">
   <div class="wrap">
-    <div class="sec-head"><h2>Условия торговли</h2>
-      <p>Одинаковые условия для всех клиентов — без скрытых наценок к спреду.</p></div>
+    <div class="sec-head"><h2 id="cfgStatsH">Условия торговли</h2>
+      <p id="cfgStatsP">Одинаковые условия для всех клиентов — без скрытых наценок к спреду.</p></div>
     <div class="grid-3" id="stats"></div>
   </div>
 </section>
@@ -479,8 +481,8 @@ table.data tr:last-child td{border-bottom:0}
 <!-- Счета -->
 <section class="band alt" id="accounts">
   <div class="wrap">
-    <div class="sec-head"><h2>Четыре типа счетов</h2>
-      <p>От первого депозита до институционального объёма. Тип счёта можно сменить в личном кабинете.</p></div>
+    <div class="sec-head"><h2 id="cfgAccH">Четыре типа счетов</h2>
+      <p id="cfgAccP">От первого депозита до институционального объёма. Тип счёта можно сменить в личном кабинете.</p></div>
     <div class="acc-grid" id="accounts-grid"></div>
   </div>
 </section>
@@ -488,8 +490,8 @@ table.data tr:last-child td{border-bottom:0}
 <!-- Платформы -->
 <section class="band" id="platforms">
   <div class="wrap">
-    <div class="sec-head"><h2>Торговые платформы</h2>
-      <p>Один счёт — пять способов торговать. Десктоп, браузер и мобильные приложения синхронизированы.</p></div>
+    <div class="sec-head"><h2 id="cfgPlatH">Торговые платформы</h2>
+      <p id="cfgPlatP">Один счёт — пять способов торговать. Десктоп, браузер и мобильные приложения синхронизированы.</p></div>
     <div class="grid-2" id="platforms-grid"></div>
   </div>
 </section>
@@ -497,7 +499,7 @@ table.data tr:last-child td{border-bottom:0}
 <!-- Классы активов -->
 <section class="band alt">
   <div class="wrap">
-    <div class="sec-head"><h2>Классы активов</h2></div>
+    <div class="sec-head"><h2 id="cfgClsH">Классы активов</h2></div>
     <div class="tabs" id="clsTabs"></div>
     <div class="class-box">
       <div>
@@ -514,7 +516,7 @@ table.data tr:last-child td{border-bottom:0}
 <section class="band">
   <div class="wrap mob">
     <div>
-      <h2 style="font-size:clamp(26px,3.4vw,36px);font-weight:600;letter-spacing:-.02em">Терминал в кармане</h2>
+      <h2 style="font-size:clamp(26px,3.4vw,36px);font-weight:600;letter-spacing:-.02em" id="cfgMobH">Терминал в кармане</h2>
       <div class="rating">
         <span class="r num">4.7</span>
         <div><div class="stars">★★★★★</div><small style="color:var(--dim)">более 15 млн загрузок</small></div>
@@ -536,17 +538,17 @@ table.data tr:last-child td{border-bottom:0}
 <!-- Достижения -->
 <section class="band alt" id="about">
   <div class="wrap">
-    <div class="sec-head"><h2>Компания в цифрах</h2></div>
+    <div class="sec-head"><h2 id="cfgAchvH">Компания в цифрах</h2></div>
     <div class="grid-4" id="achv"></div>
   </div>
 </section>
 
 <section class="cta">
   <div class="wrap">
-    <h2>Торгуйте как профессионал</h2>
-    <p>Откройте счёт за пять минут или попробуйте демо-кабинет без регистрации.</p>
+    <h2 id="cfgCtaH">Торгуйте как профессионал</h2>
+    <p id="cfgCtaP">Откройте счёт за пять минут или попробуйте демо-кабинет без регистрации.</p>
     <div class="hero-actions" style="justify-content:center">
-      <button class="btn btn-primary btn-lg" data-open="signup">Зарегистрироваться в Avexo</button>
+      <button class="btn btn-primary btn-lg" id="cfgCtaBtn" data-open="signup">Зарегистрироваться в Avexo</button>
       <button class="btn btn-ghost btn-lg" data-demo>Открыть демо-кабинет</button>
     </div>
   </div>
@@ -556,9 +558,9 @@ table.data tr:last-child td{border-bottom:0}
   <div class="wrap">
     <div class="foot-grid">
       <div class="foot-col foot-about">
-        <div class="logo"><span class="logo-mark">A</span> Avexo<span style="color:var(--muted);font-weight:400">Trade</span></div>
-        <p>Вымышленный брокер, созданный как учебный макет интерфейса. Компании Avexo Trade не существует.</p>
-        <span class="demo-note">Демо-макет · не финансовая услуга</span>
+        <div class="logo"><span class="logo-mark cfgMark">A</span> <span class="cfgBrand">Avexo</span><span style="color:var(--muted);font-weight:400" class="cfgBrand2">Trade</span></div>
+        <p id="cfgFootAbout">Вымышленный брокер, созданный как учебный макет интерфейса. Компании Avexo Trade не существует.</p>
+        <span class="demo-note" id="cfgDemoNote">Демо-макет · не финансовая услуга</span>
       </div>
       <div class="foot-col"><h4>Рынки</h4><ul>
         <li><a href="#markets">Валюты</a></li><li><a href="#markets">Металлы</a></li>
@@ -573,7 +575,7 @@ table.data tr:last-child td{border-bottom:0}
         <li><a href="#about">Обучение</a></li><li><a href="#about">Партнёрская программа</a></li>
         <li><a href="#about">Поддержка 24/5</a></li></ul></div>
     </div>
-    <p class="disclaimer">
+    <p class="disclaimer" id="cfgDisclaimer">
       Предупреждение о рисках: торговля производными финансовыми инструментами с кредитным плечом связана с
       высоким риском и подходит не всем инвесторам. Вы можете потерять весь вложенный капитал.
       Страница является учебным прототипом интерфейса: бренд, лицензии, котировки, отзывы и статистика вымышлены,
@@ -587,8 +589,8 @@ table.data tr:last-child td{border-bottom:0}
 <div id="app">
   <header class="app-head">
     <div class="app-head-in">
-      <div class="logo"><span class="logo-mark">A</span> Avexo</div>
-      <span class="pill" style="margin-left:4px">Демо-счёт</span>
+      <div class="logo"><span class="logo-mark cfgMark">A</span> <span class="cfgBrand">Avexo</span></div>
+      <span class="pill" style="margin-left:4px" id="acctLabel">Демо-счёт (гость)</span>
       <div class="acct-badge">
         <span style="color:var(--muted)">Баланс:</span>
         <span class="bal num" id="hdrBal">$12 480.30</span>
@@ -608,7 +610,7 @@ table.data tr:last-child td{border-bottom:0}
       <button data-pane="prof">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><circle cx="12" cy="8" r="4"/><path d="M4 21c0-4 3.6-6 8-6s8 2 8 6"/></svg>Профиль</button>
       <div class="spacer"></div>
-      <button data-back>
+      <button data-logout>
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M14 5l-7 7 7 7"/></svg>Выйти</button>
     </nav>
     <main class="pane">
@@ -616,7 +618,7 @@ table.data tr:last-child td{border-bottom:0}
       <!-- Обзор -->
       <div data-view="dash">
         <h2>Обзор счёта</h2>
-        <p class="pane-sub">Счёт <span class="num">#4 032 118</span> · Raw+ · USD · плечо 1:200</p>
+        <p class="pane-sub" id="dashSub">Гостевой демо-счёт</p>
         <div class="bal-grid" id="balGrid"></div>
         <div class="grid-2" style="gap:16px;margin-bottom:16px">
           <div class="panel" style="grid-column:span 2">
@@ -735,6 +737,7 @@ table.data tr:last-child td{border-bottom:0}
             <div class="mt-val1" id="mtRowName"></div>
             <div class="mt-lbl2">Сервер</div>
             <div class="mt-val2" id="mtRowSrv"></div>
+            <div class="mt-demo">ДЕМО</div>
           </div>
         </div>
         <div class="prof-grid">
@@ -802,24 +805,24 @@ const CATS = {
     ["GLD","SPDR Gold Shares",218.44,2,0.68],["ARKK","ARK Innovation",44.27,2,-1.08],
     ["EEM","iShares EM",42.16,2,0.22]]
 };
-const BENEFITS = [
+const DEF_BENEFITS = [
   ["globe","Доступ к мировым рынкам","Валюты, металлы, индексы, энергоносители, акции и ETF на одном счёте — без смены платформы."],
   ["shield","Защита средств клиентов","Сегрегированные счета, шифрование трафика и подтверждение операций по второму фактору."],
   ["bolt","Быстрые ввод и вывод","Девять платёжных методов, зачисление в среднем за 7 минут, вывод без комиссии брокера."],
   ["clock","Опыт с 2001 года","Более двух десятилетий на рынке и команда поддержки, которая говорит на 24 языках."]
 ];
-const STATS = [
+const DEF_STATS = [
   ["От 0","Спред на счетах Raw+ и Elite",true],["1:500","Максимальное кредитное плечо",false],
   ["2 100+","Финансовых инструментов",false],["24/5","Поддержка на русском языке",false],
   ["12 мс","Среднее время исполнения",true],["$120M+","Собственный капитал компании",false]
 ];
-const ACCOUNTS = [
+const DEF_ACCOUNTS = [
   ["Standard","Первый счёт","$100","от 1.2 пт","Нет","1:500",false],
   ["Raw+","Самый популярный","$500","от 0.0 пт","$3.5 за лот","1:200",true],
   ["Elite","Крупный объём","$10 000","от 0.0 пт","$2.0 за лот","1:100",false],
   ["Pro API","Алгоритмы и FIX","$25 000","от 0.0 пт","$1.5 за лот","1:100",false]
 ];
-const PLATFORMS = [
+const DEF_PLATFORMS = [
   ["Avexo Terminal","Собственный десктопный терминал: 68 индикаторов, стакан заявок, горячие клавиши и тестер стратегий.","Windows · macOS · Linux"],
   ["Веб-терминал","Полный функционал в браузере без установки. Рабочие пространства синхронизируются между устройствами.","Любой браузер"],
   ["Мобильное приложение","Push-уведомления по уровням, вход по биометрии, быстрое пополнение счёта.","iOS · Android"],
@@ -846,7 +849,7 @@ const CLASSES = {
     ["Плечо до 1:20","Комиссия $0.02 за пай","Более 120 фондов","Реинвестирование"],
     [["SPY","527.83","-0.16%"],["QQQ","456.12","+0.51%"],["GLD","218.44","+0.68%"],["ARKK","44.27","-1.08%"],["EEM","42.16","+0.22%"]]]
 };
-const ACHV = [["1 240 000","Открытых торговых счетов"],["38","Наград отраслевых изданий"],
+const DEF_ACHV = [["1 240 000","Открытых торговых счетов"],["38","Наград отраслевых изданий"],
   ["4.7","Средняя оценка приложения"],["9","Платёжных методов"]];
 const ICONS = {
   globe:'<circle cx="12" cy="12" r="9"/><path d="M3 12h18M12 3a15 15 0 010 18a15 15 0 010-18"/>',
@@ -855,6 +858,69 @@ const ICONS = {
   clock:'<circle cx="12" cy="12" r="9"/><path d="M12 7v5l3.5 2"/>',
   chart:'<path d="M3 17l5-6 4 4 7-9"/>'
 };
+
+/* ---------------- конфиг сайта (редактируется в admin.html) ---------------- */
+const CFG_KEY="avexo_site_config_v1";
+const DEFAULTS={
+  brand:{name:"Avexo",suffix:"Trade",mark:"A",accent:"#0056FF",red:"#F41112"},
+  hero:{eyebrow:"Учебный демонстрационный проект",
+    h1:"Брокер, который работает\nна скорости рынка",
+    lead:"2 100+ инструментов, исполнение от 12 мс и спред от 0 пунктов. Один счёт — валюты, металлы, индексы, фьючерсы, акции и ETF.",
+    btn1:"Открыть торговый счёт",btn2:"Войти в демо-кабинет",
+    note:"Торговля с кредитным плечом сопряжена с высоким риском убытков. Все данные на этой странице вымышлены."},
+  heads:{markets:"Торгуйте тем, что движет рынком",
+    marketsP:"Котировки обновляются в реальном времени. Выберите категорию, чтобы увидеть инструменты.",
+    benefits:"Почему трейдеры выбирают Avexo",
+    stats:"Условия торговли",statsP:"Одинаковые условия для всех клиентов — без скрытых наценок к спреду.",
+    accounts:"Четыре типа счетов",accountsP:"От первого депозита до институционального объёма. Тип счёта можно сменить в личном кабинете.",
+    platforms:"Торговые платформы",platformsP:"Один счёт — пять способов торговать. Десктоп, браузер и мобильные приложения синхронизированы.",
+    classes:"Классы активов",mobile:"Терминал в кармане",achv:"Компания в цифрах"},
+  cta:{h:"Торгуйте как профессионал",p:"Откройте счёт за пять минут или попробуйте демо-кабинет без регистрации.",btn:"Зарегистрироваться в Avexo"},
+  foot:{about:"Вымышленный брокер, созданный как учебный макет интерфейса. Компании Avexo Trade не существует.",
+    note:"Демо-макет · не финансовая услуга",
+    disclaimer:"Предупреждение о рисках: торговля производными финансовыми инструментами с кредитным плечом связана с высоким риском и подходит не всем инвесторам. Вы можете потерять весь вложенный капитал. Страница является учебным прототипом интерфейса: бренд, лицензии, котировки, отзывы и статистика вымышлены, счета и платежи не существуют, персональные данные не собираются и никуда не передаются."},
+  benefits:DEF_BENEFITS.map(([ic,t,d])=>({ic,t,d})),
+  stats:DEF_STATS.map(([v,k,hl])=>({v,k,hl:!!hl})),
+  accounts:DEF_ACCOUNTS.map(([n,tag,dep,spr,com,lev,f])=>({n,tag,dep,spr,com,lev,f:!!f})),
+  platforms:DEF_PLATFORMS.map(([n,d,t])=>({n,d,t})),
+  achv:DEF_ACHV.map(([v,k])=>({v,k}))
+};
+function deepMerge(base,over){
+  if(Array.isArray(base)) return Array.isArray(over)?over:base;
+  if(base&&typeof base==="object"){
+    const out={...base};
+    if(over&&typeof over==="object") for(const k in over) out[k]=deepMerge(base[k],over[k]);
+    return out;
+  }
+  return over===undefined?base:over;
+}
+let CFG=DEFAULTS;
+try{const raw=localStorage.getItem(CFG_KEY); if(raw) CFG=deepMerge(DEFAULTS,JSON.parse(raw));}catch(e){}
+function setTxt(id,v){const el=document.getElementById(id); if(el&&v!=null) el.textContent=v;}
+function applyConfig(){
+  const b=CFG.brand||{};
+  document.documentElement.style.setProperty("--accent",b.accent||"#0056FF");
+  document.documentElement.style.setProperty("--brand",b.red||"#F41112");
+  document.documentElement.style.setProperty("--sell",b.red||"#F41112");
+  document.querySelectorAll(".cfgBrand").forEach(e=>e.textContent=b.name||"Avexo");
+  document.querySelectorAll(".cfgBrand2").forEach(e=>e.textContent=b.suffix||"Trade");
+  document.querySelectorAll(".cfgMark").forEach(e=>e.textContent=b.mark||"A");
+  const h=CFG.hero||{};
+  setTxt("cfgEyebrow",h.eyebrow);
+  const h1=document.getElementById("cfgH1");
+  if(h1&&h.h1!=null) h1.innerHTML=String(h.h1).split("\n").map(x=>x.replace(/[<>]/g,"")).join("<br>");
+  setTxt("cfgLead",h.lead); setTxt("cfgHeroBtn1",h.btn1); setTxt("cfgHeroBtn2",h.btn2); setTxt("cfgHeroNote",h.note);
+  const H=CFG.heads||{};
+  setTxt("cfgMarketsH",H.markets); setTxt("cfgMarketsP",H.marketsP);
+  setTxt("cfgBenefitsH",H.benefits); setTxt("cfgStatsH",H.stats); setTxt("cfgStatsP",H.statsP);
+  setTxt("cfgAccH",H.accounts); setTxt("cfgAccP",H.accountsP);
+  setTxt("cfgPlatH",H.platforms); setTxt("cfgPlatP",H.platformsP);
+  setTxt("cfgClsH",H.classes); setTxt("cfgMobH",H.mobile); setTxt("cfgAchvH",H.achv);
+  const c=CFG.cta||{}; setTxt("cfgCtaH",c.h); setTxt("cfgCtaP",c.p); setTxt("cfgCtaBtn",c.btn);
+  const f=CFG.foot||{}; setTxt("cfgFootAbout",f.about); setTxt("cfgDemoNote",f.note); setTxt("cfgDisclaimer",f.disclaimer);
+  document.title=(b.name||"Avexo")+" "+(b.suffix||"Trade");
+}
+
 const fmt=(n,d=2)=>n.toLocaleString("ru-RU",{minimumFractionDigits:d,maximumFractionDigits:d});
 const usd=n=>"$"+fmt(n,2);
 
@@ -899,12 +965,13 @@ setInterval(()=>{
 },1600);
 
 /* ---------------- лендинг: блоки ---------------- */
-document.getElementById("benefits").innerHTML=BENEFITS.map(([ic,t,d])=>
-  `<div class="card"><div class="ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7">${ICONS[ic]}</svg></div>
+applyConfig();
+document.getElementById("benefits").innerHTML=CFG.benefits.map(({ic,t,d})=>
+  `<div class="card"><div class="ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7">${ICONS[ic]||ICONS.chart}</svg></div>
    <h3>${t}</h3><p>${d}</p></div>`).join("");
-document.getElementById("stats").innerHTML=STATS.map(([v,k,hl])=>
+document.getElementById("stats").innerHTML=CFG.stats.map(({v,k,hl})=>
   `<div class="stat${hl?" hl":""}"><div class="v num">${v}</div><div class="k">${k}</div></div>`).join("");
-document.getElementById("accounts-grid").innerHTML=ACCOUNTS.map(([n,tag,dep,spr,com,lev,f])=>
+document.getElementById("accounts-grid").innerHTML=CFG.accounts.map(({n,tag,dep,spr,com,lev,f})=>
   `<div class="acc${f?" featured":""}">
      <div class="acc-name"><h3>${n}</h3>${f?'<span class="pill">Популярный</span>':''}</div>
      <p style="color:var(--muted);font-size:13.5px;margin:-8px 0 0">${tag}</p>
@@ -916,10 +983,10 @@ document.getElementById("accounts-grid").innerHTML=ACCOUNTS.map(([n,tag,dep,spr,
      </dl>
      <button class="btn ${f?"btn-primary":"btn-ghost"}" data-open="signup">Открыть счёт</button>
    </div>`).join("");
-document.getElementById("platforms-grid").innerHTML=PLATFORMS.map(([n,d,t])=>
+document.getElementById("platforms-grid").innerHTML=CFG.platforms.map(({n,d,t})=>
   `<div class="plat"><div class="ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7">${ICONS.chart}</svg></div>
    <div><h3>${n}</h3><p>${d}</p><span class="tagline">${t}</span></div></div>`).join("");
-document.getElementById("achv").innerHTML=ACHV.map(([v,k])=>
+document.getElementById("achv").innerHTML=CFG.achv.map(({v,k})=>
   `<div class="stat"><div class="v num">${v}</div><div class="k">${k}</div></div>`).join("");
 document.getElementById("phoneRows").innerHTML=CATS["Популярное"].slice(0,7).map(([s,,p,d,c])=>
   `<div class="phone-row"><span>${s}</span><span class="num ${c>=0?"up":"down"}">${fmt(p,d)}</span></div>`).join("");
@@ -983,31 +1050,84 @@ function modal(kind){
   const el=document.createElement("div"); el.className="overlay";
   el.innerHTML=`<div class="modal" role="dialog" aria-modal="true">
     <button class="modal-x" aria-label="Закрыть">×</button>
-    <h3>${signup?"Открыть счёт":"Вход в кабинет"}</h3>
-    <p class="sub">${signup?"Демо-форма: счёт не создаётся.":"Демо-форма: подойдут любые значения."}</p>
-    ${signup?'<div class="field"><label for="m-name">Имя и фамилия</label><input id="m-name" value="Дмитрий Ковалёв"></div>':''}
-    <div class="field"><label for="m-mail">Email</label><input id="m-mail" type="email" value="d.kovalev@example.com"></div>
-    <div class="field"><label for="m-pass">Пароль</label><input id="m-pass" type="password" value="demodemo"></div>
-    ${signup?'<div class="field"><label for="m-cur">Валюта счёта</label><select id="m-cur"><option>USD</option><option>EUR</option></select></div>':''}
-    <button class="btn btn-primary btn-block" id="m-go">${signup?"Создать счёт":"Войти"}</button>
-    <p class="modal-foot">Учебный прототип. Данные не отправляются на сервер.</p>
+    <h3>${signup?"Регистрация демо-кошелька":"Вход в кошелёк"}</h3>
+    <p class="sub">${signup?"Учебный кошелёк без реальных денег: баланс начисляет администратор в админке.":"Введите email и пароль, указанные при регистрации."}</p>
+    ${signup?'<div class="field"><label for="m-name">Имя и фамилия</label><input id="m-name" placeholder="Как показывать в кабинете"></div>':''}
+    <div class="field"><label for="m-mail">Email</label><input id="m-mail" type="email" placeholder="you@example.com"></div>
+    <div class="field"><label for="m-pass">Пароль</label><input id="m-pass" type="password" placeholder="минимум 6 символов"></div>
+    ${signup?'<div class="field"><label for="m-cur">Валюта кошелька</label><select id="m-cur"><option>USD</option><option>EUR</option></select></div>':''}
+    <p id="m-err" class="sub" style="color:var(--sell);margin:0 0 12px" hidden></p>
+    <button class="btn btn-primary btn-block" id="m-go">${signup?"Создать демо-кошелёк":"Войти"}</button>
+    <p class="modal-foot">${signup?"Уже есть кошелёк? <a href=\"#\" id=\"m-swap\" style=\"color:var(--accent)\">Войти</a>":"Нет кошелька? <a href=\"#\" id=\"m-swap\" style=\"color:var(--accent)\">Зарегистрироваться</a>"}<br>
+      Данные хранятся только в этом браузере. Реальных платежей и счетов нет.</p>
   </div>`;
   document.body.appendChild(el);
   const close=()=>el.remove();
+  const err=m=>{const e=el.querySelector("#m-err"); e.textContent=m; e.hidden=!m;};
   el.querySelector(".modal-x").onclick=close;
   el.onclick=e=>{if(e.target===el)close();};
-  el.querySelector("#m-go").onclick=()=>{close();openApp("dash");};
+  const swap=el.querySelector("#m-swap");
+  if(swap) swap.onclick=e=>{e.preventDefault(); close(); modal(signup?"login":"signup");};
+  el.querySelector("#m-go").onclick=()=>{
+    const mail=(el.querySelector("#m-mail").value||"").trim();
+    const pass=el.querySelector("#m-pass").value||"";
+    if(!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(mail)) return err("Введите корректный email");
+    if(pass.length<6) return err("Пароль не короче 6 символов");
+    let r;
+    if(signup){
+      const name=(el.querySelector("#m-name").value||"").trim();
+      const cur=el.querySelector("#m-cur").value;
+      r=registerUser(name,mail,pass,cur);
+    }else{
+      r=loginUser(mail,pass);
+    }
+    if(r.err) return err(r.err);
+    setSession(r.user.email); close();
+    openApp("dash");
+    toast(signup?("Кошелёк №"+r.user.acct+" создан"):("С возвращением, "+r.user.name));
+  };
   el.querySelector("input").focus();
 }
 document.addEventListener("click",e=>{
   const o=e.target.closest("[data-open]"); if(o){modal(o.dataset.open);return;}
   if(e.target.closest("[data-demo]")){openApp("dash");return;}
+  if(e.target.closest("[data-logout]")){
+    setSession(""); loadSession();
+    document.getElementById("app").style.display="none";
+    document.getElementById("site").style.display="";
+    window.scrollTo(0,0); toast("Вы вышли из кошелька"); return;
+  }
   if(e.target.closest("[data-back]")){
     document.getElementById("app").style.display="none";
     document.getElementById("site").style.display="";
     window.scrollTo(0,0); return;
   }
 });
+
+
+/* ---------------- демо-пользователи и кошелёк ---------------- */
+const USERS_KEY="avexo_users_v1", SESS_KEY="avexo_session_v1";
+function loadUsers(){try{return JSON.parse(localStorage.getItem(USERS_KEY))||[]}catch(e){return []}}
+function saveUsers(u){try{localStorage.setItem(USERS_KEY,JSON.stringify(u))}catch(e){}}
+function setSession(e){try{e?localStorage.setItem(SESS_KEY,e):localStorage.removeItem(SESS_KEY)}catch(x){}}
+function sessionEmail(){try{return localStorage.getItem(SESS_KEY)||""}catch(e){return ""}}
+function currentUser(){const e=sessionEmail(); if(!e)return null; return loadUsers().find(u=>u.email===e)||null;}
+function persistUser(u){const us=loadUsers(),i=us.findIndex(x=>x.email===u.email);
+  if(i>=0){us[i]=u;} else {us.push(u);} saveUsers(us);}
+function newAcctNo(){return String(4030000+Math.floor(Math.random()*9000)+Math.floor(Math.random()*99));}
+function registerUser(name,email,pass,cur){
+  const us=loadUsers();
+  if(us.some(u=>u.email.toLowerCase()===email.toLowerCase())) return {err:"Такой email уже зарегистрирован"};
+  const u={name:name||email.split("@")[0],email,pass,cur:cur||"USD",acct:newAcctNo(),
+    balance:0,positions:[],tx:[],hist:[],created:new Date().toISOString()};
+  us.push(u); saveUsers(us); return {user:u};
+}
+function loginUser(email,pass){
+  const u=loadUsers().find(x=>x.email.toLowerCase()===email.toLowerCase());
+  if(!u) return {err:"Аккаунт с таким email не найден"};
+  if(u.pass!==pass) return {err:"Неверный пароль"};
+  return {user:u};
+}
 
 /* ---------------- личный кабинет ---------------- */
 const INSTR=[["EUR/USD",1.08412,5],["XAU/USD",2361.40,2],["US500",5284.6,1],
@@ -1036,11 +1156,43 @@ const SPECS={"EUR/USD":[100000,0.0001,0.1],"USD/JPY":[100000,0.01,0.2],"XAU/USD"
   "US500":[10,0.1,0.4],"BTC/USD":[1,1,12],"AAPL":[100,0.01,0.03],"USOIL":[100,0.01,0.03]};
 const spec=s=>SPECS[s]||[100,0.01,0.1];
 
+const GUEST=JSON.parse(JSON.stringify({balance:state.balance,positions:state.positions,tx:state.tx,hist:state.hist}));
+function loadSession(){
+  const u=currentUser();
+  if(u){
+    state.balance=u.balance||0;
+    state.positions=u.positions||[];
+    state.tx=u.tx||[];
+    state.hist=u.hist||[];
+  }else{
+    state.balance=GUEST.balance; state.positions=JSON.parse(JSON.stringify(GUEST.positions));
+    state.tx=JSON.parse(JSON.stringify(GUEST.tx)); state.hist=JSON.parse(JSON.stringify(GUEST.hist));
+  }
+  syncHeader();
+}
+function saveSession(){
+  const u=currentUser(); if(!u)return;
+  u.balance=state.balance; u.positions=state.positions; u.tx=state.tx; u.hist=state.hist;
+  persistUser(u);
+}
+function syncHeader(){
+  const u=currentUser();
+  const av=document.querySelector("#app .avatar");
+  const label=document.getElementById("acctLabel");
+  if(av) av.textContent=(u? u.name : "Демо").trim().split(/\s+/).map(w=>w[0]).join("").slice(0,2).toUpperCase();
+  if(label) label.textContent=u? ("Демо-кошелёк · "+u.name) : "Демо-счёт (гость)";
+  const sub=document.getElementById("dashSub");
+  if(sub) sub.innerHTML= u
+    ? 'Кошелёк <span class="num">#'+u.acct+'</span> · Demo · '+u.cur+' · сервер Avexo-DEMO'
+    : 'Гостевой демо-счёт · зарегистрируйтесь, чтобы завести свой кошелёк';
+}
 function openApp(pane,sym){
   document.getElementById("site").style.display="none";
   document.getElementById("app").style.display="block";
   window.scrollTo(0,0);
   if(sym&&prices[sym]) state.curSym=sym;
+  loadSession();
+  renderHist(); renderTx(); renderPositions();
   showPane(pane||"dash");
 }
 function showPane(id){
@@ -1096,7 +1248,7 @@ function renderPositions(){
     state.balance+=v;
     state.hist.unshift([new Date().toLocaleDateString("ru-RU"),"Закрытие сделки",p.sym,
       (v>=0?"+":"−")+usd(Math.abs(v)),"ok"]);
-    state.positions.splice(i,1); renderPositions(); renderHist();
+    state.positions.splice(i,1); saveSession(); renderPositions(); renderHist();
     toast("Позиция закрыта, результат "+(v>=0?"+":"−")+usd(Math.abs(v)));
   });
 }
@@ -1219,7 +1371,7 @@ document.getElementById("placeOrder").onclick=()=>{
   const vol=parseFloat(document.getElementById("vol").value)||0.1;
   state.positions.unshift({sym:state.curSym,side:state.side,vol,open:prices[state.curSym],dec:decs[state.curSym]});
   toast("Ордер принят: "+(state.side==="buy"?"Buy":"Sell")+" "+fmt(vol,2)+" "+state.curSym);
-  renderPositions();
+  saveSession(); renderPositions();
 };
 
 /* платежи */
@@ -1267,7 +1419,7 @@ document.getElementById("payGo").onclick=()=>{
     (inMode?"+":"−")+usd(amt),inMode?"ok":"wait",inMode?"Исполнено":"В обработке"]);
   state.hist.unshift([new Date().toLocaleDateString("ru-RU"),inMode?"Пополнение":"Вывод","—",
     (inMode?"+":"−")+usd(amt),inMode?"ok":"wait"]);
-  renderTx();renderHist();renderBalance();
+  saveSession(); renderTx();renderHist();renderBalance();
   toast(inMode?"Счёт пополнен на "+usd(amt):"Заявка на вывод "+usd(amt)+" принята");
 };
 function renderTx(){
@@ -1279,25 +1431,33 @@ function renderTx(){
 renderMethods();calcPay();renderTx();
 
 /* карточка счёта в стиле терминала */
-const ACCTS=[
-  {id:"4032118",name:"Daniil Kovalev",srv:"Avexo-LIVE",mode:"Hedge",type:"Raw+",lev:"1:200",bal:12480.30,cur:"USD",st:["ok","активен"]},
-  {id:"4032119",name:"Daniil Kovalev",srv:"Avexo-LIVE",mode:"Netting",type:"Standard",lev:"1:500",bal:340.00,cur:"EUR",st:["ok","активен"]},
+const DEMO_ACCTS=[
+  {id:"4032118",name:"Daniil Kovalev",srv:"Avexo-DEMO",mode:"Hedge",type:"Demo",lev:"1:200",bal:12480.30,cur:"USD",st:["wait","демо"]},
+  {id:"4032119",name:"Daniil Kovalev",srv:"Avexo-DEMO",mode:"Netting",type:"Demo",lev:"1:500",bal:340.00,cur:"EUR",st:["wait","демо"]},
   {id:"9011455",name:"Daniil Kovalev",srv:"Avexo-DEMO",mode:"Hedge",type:"Demo",lev:"1:100",bal:100000.00,cur:"USD",st:["wait","демо"]}
 ];
 let acctIdx=0;
+function acctList(){
+  const u=currentUser();
+  if(u) return [{id:u.acct,name:u.name,srv:"Avexo-DEMO",mode:"Hedge",type:"Demo",lev:"1:100",
+    bal:state.balance,cur:u.cur||"USD",st:["wait","демо"]}];
+  return DEMO_ACCTS;
+}
 const money=(n,c)=>n.toLocaleString("ru-RU",{minimumFractionDigits:2,maximumFractionDigits:2}).replace(/,/,".")+" "+c;
 function renderAcct(){
-  const a=ACCTS[acctIdx];
-  a.bal = acctIdx===0 ? state.balance : a.bal;
+  const list=acctList();
+  if(acctIdx>=list.length) acctIdx=0;
+  const a=list[acctIdx];
+  if(acctIdx===0) a.bal=state.balance;
   document.getElementById("mtName").textContent=a.name;
   document.getElementById("mtMeta").innerHTML=a.id+'<i>-</i>'+a.srv+'<i>-</i>'+a.mode;
   document.getElementById("mtBal").textContent=money(a.bal,a.cur);
   document.getElementById("mtRowName").textContent=a.name;
   document.getElementById("mtRowSrv").textContent=a.srv;
-  document.getElementById("acctBody").innerHTML=ACCTS.map((x,i)=>
+  document.getElementById("acctBody").innerHTML=list.map((x,i)=>
     `<tr class="${i===acctIdx?"on":""}" data-acct="${i}">
       <td class="num">${x.id}</td><td>${x.name}</td><td>${x.srv}</td><td>${x.type}</td>
-      <td class="num">${x.lev}</td><td class="num">${money(i===0?state.balance:x.bal,x.cur)}</td>
+      <td class="num">${x.lev}</td><td class="num">${money(i===acctIdx?state.balance:x.bal,x.cur)}</td>
       <td><span class="badge ${x.st[0]}">${x.st[1]}</span></td></tr>`).join("");
   document.querySelectorAll("[data-acct]").forEach(tr=>tr.onclick=()=>{acctIdx=+tr.dataset.acct;renderAcct();});
 }

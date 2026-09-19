@@ -1,0 +1,560 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta name="robots" content="noindex,nofollow">
+<title>Avexo — админка сайта</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Sora:wght@400;600;700&family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500&display=swap">
+<style>
+:root{
+  --bg:#F8F8F9;--surface:#fff;--line:#D9DCE1;--line-soft:#E9EBEF;
+  --text:#2A2D32;--muted:#7C7C7C;--dim:#9DA2A9;
+  --accent:#0056FF;--accent-dim:#004CE0;--accent-soft:rgba(0,86,255,.08);
+  --red:#F41112;--ok:#00C11F;
+  --shadow:0 12px 34px rgba(20,28,44,.09);--radius:12px;
+  color-scheme:light;
+}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--text);
+  font-family:"IBM Plex Sans",-apple-system,"Segoe UI",sans-serif;font-size:15px;line-height:1.55}
+h1,h2,h3{font-family:"Sora",sans-serif;margin:0;line-height:1.2}
+a{color:var(--accent);text-decoration:none}
+button{font:inherit;cursor:pointer;border:0;background:none;color:inherit}
+input,textarea,select{font:inherit;width:100%;background:#fff;border:1px solid var(--line);
+  border-radius:9px;padding:10px 12px;color:var(--text)}
+input:focus,textarea:focus{outline:none;border-color:var(--accent)}
+textarea{resize:vertical;min-height:76px}
+:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+
+.head{position:sticky;top:env(safe-area-inset-top,0px);z-index:20;background:rgba(255,255,255,.94);
+  backdrop-filter:blur(12px);border-bottom:1px solid var(--line-soft)}
+.head-in{max-width:1080px;margin:0 auto;padding:0 20px;height:64px;display:flex;align-items:center;gap:14px}
+.logo{display:flex;align-items:center;gap:10px;font-family:"Sora";font-weight:700;font-size:17px}
+.mark{width:28px;height:28px;border-radius:7px;background:var(--red);color:#fff;display:grid;
+  place-items:center;font-size:14px}
+.head .right{margin-left:auto;display:flex;gap:9px;align-items:center;flex-wrap:wrap}
+.btn{display:inline-flex;align-items:center;gap:7px;padding:9px 16px;border-radius:9px;
+  font-weight:600;font-size:13.5px;white-space:nowrap;transition:.15s}
+.btn-primary{background:var(--accent);color:#fff}
+.btn-primary:hover{background:var(--accent-dim)}
+.btn-ghost{border:1px solid var(--line);background:#fff}
+.btn-ghost:hover{border-color:var(--accent);color:var(--accent)}
+.btn-danger{border:1px solid rgba(244,17,18,.3);color:var(--red);background:#fff}
+.btn-sm{padding:6px 11px;font-size:12.5px;border-radius:7px}
+
+.wrap{max-width:1080px;margin:0 auto;padding:26px 20px 90px}
+.intro{background:#fff;border:1px solid var(--line-soft);border-radius:var(--radius);
+  box-shadow:var(--shadow);padding:20px;margin-bottom:22px}
+.intro h1{font-size:23px;margin-bottom:8px}
+.intro p{color:var(--muted);margin:0;font-size:14px;max-width:70ch}
+.intro .warn{margin-top:14px;font-size:13px;color:#8A5A00;background:rgba(224,124,0,.08);
+  border:1px solid rgba(224,124,0,.22);border-radius:9px;padding:10px 13px}
+
+.tabs{display:flex;gap:6px;overflow-x:auto;padding-bottom:6px;margin-bottom:18px}
+.tab{padding:8px 15px;border-radius:999px;font-size:13.5px;color:var(--muted);
+  border:1px solid var(--line-soft);background:#fff;white-space:nowrap}
+.tab.on{background:var(--accent-soft);color:var(--accent);border-color:rgba(0,86,255,.3);font-weight:600}
+
+.card{background:#fff;border:1px solid var(--line-soft);border-radius:var(--radius);
+  box-shadow:var(--shadow);padding:22px;margin-bottom:16px}
+.card > h2{font-size:17px;margin-bottom:4px}
+.card > .sub{color:var(--muted);font-size:13.5px;margin:0 0 18px}
+.grid{display:grid;gap:14px}
+.g2{grid-template-columns:1fr 1fr}
+.g3{grid-template-columns:repeat(3,1fr)}
+@media(max-width:720px){.g2,.g3{grid-template-columns:1fr}}
+.field{display:grid;gap:6px}
+.field label{font-size:12.5px;color:var(--muted)}
+.field .hint{font-size:11.5px;color:var(--dim)}
+.color-row{display:flex;gap:10px;align-items:center}
+.color-row input[type=color]{width:46px;height:40px;padding:3px;border-radius:9px;flex:0 0 auto}
+
+.item{border:1px solid var(--line-soft);border-radius:11px;padding:16px;background:#FCFCFD;margin-bottom:12px}
+.item-head{display:flex;align-items:center;gap:10px;margin-bottom:12px}
+.item-head b{font-size:13px;color:var(--muted);font-weight:600;letter-spacing:.04em;text-transform:uppercase}
+.item-head .sp{margin-left:auto;display:flex;gap:6px}
+.check{display:flex;align-items:center;gap:8px;font-size:13.5px;color:var(--muted)}
+.check input{width:auto}
+
+.bar{position:fixed;left:0;right:0;bottom:0;z-index:30;background:rgba(255,255,255,.96);
+  backdrop-filter:blur(12px);border-top:1px solid var(--line);
+  padding:12px 20px calc(12px + env(safe-area-inset-bottom,0px))}
+.bar-in{max-width:1080px;margin:0 auto;display:flex;align-items:center;gap:10px;flex-wrap:wrap}
+.bar .state{font-size:13px;color:var(--muted);margin-right:auto}
+.toast{position:fixed;left:50%;bottom:88px;transform:translateX(-50%);z-index:60;background:#1B2330;
+  color:#fff;border-radius:10px;padding:11px 18px;font-size:13.5px;box-shadow:0 18px 44px rgba(20,28,44,.35)}
+table.u{width:100%;border-collapse:collapse;min-width:640px}
+table.u th{font-size:11px;text-transform:uppercase;letter-spacing:.09em;color:var(--dim);
+  font-weight:500;text-align:right;padding:9px 10px;border-bottom:1px solid var(--line)}
+table.u th:first-child{text-align:left}
+table.u td{padding:11px 10px;text-align:right;font-size:13.5px;border-bottom:1px solid var(--line-soft)}
+table.u td:first-child{text-align:left}
+table.u tr:last-child td{border-bottom:0}
+.u-scroll{overflow-x:auto}
+.u-name b{display:block}
+.u-name small{color:var(--dim);font-size:12px}
+.u-bal{font-family:"IBM Plex Mono",monospace;font-weight:600;font-variant-numeric:tabular-nums}
+.u-ops{display:flex;gap:6px;justify-content:flex-end;flex-wrap:wrap}
+.u-ops input{width:110px;text-align:right;padding:7px 9px;font-family:"IBM Plex Mono",monospace}
+[hidden]{display:none!important}
+</style>
+</head>
+<body>
+
+<header class="head">
+  <div class="head-in">
+    <div class="logo"><span class="mark" id="hMark">A</span> Админка</div>
+    <div class="right">
+      <a class="btn btn-ghost" href="./" target="_blank" rel="noopener">Открыть сайт ↗</a>
+      <button class="btn btn-ghost" id="btnExport">Скачать JSON</button>
+      <button class="btn btn-ghost" id="btnImport">Загрузить JSON</button>
+      <input type="file" id="fileIn" accept="application/json" hidden>
+    </div>
+  </div>
+</header>
+
+<div class="wrap">
+  <div class="intro">
+    <h1>Настройки сайта Avexo</h1>
+    <p>Здесь меняются тексты лендинга, тарифы, платформы, цифры и оформление. Изменения сохраняются
+      в этом браузере и применяются к сайту сразу после нажатия «Сохранить».</p>
+    <div class="warn">Настройки живут только в вашем браузере на этом домене — на других устройствах сайт
+      покажет значения по умолчанию. Чтобы закрепить их для всех, скачайте JSON и передайте мне: вшью его
+      в репозиторий. Страница без пароля, адрес лучше никому не давать.</div>
+  </div>
+
+  <div class="tabs" id="tabs"></div>
+
+  <div data-pane="users">
+    <div class="card">
+      <h2>Демо-кошельки пользователей</h2>
+      <p class="sub">Те, кто зарегистрировался на сайте в этом браузере. Начисления учебные — реальных денег
+        и платежей в системе нет.</p>
+      <div style="display:flex;gap:9px;flex-wrap:wrap;margin-bottom:16px">
+        <button class="btn btn-ghost btn-sm" id="uReload">Обновить список</button>
+        <button class="btn btn-ghost btn-sm" id="uAdd">+ Создать кошелёк вручную</button>
+      </div>
+      <div id="usersBox"></div>
+    </div>
+  </div>
+
+  <div data-pane="brand" hidden>
+    <div class="card">
+      <h2>Бренд и цвета</h2>
+      <p class="sub">Название в шапке и футере, буква в логотипе, акцентные цвета всего сайта.</p>
+      <div class="grid g3">
+        <div class="field"><label for="b_name">Название</label><input id="b_name"></div>
+        <div class="field"><label for="b_suffix">Второе слово</label><input id="b_suffix">
+          <span class="hint">Серая приписка после названия</span></div>
+        <div class="field"><label for="b_mark">Буква логотипа</label><input id="b_mark" maxlength="2"></div>
+      </div>
+      <div class="grid g2" style="margin-top:14px">
+        <div class="field"><label for="b_accent">Акцентный цвет</label>
+          <div class="color-row"><input type="color" id="b_accent_c"><input id="b_accent"></div>
+          <span class="hint">Кнопки, ссылки, активные вкладки, графики</span></div>
+        <div class="field"><label for="b_red">Фирменный красный</label>
+          <div class="color-row"><input type="color" id="b_red_c"><input id="b_red"></div>
+          <span class="hint">Логотип, карточки преимуществ, падение котировок</span></div>
+      </div>
+    </div>
+  </div>
+
+  <div data-pane="hero" hidden>
+    <div class="card">
+      <h2>Первый экран</h2>
+      <p class="sub">То, что видно до прокрутки.</p>
+      <div class="grid">
+        <div class="field"><label for="h_eyebrow">Плашка над заголовком</label><input id="h_eyebrow"></div>
+        <div class="field"><label for="h_h1">Заголовок</label><textarea id="h_h1"></textarea>
+          <span class="hint">Перенос строки = новая строка в заголовке</span></div>
+        <div class="field"><label for="h_lead">Подзаголовок</label><textarea id="h_lead"></textarea></div>
+      </div>
+      <div class="grid g2" style="margin-top:14px">
+        <div class="field"><label for="h_btn1">Кнопка 1</label><input id="h_btn1"></div>
+        <div class="field"><label for="h_btn2">Кнопка 2</label><input id="h_btn2"></div>
+      </div>
+      <div class="field" style="margin-top:14px"><label for="h_note">Строка о рисках</label>
+        <textarea id="h_note"></textarea></div>
+    </div>
+  </div>
+
+  <div data-pane="heads" hidden>
+    <div class="card">
+      <h2>Заголовки разделов</h2>
+      <p class="sub">Подписи к блокам лендинга сверху вниз.</p>
+      <div class="grid g2">
+        <div class="field"><label for="s_markets">Котировки — заголовок</label><input id="s_markets"></div>
+        <div class="field"><label for="s_marketsP">Котировки — описание</label><input id="s_marketsP"></div>
+        <div class="field"><label for="s_benefits">Преимущества</label><input id="s_benefits"></div>
+        <div class="field"><label for="s_classes">Классы активов</label><input id="s_classes"></div>
+        <div class="field"><label for="s_stats">Условия — заголовок</label><input id="s_stats"></div>
+        <div class="field"><label for="s_statsP">Условия — описание</label><input id="s_statsP"></div>
+        <div class="field"><label for="s_accounts">Счета — заголовок</label><input id="s_accounts"></div>
+        <div class="field"><label for="s_accountsP">Счета — описание</label><input id="s_accountsP"></div>
+        <div class="field"><label for="s_platforms">Платформы — заголовок</label><input id="s_platforms"></div>
+        <div class="field"><label for="s_platformsP">Платформы — описание</label><input id="s_platformsP"></div>
+        <div class="field"><label for="s_mobile">Мобильное приложение</label><input id="s_mobile"></div>
+        <div class="field"><label for="s_achv">Компания в цифрах</label><input id="s_achv"></div>
+      </div>
+    </div>
+  </div>
+
+  <div data-pane="benefits" hidden>
+    <div class="card">
+      <h2>Карточки преимуществ</h2>
+      <p class="sub">Красные плитки под блоком котировок.</p>
+      <div id="listBenefits"></div>
+      <button class="btn btn-ghost btn-sm" data-add="benefits">+ Добавить карточку</button>
+    </div>
+  </div>
+
+  <div data-pane="stats" hidden>
+    <div class="card">
+      <h2>Условия торговли</h2>
+      <p class="sub">Плитки с крупной цифрой и подписью.</p>
+      <div id="listStats"></div>
+      <button class="btn btn-ghost btn-sm" data-add="stats">+ Добавить плитку</button>
+    </div>
+    <div class="card">
+      <h2>Компания в цифрах</h2>
+      <p class="sub">Нижний блок статистики перед призывом к действию.</p>
+      <div id="listAchv"></div>
+      <button class="btn btn-ghost btn-sm" data-add="achv">+ Добавить плитку</button>
+    </div>
+  </div>
+
+  <div data-pane="accounts" hidden>
+    <div class="card">
+      <h2>Типы счетов</h2>
+      <p class="sub">Тарифная сетка. Отмеченный тариф подсвечивается рамкой и плашкой «Популярный».</p>
+      <div id="listAccounts"></div>
+      <button class="btn btn-ghost btn-sm" data-add="accounts">+ Добавить тариф</button>
+    </div>
+  </div>
+
+  <div data-pane="platforms" hidden>
+    <div class="card">
+      <h2>Торговые платформы</h2>
+      <p class="sub">Карточки с названием, описанием и подписью-платформой.</p>
+      <div id="listPlatforms"></div>
+      <button class="btn btn-ghost btn-sm" data-add="platforms">+ Добавить платформу</button>
+    </div>
+  </div>
+
+  <div data-pane="foot" hidden>
+    <div class="card">
+      <h2>Призыв к действию</h2>
+      <div class="grid">
+        <div class="field"><label for="c_h">Заголовок</label><input id="c_h"></div>
+        <div class="field"><label for="c_p">Подзаголовок</label><input id="c_p"></div>
+        <div class="field"><label for="c_btn">Кнопка</label><input id="c_btn"></div>
+      </div>
+    </div>
+    <div class="card">
+      <h2>Футер</h2>
+      <div class="grid">
+        <div class="field"><label for="f_about">Описание компании</label><textarea id="f_about"></textarea></div>
+        <div class="field"><label for="f_note">Плашка-предупреждение</label><input id="f_note"></div>
+        <div class="field"><label for="f_disclaimer">Предупреждение о рисках</label>
+          <textarea id="f_disclaimer" style="min-height:130px"></textarea>
+          <span class="hint">Пометка о том, что это учебный прототип, — оставьте её: она объясняет
+            преподавателю и случайному посетителю, что перед ними макет.</span></div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="bar">
+  <div class="bar-in">
+    <span class="state" id="state">Загружено</span>
+    <button class="btn btn-danger" id="btnReset">Сбросить всё</button>
+    <button class="btn btn-primary" id="btnSave">Сохранить</button>
+  </div>
+</div>
+
+<script>
+const CFG_KEY="avexo_site_config_v1";
+const DEFAULTS={
+  brand:{name:"Avexo",suffix:"Trade",mark:"A",accent:"#0056FF",red:"#F41112"},
+  hero:{eyebrow:"Учебный демонстрационный проект",
+    h1:"Брокер, который работает\nна скорости рынка",
+    lead:"2 100+ инструментов, исполнение от 12 мс и спред от 0 пунктов. Один счёт — валюты, металлы, индексы, фьючерсы, акции и ETF.",
+    btn1:"Открыть торговый счёт",btn2:"Войти в демо-кабинет",
+    note:"Торговля с кредитным плечом сопряжена с высоким риском убытков. Все данные на этой странице вымышлены."},
+  heads:{markets:"Торгуйте тем, что движет рынком",
+    marketsP:"Котировки обновляются в реальном времени. Выберите категорию, чтобы увидеть инструменты.",
+    benefits:"Почему трейдеры выбирают Avexo",
+    stats:"Условия торговли",statsP:"Одинаковые условия для всех клиентов — без скрытых наценок к спреду.",
+    accounts:"Четыре типа счетов",accountsP:"От первого депозита до институционального объёма. Тип счёта можно сменить в личном кабинете.",
+    platforms:"Торговые платформы",platformsP:"Один счёт — пять способов торговать. Десктоп, браузер и мобильные приложения синхронизированы.",
+    classes:"Классы активов",mobile:"Терминал в кармане",achv:"Компания в цифрах"},
+  cta:{h:"Торгуйте как профессионал",p:"Откройте счёт за пять минут или попробуйте демо-кабинет без регистрации.",btn:"Зарегистрироваться в Avexo"},
+  foot:{about:"Вымышленный брокер, созданный как учебный макет интерфейса. Компании Avexo Trade не существует.",
+    note:"Демо-макет · не финансовая услуга",
+    disclaimer:"Предупреждение о рисках: торговля производными финансовыми инструментами с кредитным плечом связана с высоким риском и подходит не всем инвесторам. Вы можете потерять весь вложенный капитал. Страница является учебным прототипом интерфейса: бренд, лицензии, котировки, отзывы и статистика вымышлены, счета и платежи не существуют, персональные данные не собираются и никуда не передаются."},
+  benefits:[
+    {ic:"globe",t:"Доступ к мировым рынкам",d:"Валюты, металлы, индексы, энергоносители, акции и ETF на одном счёте — без смены платформы."},
+    {ic:"shield",t:"Защита средств клиентов",d:"Сегрегированные счета, шифрование трафика и подтверждение операций по второму фактору."},
+    {ic:"bolt",t:"Быстрые ввод и вывод",d:"Девять платёжных методов, зачисление в среднем за 7 минут, вывод без комиссии брокера."},
+    {ic:"clock",t:"Опыт с 2001 года",d:"Более двух десятилетий на рынке и команда поддержки, которая говорит на 24 языках."}],
+  stats:[{v:"От 0",k:"Спред на счетах Raw+ и Elite",hl:true},{v:"1:500",k:"Максимальное кредитное плечо",hl:false},
+    {v:"2 100+",k:"Финансовых инструментов",hl:false},{v:"24/5",k:"Поддержка на русском языке",hl:false},
+    {v:"12 мс",k:"Среднее время исполнения",hl:true},{v:"$120M+",k:"Собственный капитал компании",hl:false}],
+  accounts:[
+    {n:"Standard",tag:"Первый счёт",dep:"$100",spr:"от 1.2 пт",com:"Нет",lev:"1:500",f:false},
+    {n:"Raw+",tag:"Самый популярный",dep:"$500",spr:"от 0.0 пт",com:"$3.5 за лот",lev:"1:200",f:true},
+    {n:"Elite",tag:"Крупный объём",dep:"$10 000",spr:"от 0.0 пт",com:"$2.0 за лот",lev:"1:100",f:false},
+    {n:"Pro API",tag:"Алгоритмы и FIX",dep:"$25 000",spr:"от 0.0 пт",com:"$1.5 за лот",lev:"1:100",f:false}],
+  platforms:[
+    {n:"Avexo Terminal",d:"Собственный десктопный терминал: 68 индикаторов, стакан заявок, горячие клавиши и тестер стратегий.",t:"Windows · macOS · Linux"},
+    {n:"Веб-терминал",d:"Полный функционал в браузере без установки. Рабочие пространства синхронизируются между устройствами.",t:"Любой браузер"},
+    {n:"Мобильное приложение",d:"Push-уведомления по уровням, вход по биометрии, быстрое пополнение счёта.",t:"iOS · Android"},
+    {n:"API и FIX 4.4",d:"Прямое подключение для алгоритмической торговли, REST и WebSocket, песочница для тестов.",t:"Для разработчиков"},
+    {n:"Копи-трейдинг",d:"Подписка на стратегии с публичной статистикой просадки и прозрачной комиссией успеха.",t:"В приложении и вебе"}],
+  achv:[{v:"1 240 000",k:"Открытых торговых счетов"},{v:"38",k:"Наград отраслевых изданий"},
+    {v:"4.7",k:"Средняя оценка приложения"},{v:"9",k:"Платёжных методов"}]
+};
+const ICON_LIST=[["globe","Глобус"],["shield","Щит"],["bolt","Молния"],["clock","Часы"],["chart","График"]];
+const clone=o=>JSON.parse(JSON.stringify(o));
+
+let CFG=clone(DEFAULTS), dirty=false;
+try{
+  const raw=localStorage.getItem(CFG_KEY);
+  if(raw){const o=JSON.parse(raw); CFG={...CFG,...o};
+    ["brand","hero","heads","cta","foot"].forEach(k=>CFG[k]={...DEFAULTS[k],...(o[k]||{})});}
+}catch(e){}
+
+/* ---------- вкладки ---------- */
+const TABS=[["users","Пользователи"],["brand","Бренд"],["hero","Первый экран"],["heads","Заголовки"],["benefits","Преимущества"],
+  ["stats","Цифры"],["accounts","Счета"],["platforms","Платформы"],["foot","CTA и футер"]];
+const tabsEl=document.getElementById("tabs");
+tabsEl.innerHTML=TABS.map(([k,t],i)=>`<button class="tab${i?"":" on"}" data-tab="${k}">${t}</button>`).join("");
+tabsEl.addEventListener("click",e=>{
+  const b=e.target.closest("[data-tab]"); if(!b)return;
+  tabsEl.querySelectorAll(".tab").forEach(x=>x.classList.remove("on")); b.classList.add("on");
+  document.querySelectorAll("[data-pane]").forEach(p=>p.hidden=p.dataset.pane!==b.dataset.tab);
+});
+
+/* ---------- простые поля ---------- */
+const FIELDS=[
+  ["b_name","brand","name"],["b_suffix","brand","suffix"],["b_mark","brand","mark"],
+  ["b_accent","brand","accent"],["b_red","brand","red"],
+  ["h_eyebrow","hero","eyebrow"],["h_h1","hero","h1"],["h_lead","hero","lead"],
+  ["h_btn1","hero","btn1"],["h_btn2","hero","btn2"],["h_note","hero","note"],
+  ["s_markets","heads","markets"],["s_marketsP","heads","marketsP"],["s_benefits","heads","benefits"],
+  ["s_stats","heads","stats"],["s_statsP","heads","statsP"],["s_accounts","heads","accounts"],
+  ["s_accountsP","heads","accountsP"],["s_platforms","heads","platforms"],["s_platformsP","heads","platformsP"],
+  ["s_classes","heads","classes"],["s_mobile","heads","mobile"],["s_achv","heads","achv"],
+  ["c_h","cta","h"],["c_p","cta","p"],["c_btn","cta","btn"],
+  ["f_about","foot","about"],["f_note","foot","note"],["f_disclaimer","foot","disclaimer"]
+];
+function fillFields(){
+  FIELDS.forEach(([id,grp,key])=>{const el=document.getElementById(id); if(el) el.value=CFG[grp][key]??"";});
+  document.getElementById("b_accent_c").value=norm(CFG.brand.accent);
+  document.getElementById("b_red_c").value=norm(CFG.brand.red);
+  document.getElementById("hMark").textContent=CFG.brand.mark||"A";
+  document.getElementById("hMark").style.background=CFG.brand.red;
+}
+function norm(v){return /^#[0-9a-f]{6}$/i.test(v||"")?v:"#000000";}
+FIELDS.forEach(([id,grp,key])=>{
+  const el=document.getElementById(id); if(!el)return;
+  el.addEventListener("input",()=>{CFG[grp][key]=el.value; markDirty();
+    if(id==="b_mark"){document.getElementById("hMark").textContent=el.value||"A";}
+    if(id==="b_red"){document.getElementById("b_red_c").value=norm(el.value);
+      document.getElementById("hMark").style.background=el.value;}
+    if(id==="b_accent"){document.getElementById("b_accent_c").value=norm(el.value);}
+  });
+});
+document.getElementById("b_accent_c").addEventListener("input",e=>{
+  CFG.brand.accent=e.target.value; document.getElementById("b_accent").value=e.target.value; markDirty();});
+document.getElementById("b_red_c").addEventListener("input",e=>{
+  CFG.brand.red=e.target.value; document.getElementById("b_red").value=e.target.value;
+  document.getElementById("hMark").style.background=e.target.value; markDirty();});
+
+/* ---------- списки ---------- */
+const SCHEMA={
+  benefits:{title:"Карточка",blank:{ic:"globe",t:"Новое преимущество",d:"Описание"},
+    fields:[["ic","Иконка","select"],["t","Заголовок","input"],["d","Текст","textarea"]]},
+  stats:{title:"Плитка",blank:{v:"0",k:"Подпись",hl:false},
+    fields:[["v","Значение","input"],["k","Подпись","input"],["hl","Выделить цветом","check"]]},
+  achv:{title:"Плитка",blank:{v:"0",k:"Подпись"},
+    fields:[["v","Значение","input"],["k","Подпись","input"]]},
+  accounts:{title:"Тариф",blank:{n:"Новый",tag:"Описание",dep:"$100",spr:"от 1.0 пт",com:"Нет",lev:"1:100",f:false},
+    fields:[["n","Название","input"],["tag","Короткое описание","input"],["dep","Мин. депозит","input"],
+      ["spr","Спред","input"],["com","Комиссия","input"],["lev","Плечо","input"],["f","Популярный","check"]]},
+  platforms:{title:"Платформа",blank:{n:"Новая платформа",d:"Описание",t:"Подпись"},
+    fields:[["n","Название","input"],["d","Описание","textarea"],["t","Подпись","input"]]}
+};
+const LIST_EL={benefits:"listBenefits",stats:"listStats",achv:"listAchv",
+  accounts:"listAccounts",platforms:"listPlatforms"};
+
+function renderList(key){
+  const sc=SCHEMA[key], box=document.getElementById(LIST_EL[key]);
+  box.innerHTML=CFG[key].map((item,i)=>{
+    const fields=sc.fields.map(([f,label,type])=>{
+      if(type==="check") return `<label class="check"><input type="checkbox" data-k="${key}" data-i="${i}" data-f="${f}"${item[f]?" checked":""}> ${label}</label>`;
+      if(type==="select") return `<div class="field"><label>${label}</label><select data-k="${key}" data-i="${i}" data-f="${f}">`+
+        ICON_LIST.map(([v,n])=>`<option value="${v}"${item[f]===v?" selected":""}>${n}</option>`).join("")+`</select></div>`;
+      if(type==="textarea") return `<div class="field" style="grid-column:1/-1"><label>${label}</label><textarea data-k="${key}" data-i="${i}" data-f="${f}">${esc(item[f]||"")}</textarea></div>`;
+      return `<div class="field"><label>${label}</label><input data-k="${key}" data-i="${i}" data-f="${f}" value="${esc(item[f]||"")}"></div>`;
+    }).join("");
+    return `<div class="item">
+      <div class="item-head"><b>${sc.title} ${i+1}</b><span class="sp">
+        <button class="btn btn-ghost btn-sm" data-move="${key}:${i}:-1"${i?"":" disabled style=opacity:.4"}>↑</button>
+        <button class="btn btn-ghost btn-sm" data-move="${key}:${i}:1"${i===CFG[key].length-1?" disabled style=opacity:.4":""}>↓</button>
+        <button class="btn btn-danger btn-sm" data-del="${key}:${i}">Удалить</button></span></div>
+      <div class="grid g2">${fields}</div></div>`;
+  }).join("") || `<p style="color:var(--dim);font-size:13.5px">Пока пусто — добавьте первый элемент.</p>`;
+}
+function esc(s){return String(s).replace(/&/g,"&amp;").replace(/"/g,"&quot;").replace(/</g,"&lt;").replace(/>/g,"&gt;");}
+
+document.addEventListener("input",e=>{
+  const el=e.target; if(!el.dataset||!el.dataset.k)return;
+  const {k,i,f}=el.dataset;
+  CFG[k][+i][f]= el.type==="checkbox" ? el.checked : el.value;
+  markDirty();
+});
+document.addEventListener("change",e=>{
+  const el=e.target; if(!el.dataset||!el.dataset.k)return;
+  if(el.tagName==="SELECT"||el.type==="checkbox"){
+    CFG[el.dataset.k][+el.dataset.i][el.dataset.f]= el.type==="checkbox"?el.checked:el.value; markDirty();}
+});
+document.addEventListener("click",e=>{
+  const add=e.target.closest("[data-add]");
+  if(add){const k=add.dataset.add; CFG[k].push(clone(SCHEMA[k].blank)); renderList(k); markDirty(); return;}
+  const del=e.target.closest("[data-del]");
+  if(del){const [k,i]=del.dataset.del.split(":"); CFG[k].splice(+i,1); renderList(k); markDirty(); return;}
+  const mv=e.target.closest("[data-move]");
+  if(mv){const [k,i,d]=mv.dataset.move.split(":"); const a=CFG[k],x=+i,y=x+ +d;
+    if(y<0||y>=a.length)return; [a[x],a[y]]=[a[y],a[x]]; renderList(k); markDirty();}
+});
+
+/* ---------- сохранение ---------- */
+function markDirty(){dirty=true; document.getElementById("state").textContent="Есть несохранённые изменения";}
+function toast(msg){
+  document.querySelectorAll(".toast").forEach(t=>t.remove());
+  const t=document.createElement("div"); t.className="toast"; t.textContent=msg;
+  document.body.appendChild(t); setTimeout(()=>t.remove(),2600);
+}
+document.getElementById("btnSave").onclick=()=>{
+  try{
+    localStorage.setItem(CFG_KEY,JSON.stringify(CFG));
+    dirty=false; document.getElementById("state").textContent="Сохранено "+new Date().toLocaleTimeString("ru-RU");
+    toast("Сохранено — откройте сайт, чтобы увидеть изменения");
+  }catch(err){toast("Браузер не дал сохранить: "+err.message);}
+};
+document.getElementById("btnReset").onclick=()=>{
+  if(!confirm("Сбросить все настройки к значениям по умолчанию?"))return;
+  try{localStorage.removeItem(CFG_KEY);}catch(e){}
+  CFG=clone(DEFAULTS); fillFields(); Object.keys(LIST_EL).forEach(renderList);
+  dirty=false; document.getElementById("state").textContent="Сброшено";
+  toast("Настройки сброшены");
+};
+document.getElementById("btnExport").onclick=()=>{
+  const txt=JSON.stringify(CFG,null,2);
+  try{
+    const url=URL.createObjectURL(new Blob([txt],{type:"application/json"}));
+    const a=document.createElement("a");
+    a.href=url; a.download="avexo-config.json";
+    document.body.appendChild(a); a.click(); a.remove();
+    setTimeout(()=>URL.revokeObjectURL(url),1000);
+    toast("Файл avexo-config.json скачан");
+  }catch(err){
+    navigator.clipboard?.writeText(txt).then(
+      ()=>toast("Скачивание недоступно — JSON скопирован в буфер"),
+      ()=>toast("Скопируйте JSON из консоли браузера"));
+    console.log(txt);
+  }
+};
+document.getElementById("btnImport").onclick=()=>document.getElementById("fileIn").click();
+document.getElementById("fileIn").onchange=e=>{
+  const f=e.target.files[0]; if(!f)return;
+  const r=new FileReader();
+  r.onload=()=>{
+    try{
+      const o=JSON.parse(r.result);
+      CFG={...clone(DEFAULTS),...o};
+      ["brand","hero","heads","cta","foot"].forEach(k=>CFG[k]={...DEFAULTS[k],...(o[k]||{})});
+      fillFields(); Object.keys(LIST_EL).forEach(renderList); markDirty();
+      toast("JSON загружен — нажмите «Сохранить»");
+    }catch(err){toast("Не похоже на настройки: "+err.message);}
+  };
+  r.readAsText(f); e.target.value="";
+};
+window.addEventListener("beforeunload",e=>{if(dirty){e.preventDefault(); e.returnValue="";}});
+
+
+/* ---------- демо-кошельки ---------- */
+const USERS_KEY="avexo_users_v1";
+function uLoad(){try{return JSON.parse(localStorage.getItem(USERS_KEY))||[]}catch(e){return []}}
+function uSave(a){try{localStorage.setItem(USERS_KEY,JSON.stringify(a))}catch(e){toast("Не удалось сохранить: "+e.message)}}
+function fmtMoney(n,c){return Number(n||0).toLocaleString("ru-RU",{minimumFractionDigits:2,maximumFractionDigits:2}).replace(/,/,".")+" "+(c||"USD");}
+function renderUsers(){
+  const us=uLoad(), box=document.getElementById("usersBox");
+  if(!us.length){
+    box.innerHTML='<p style="color:var(--dim);font-size:13.5px">Пока никто не зарегистрировался. '+
+      'Откройте сайт, нажмите «Регистрация» — кошелёк появится здесь.</p>'; return;
+  }
+  box.innerHTML='<div class="u-scroll"><table class="u"><thead><tr>'+
+    '<th>Пользователь</th><th>Кошелёк</th><th>Баланс</th><th>Операция</th><th></th>'+
+    '</tr></thead><tbody>'+us.map((u,i)=>
+    `<tr>
+      <td class="u-name"><b>${escapeHtml(u.name||"—")}</b><small>${escapeHtml(u.email)}</small></td>
+      <td class="num">${escapeHtml(u.acct||"—")}</td>
+      <td class="u-bal">${fmtMoney(u.balance,u.cur)}</td>
+      <td><div class="u-ops">
+        <input type="number" step="0.01" min="0" placeholder="сумма" data-amt="${i}">
+        <button class="btn btn-ghost btn-sm" data-credit="${i}">Начислить</button>
+        <button class="btn btn-ghost btn-sm" data-debit="${i}">Списать</button>
+      </div></td>
+      <td><button class="btn btn-danger btn-sm" data-udel="${i}">Удалить</button></td>
+    </tr>`).join("")+'</tbody></table></div>'+
+    '<p style="color:var(--dim);font-size:12.5px;margin:14px 0 0">Операция записывается в историю кошелька '+
+    'и сразу видна пользователю в кабинете.</p>';
+}
+function escapeHtml(s){return String(s??"").replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;").replace(/"/g,"&quot;");}
+function adjust(i,sign){
+  const us=uLoad(), u=us[i]; if(!u)return;
+  const inp=document.querySelector(`[data-amt="${i}"]`);
+  const amt=parseFloat(inp && inp.value);
+  if(!(amt>0)) return toast("Введите сумму больше нуля");
+  if(sign<0 && amt>Number(u.balance||0)) return toast("На кошельке меньше этой суммы");
+  u.balance=Number(u.balance||0)+sign*amt;
+  const date=new Date().toLocaleDateString("ru-RU");
+  u.tx=u.tx||[]; u.hist=u.hist||[];
+  u.tx.unshift([date,"Начисление администратором",(sign>0?"+":"−")+"$"+amt.toFixed(2),"ok",
+    sign>0?"Исполнено":"Списано"]);
+  u.hist.unshift([date,sign>0?"Начисление":"Списание","—",(sign>0?"+":"−")+"$"+amt.toFixed(2),"ok"]);
+  us[i]=u; uSave(us); renderUsers();
+  if(inp) inp.value="";
+  toast((sign>0?"Начислено ":"Списано ")+fmtMoney(amt,u.cur)+" — "+(u.name||u.email));
+}
+document.addEventListener("click",e=>{
+  const c=e.target.closest("[data-credit]"); if(c) return adjust(+c.dataset.credit,1);
+  const d=e.target.closest("[data-debit]");  if(d) return adjust(+d.dataset.debit,-1);
+  const x=e.target.closest("[data-udel]");
+  if(x){const us=uLoad(),u=us[+x.dataset.udel];
+    if(u&&confirm("Удалить кошелёк "+(u.name||u.email)+"? Историю операций тоже сотрёт.")){
+      us.splice(+x.dataset.udel,1); uSave(us); renderUsers(); toast("Кошелёк удалён");}}
+});
+document.getElementById("uReload").onclick=()=>{renderUsers(); toast("Список обновлён");};
+document.getElementById("uAdd").onclick=()=>{
+  const email=(prompt("Email нового демо-кошелька:")||"").trim();
+  if(!email) return;
+  const us=uLoad();
+  if(us.some(u=>u.email.toLowerCase()===email.toLowerCase())) return toast("Такой email уже есть");
+  const name=(prompt("Имя владельца:")||email.split("@")[0]).trim();
+  us.push({name,email,pass:"demo123",cur:"USD",acct:String(4030000+Math.floor(Math.random()*9999)),
+    balance:0,positions:[],tx:[],hist:[],created:new Date().toISOString()});
+  uSave(us); renderUsers(); toast("Кошелёк создан, пароль demo123");
+};
+renderUsers();
+
+fillFields(); Object.keys(LIST_EL).forEach(renderList);
+document.getElementById("state").textContent="Загружено";
+</script>
+</body>
+</html>
