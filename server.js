@@ -236,7 +236,7 @@ app.post('/api/admin/users', requireAdmin, async (req, res) => {
 /* начисление, списание, сценарий, номер счёта */
 app.patch('/api/admin/users/:id', requireAdmin, async (req, res) => {
   const id = Number(req.params.id);
-  const { delta, dyn, note, acct, card } = req.body || {};
+  const { delta, dyn, note, acct, card, date, tx: txSet, hist: histSet } = req.body || {};
   try {
     const cur = await q('SELECT * FROM users WHERE id = $1', [id]);
     if (!cur.rows[0]) return bad(res, 404, 'Кошелёк не найден');
@@ -246,15 +246,23 @@ app.patch('/api/admin/users/:id', requireAdmin, async (req, res) => {
       const amt = Number(delta);
       if (!Number.isFinite(amt) || amt === 0) return bad(res, 400, 'Некорректная сумма');
       if (amt < 0 && Math.abs(amt) > u.balance) return bad(res, 400, 'На кошельке меньше этой суммы');
-      const date = new Date().toLocaleDateString('ru-RU');
+      const when = (typeof date === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(date))
+        ? date.split('-').reverse().join('.')
+        : new Date().toLocaleDateString('ru-RU');
       const sum = (amt > 0 ? '+' : '−') + '$' + Math.abs(amt).toFixed(2);
-      const tx = [[date, note || 'Начисление администратором', sum, 'ok', amt > 0 ? 'Исполнено' : 'Списано'], ...u.tx];
-      const hist = [[date, amt > 0 ? 'Начисление' : 'Списание', '—', sum, 'ok'], ...u.hist];
+      const tx = [[when, note || 'Начисление администратором', sum, 'ok', amt > 0 ? 'Исполнено' : 'Списано'], ...u.tx];
+      const hist = [[when, amt > 0 ? 'Начисление' : 'Списание', '—', sum, 'ok'], ...u.hist];
       await q('UPDATE users SET balance = balance + $2, tx = $3::jsonb, hist = $4::jsonb WHERE id = $1',
         [id, amt, JSON.stringify(tx.slice(0, 200)), JSON.stringify(hist.slice(0, 200))]);
     }
     if (dyn !== undefined) {
       await q('UPDATE users SET dyn = $2::jsonb WHERE id = $1', [id, JSON.stringify(dyn || {})]);
+    }
+    if (txSet !== undefined || histSet !== undefined) {
+      await q('UPDATE users SET tx = COALESCE($2,tx), hist = COALESCE($3,hist) WHERE id = $1',
+        [id,
+         txSet ? JSON.stringify(txSet.slice(0, 200)) : null,
+         histSet ? JSON.stringify(histSet.slice(0, 200)) : null]);
     }
     if (card !== undefined) {
       await q('UPDATE users SET card = $2::jsonb WHERE id = $1', [id, JSON.stringify(card || {})]);
