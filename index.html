@@ -309,6 +309,25 @@ table.data tr:last-child td{border-bottom:0}
 .badge.sell{background:rgba(244,17,18,.08);color:var(--sell)}
 .empty{color:var(--dim);font-size:13.5px;padding:20px 0;text-align:center}
 
+/* блок сценария в стиле биржевого терминала */
+.bb-card{background:#0E1117;border:1px solid #1B212B;border-radius:16px;padding:22px 22px 8px;
+  margin-bottom:16px;color:#EAF0F7;box-shadow:0 18px 48px rgba(10,14,22,.28)}
+.bb-top{display:grid;grid-template-columns:repeat(4,1fr);gap:18px;margin-bottom:6px}
+@media(max-width:860px){.bb-top{grid-template-columns:repeat(2,1fr)}}
+@media(max-width:480px){.bb-top{grid-template-columns:1fr}}
+.bb-label{font-size:11px;letter-spacing:.1em;text-transform:uppercase;color:#6B7785;margin-bottom:7px}
+.bb-val{font-family:"IBM Plex Mono",monospace;font-size:26px;font-weight:600;line-height:1.1;
+  font-variant-numeric:tabular-nums}
+.bb-sub{font-size:12.5px;color:#7C8896;margin-top:6px;font-variant-numeric:tabular-nums}
+.bb-up{color:#2EBD85}.bb-down{color:#F6465D}
+.bb-bar{height:5px;border-radius:99px;background:#1B212B;overflow:hidden;margin-top:9px;max-width:170px}
+.bb-bar i{display:block;height:100%;background:#F7A600;border-radius:99px;transition:width .6s ease}
+.bb-target .bb-val{color:#F7A600}
+.bb-dot{display:inline-block;width:7px;height:7px;border-radius:50%;background:#2EBD85;margin-right:6px;
+  animation:bbPulse 1.6s ease-in-out infinite;vertical-align:middle}
+@keyframes bbPulse{0%,100%{opacity:1;transform:scale(1)}50%{opacity:.35;transform:scale(.8)}}
+#bbChart{width:100%;height:210px;display:block;margin-top:10px}
+
 /* terminal */
 .term{display:grid;grid-template-columns:240px 1fr 260px;gap:14px;align-items:start}
 @media(max-width:1150px){.term{grid-template-columns:220px 1fr}.term .ticket{grid-column:1/-1}}
@@ -664,6 +683,32 @@ body.ed-on .ed-sel{outline:2px solid #0056FF!important;outline-offset:2px}
       <div data-view="dash">
         <h2>Обзор счёта</h2>
         <p class="pane-sub" id="dashSub">Гостевой демо-счёт</p>
+        <div class="bb-card" id="bbCard" hidden>
+          <div class="bb-top">
+            <div class="bb-cell">
+              <div class="bb-label">Средства</div>
+              <div class="bb-val num" id="bbEq">$0.00</div>
+              <div class="bb-sub num" id="bbStart"></div>
+            </div>
+            <div class="bb-cell">
+              <div class="bb-label">Прибыль по сценарию</div>
+              <div class="bb-val num" id="bbPL">+$0.00</div>
+              <div class="bb-sub num" id="bbPct">+0.00%</div>
+            </div>
+            <div class="bb-cell">
+              <div class="bb-label">Прогресс</div>
+              <div class="bb-val num" id="bbProg">0%</div>
+              <div class="bb-bar"><i id="bbBar"></i></div>
+              <div class="bb-sub" id="bbLeft"></div>
+            </div>
+            <div class="bb-cell bb-target">
+              <div class="bb-label">Цель</div>
+              <div class="bb-val num" id="bbGoal">$0.00</div>
+              <div class="bb-sub" id="bbLive"><span class="bb-dot"></span>live</div>
+            </div>
+          </div>
+          <canvas id="bbChart" width="1600" height="420"></canvas>
+        </div>
         <div class="bal-grid" id="balGrid"></div>
         <div class="grid-2" style="gap:16px;margin-bottom:16px">
           <div class="panel" style="grid-column:span 2">
@@ -1629,7 +1674,7 @@ function showPane(id){
   if((CFG.panes||{})[id]===false){const first=PANES.find(([k])=>(CFG.panes||{})[k]!==false); id=first?first[0]:id;}
   document.querySelectorAll("[data-view]").forEach(v=>v.hidden=v.dataset.view!==id);
   document.querySelectorAll("#side [data-pane]").forEach(b=>b.classList.toggle("on",b.dataset.pane===id));
-  if(id==="dash"){drawEquity();renderPositions();}
+  if(id==="dash"){drawEquity();renderPositions();bbDraw();}
   if(id==="term"){renderWatch();drawCandles();updateTicket();}
   if(id==="prof"){renderProfile();renderAcct();fitAcct();}
   if(id==="ai"){initAI();}
@@ -2015,6 +2060,118 @@ function startEditor(){
   };
 }
 if(/[?&]edit=1/.test(location.search)) startEditor();
+
+
+/* ---------------- живой блок сценария ---------------- */
+function bbDraw(){
+  const card=document.getElementById("bbCard"); if(!card)return;
+  const d=dynCfg(), pr=dynProgress();
+  if(pr===null){card.hidden=true; return;}
+  card.hidden=false;
+  const from=Number(d.from)||0, to=Number(d.to)||0, cur=dynValue();
+  const pl=cur-from, pct=from? pl/from*100 : 0, up=pl>=0;
+  const set=(id,v,cls)=>{const e=document.getElementById(id); if(!e)return;
+    e.textContent=v; if(cls!==undefined) e.className=cls;};
+  set("bbEq",usd(cur),"bb-val num");
+  set("bbStart","старт "+usd(from));
+  set("bbPL",(up?"+":"−")+usd(Math.abs(pl)),"bb-val num "+(up?"bb-up":"bb-down"));
+  set("bbPct",(up?"+":"−")+fmt(Math.abs(pct),2)+"%","bb-sub num "+(up?"bb-up":"bb-down"));
+  set("bbProg",Math.round(pr*100)+"%");
+  set("bbGoal",usd(to));
+  const bar=document.getElementById("bbBar"); if(bar) bar.style.width=(pr*100)+"%";
+  const leftMs=Math.max(0,(Number(d.hours)||24)*3600000*(1-pr));
+  const h=Math.floor(leftMs/3600000), m=Math.floor(leftMs%3600000/60000);
+  set("bbLeft", pr>=1 ? "сценарий завершён" : ("осталось "+(h?h+" ч ":"")+m+" мин"));
+  const liveEl=document.getElementById("bbLive");
+  if(liveEl) liveEl.innerHTML = pr>=1 ? "завершено" : '<span class="bb-dot"></span>live';
+
+  /* график */
+  const cv=document.getElementById("bbChart"); if(!cv)return;
+  const ctx=cv.getContext("2d"), w=cv.width, hgt=cv.height;
+  const padL=16,padR=118,padT=22,padB=30;
+  const pts=dynSeries(120);
+  const vals=pts.map(x=>x.v);
+  const mn=Math.min(...vals,from,to), mx=Math.max(...vals,from,to);
+  const rng=(mx-mn)||1, pad=rng*0.12;
+  const lo=mn-pad, hi=mx+pad, span=hi-lo;
+  const X=i=>padL+i*(w-padL-padR)/(pts.length-1);
+  const Y=v=>padT+(1-(v-lo)/span)*(hgt-padT-padB);
+  ctx.clearRect(0,0,w,hgt);
+  /* сетка */
+  ctx.font="17px 'IBM Plex Mono', monospace"; ctx.textAlign="left";
+  for(let i=0;i<=4;i++){
+    const v=lo+span*i/4, y=Y(v);
+    ctx.strokeStyle="rgba(255,255,255,.055)"; ctx.lineWidth=1;
+    ctx.beginPath(); ctx.moveTo(padL,y); ctx.lineTo(w-padR,y); ctx.stroke();
+    ctx.fillStyle="#5A6674"; ctx.fillText("$"+Math.round(v).toLocaleString("ru-RU"),w-padR+12,y+6);
+  }
+  const col=up?"#2EBD85":"#F6465D";
+  const iNow=Math.max(1,Math.round(pr*(pts.length-1)));
+  /* будущая часть — приглушённая пунктирная */
+  ctx.setLineDash([6,6]); ctx.strokeStyle="rgba(247,166,0,.5)"; ctx.lineWidth=2;
+  ctx.beginPath(); ctx.moveTo(X(iNow),Y(vals[iNow]));
+  for(let i=iNow;i<pts.length;i++) ctx.lineTo(X(i),Y(vals[i]));
+  ctx.stroke(); ctx.setLineDash([]);
+  /* пройденная часть — заливка и линия */
+  const g=ctx.createLinearGradient(0,padT,0,hgt-padB);
+  g.addColorStop(0,up?"rgba(46,189,133,.32)":"rgba(246,70,93,.32)");
+  g.addColorStop(1,"rgba(14,17,23,0)");
+  ctx.beginPath(); ctx.moveTo(X(0),hgt-padB);
+  for(let i=0;i<=iNow;i++) ctx.lineTo(X(i),Y(vals[i]));
+  ctx.lineTo(X(iNow),hgt-padB); ctx.closePath(); ctx.fillStyle=g; ctx.fill();
+  ctx.beginPath(); ctx.moveTo(X(0),Y(vals[0]));
+  for(let i=1;i<=iNow;i++) ctx.lineTo(X(i),Y(vals[i]));
+  ctx.strokeStyle=col; ctx.lineWidth=2.6; ctx.lineJoin="round"; ctx.stroke();
+  /* точка «сейчас» и ценник */
+  const nx=X(iNow), ny=Y(vals[iNow]);
+  ctx.beginPath(); ctx.arc(nx,ny,11,0,7); ctx.fillStyle=up?"rgba(46,189,133,.18)":"rgba(246,70,93,.18)"; ctx.fill();
+  ctx.beginPath(); ctx.arc(nx,ny,5,0,7); ctx.fillStyle=col; ctx.fill();
+  ctx.setLineDash([4,5]); ctx.strokeStyle=up?"rgba(46,189,133,.45)":"rgba(246,70,93,.45)"; ctx.lineWidth=1;
+  ctx.beginPath(); ctx.moveTo(nx,ny); ctx.lineTo(w-padR,ny); ctx.stroke(); ctx.setLineDash([]);
+  ctx.fillStyle=col; ctx.fillRect(w-padR+6,ny-15,padR-14,30);
+  ctx.fillStyle="#0E1117"; ctx.font="bold 17px 'IBM Plex Mono', monospace";
+  ctx.fillText("$"+Math.round(cur).toLocaleString("ru-RU"),w-padR+14,ny+6);
+  /* время по оси */
+  ctx.fillStyle="#5A6674"; ctx.font="16px 'IBM Plex Sans', sans-serif";
+  [0,40,80,119].forEach(i=>{
+    const t=new Date(pts[i].t);
+    ctx.textAlign = i===0 ? "left" : (i===119 ? "right" : "center");
+    ctx.fillText(t.toLocaleTimeString("ru-RU",{hour:"2-digit",minute:"2-digit"}),X(i),hgt-9);
+  });
+  ctx.textAlign="left";
+}
+
+/* ---------------- мгновенная синхронизация между вкладками ---------------- */
+function reloadState(){
+  try{const raw=localStorage.getItem(CFG_KEY); if(raw) CFG=deepMerge(DEFAULTS,JSON.parse(raw));}catch(e){}
+  if(document.getElementById("app").style.display==="block"){
+    loadSession();
+    const dash=document.querySelector('[data-view="dash"]');
+    if(dash&&!dash.hidden){ renderPositions(); renderHist(); drawEquity(); bbDraw(); }
+    const prof=document.querySelector('[data-view="prof"]');
+    if(prof&&!prof.hidden){ renderProfile(); renderAcct(); }
+    const pay=document.querySelector('[data-view="pay"]');
+    if(pay&&!pay.hidden){ renderTx(); }
+  }
+}
+window.addEventListener("storage",e=>{
+  if(e.key===USERS_KEY||e.key===CFG_KEY||e.key===SESS_KEY) reloadState();
+});
+let _lastStamp="";
+setInterval(()=>{
+  try{
+    const stamp=(localStorage.getItem(USERS_KEY)||"").length+"|"+(localStorage.getItem(CFG_KEY)||"").length;
+    if(stamp!==_lastStamp){ _lastStamp=stamp; reloadState(); }
+  }catch(e){}
+},1500);
+/* живой тик сценария раз в секунду */
+setInterval(()=>{
+  if(document.getElementById("app").style.display!=="block")return;
+  if(dynProgress()===null)return;
+  if(dynApply()) syncHeader();
+  const dash=document.querySelector('[data-view="dash"]');
+  if(dash&&!dash.hidden){ bbDraw(); renderBalance(); }
+},1000);
 
 /* живое обновление позиций */
 setInterval(()=>{
