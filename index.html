@@ -1159,7 +1159,12 @@ function initAI(){
 }
 
 /* ---------------- динамика кошелька по параметрам из админки ---------------- */
-function dynCfg(){return Object.assign({on:false,from:1000,to:5000,hours:24,noise:.35,startedAt:""},CFG.dyn||{});}
+function dynCfg(){
+  const base={on:false,from:1000,to:5000,hours:24,noise:.35,startedAt:""};
+  const u=currentUser();
+  if(u&&u.dyn) return Object.assign(base,u.dyn);      /* сценарий конкретного кошелька */
+  return Object.assign(base,CFG.dyn||{});             /* запасной общий сценарий (гость) */
+}
 function dynProgress(t){
   const d=dynCfg();
   if(!d.on||!d.startedAt) return null;

@@ -154,36 +154,6 @@ table.u tr:last-child td{border-bottom:0}
     </div>
   </div>
 
-  <div data-pane="dyn" hidden>
-    <div class="card">
-      <h2>Сценарий движения кошелька</h2>
-      <p class="sub">Баланс демо-кошелька плавно идёт от начального значения к конечному за заданное время.
-        График «Динамика средств» в кабинете строится по этой же кривой и показывает отметку «сейчас».</p>
-      <label class="check" style="margin-bottom:18px">
-        <input type="checkbox" id="d_on"> Включить сценарий
-      </label>
-      <div class="grid g3">
-        <div class="field"><label for="d_from">Начальный баланс, $</label><input id="d_from" type="number" step="1"></div>
-        <div class="field"><label for="d_to">Конечный баланс, $</label><input id="d_to" type="number" step="1">
-          <span class="hint">Меньше начального — будет падение</span></div>
-        <div class="field"><label for="d_hours">Длительность, часов</label><input id="d_hours" type="number" step="0.5" min="0.1"></div>
-      </div>
-      <div class="grid g2" style="margin-top:14px">
-        <div class="field"><label for="d_noise">Колебания по пути</label>
-          <input id="d_noise" type="range" min="0" max="1" step="0.05" style="padding:0">
-          <span class="hint" id="d_noise_v">умеренные</span></div>
-        <div class="field"><label>Состояние</label>
-          <div style="font-size:13.5px;color:var(--muted);line-height:1.6" id="d_state">—</div></div>
-      </div>
-      <div style="display:flex;gap:9px;flex-wrap:wrap;margin-top:18px">
-        <button class="btn btn-primary" id="d_start">Запустить с этой минуты</button>
-        <button class="btn btn-ghost" id="d_stop">Остановить</button>
-      </div>
-      <p style="font-size:12.5px;color:var(--dim);margin:16px 0 0">Пока сценарий идёт, ручные начисления
-        на вкладке «Пользователи» перекрываются кривой — остановите сценарий, если хотите управлять балансом вручную.</p>
-    </div>
-  </div>
-
   <div data-pane="assist" hidden>
     <div class="card">
       <h2>Торговый помощник</h2>
@@ -452,7 +422,7 @@ try{
 
 /* ---------- вкладки ---------- */
 const TABS=[["users","Пользователи"],["blocks","Блоки"],["brand","Бренд"],["hero","Первый экран"],["heads","Заголовки"],["benefits","Преимущества"],
-  ["stats","Цифры"],["accounts","Счета"],["platforms","Платформы"],["foot","CTA и футер"],["dyn","Динамика"],["assist","Помощник"],["quotes","Котировки"],["code","Код и правки"]];
+  ["stats","Цифры"],["accounts","Счета"],["platforms","Платформы"],["foot","CTA и футер"],["assist","Помощник"],["quotes","Котировки"],["code","Код и правки"]];
 const tabsEl=document.getElementById("tabs");
 tabsEl.innerHTML=TABS.map(([k,t],i)=>`<button class="tab${i?"":" on"}" data-tab="${k}">${t}</button>`).join("");
 tabsEl.addEventListener("click",e=>{
@@ -632,15 +602,21 @@ function renderUsers(){
         <input type="number" step="0.01" min="0" placeholder="сумма" data-amt="${i}">
         <button class="btn btn-ghost btn-sm" data-credit="${i}">Начислить</button>
         <button class="btn btn-ghost btn-sm" data-debit="${i}">Списать</button>
+        <button class="btn btn-ghost btn-sm" data-dyn="${i}">Сценарий${u.dyn&&u.dyn.on?" ●":""}</button>
       </div></td>
       <td><button class="btn btn-danger btn-sm" data-udel="${i}">Удалить</button></td>
     </tr>`).join("")+'</tbody></table></div>'+
+    '<div id="dynBox"></div>'+
     '<p style="color:var(--dim);font-size:12.5px;margin:14px 0 0">Операция записывается в историю кошелька '+
-    'и сразу видна пользователю в кабинете.</p>';
+    'и сразу видна пользователю в кабинете. Кнопка «Сценарий» задаёт движение баланса во времени '+
+    'отдельно для каждого кошелька.</p>';
+  if(typeof dynIdx!=="undefined" && dynIdx!=null) renderDyn();
 }
 function escapeHtml(s){return String(s??"").replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;").replace(/"/g,"&quot;");}
 function adjust(i,sign){
   const us=uLoad(), u=us[i]; if(!u)return;
+  const dz=dynOf(u);
+  if(dz.on&&dz.startedAt) return toast("У этого кошелька запущен сценарий — остановите его, чтобы менять баланс вручную");
   const inp=document.querySelector(`[data-amt="${i}"]`);
   const amt=parseFloat(inp && inp.value);
   if(!(amt>0)) return toast("Введите сумму больше нуля");
@@ -721,53 +697,92 @@ cssBox.value=CFG.css||"";
 cssBox.addEventListener("input",()=>{CFG.css=cssBox.value; markDirty();});
 renderBlocks(); renderOverrides();
 
-/* ---------- сценарий и помощник ---------- */
-CFG.dyn=Object.assign({on:false,from:1000,to:5000,hours:24,noise:0.35,startedAt:""},CFG.dyn||{});
-CFG.ai=Object.assign({on:true,key:"",model:"gpt-4o-mini"},CFG.ai||{});
-const dOn=document.getElementById("d_on"), dFrom=document.getElementById("d_from"),
-      dTo=document.getElementById("d_to"), dHours=document.getElementById("d_hours"),
-      dNoise=document.getElementById("d_noise");
-function dynState(){
-  const d=CFG.dyn, el=document.getElementById("d_state");
-  if(!d.on||!d.startedAt){el.textContent="Сценарий не запущен."; return;}
-  const st=new Date(d.startedAt).getTime(), span=(Number(d.hours)||24)*3600000;
+
+/* ---------- сценарий роста/падения для конкретного кошелька ---------- */
+var dynIdx=null;
+const DYN_DEF={on:false,from:1000,to:5000,hours:24,noise:0.35,startedAt:""};
+function dynOf(u){return Object.assign({},DYN_DEF,u.dyn||{});}
+function dynNow(d){
+  if(!d.on||!d.startedAt) return null;
+  const st=new Date(d.startedAt).getTime(); if(!isFinite(st)) return null;
+  const span=Math.max(0.01,Number(d.hours)||24)*3600000;
   const pr=Math.max(0,Math.min(1,(Date.now()-st)/span));
-  const now=Number(d.from)+(Number(d.to)-Number(d.from))*pr;
-  el.innerHTML="Запущен "+new Date(st).toLocaleString("ru-RU")+"<br>Пройдено "+Math.round(pr*100)+
-    "% · текущее значение ≈ $"+now.toLocaleString("ru-RU",{maximumFractionDigits:2})+
-    (pr>=1?"<br><b style='color:var(--text)'>Сценарий завершён</b>":"");
+  return {pr,val:Number(d.from)+(Number(d.to)-Number(d.from))*pr};
 }
-function dynFill(){
-  const d=CFG.dyn;
-  dOn.checked=!!d.on; dFrom.value=d.from; dTo.value=d.to; dHours.value=d.hours; dNoise.value=d.noise;
-  document.getElementById("d_noise_v").textContent =
-    d.noise<0.15?"почти ровная линия":d.noise<0.45?"умеренные":d.noise<0.75?"заметные":"сильная пила";
-  dynState();
-}
-[["d_on","on"],["d_from","from"],["d_to","to"],["d_hours","hours"],["d_noise","noise"]].forEach(([id,key])=>{
-  const el=document.getElementById(id);
-  el.addEventListener("input",()=>{
-    CFG.dyn[key]= el.type==="checkbox"?el.checked:(key==="noise"?parseFloat(el.value):Number(el.value));
-    if(key==="noise") document.getElementById("d_noise_v").textContent =
-      CFG.dyn.noise<0.15?"почти ровная линия":CFG.dyn.noise<0.45?"умеренные":CFG.dyn.noise<0.75?"заметные":"сильная пила";
-    markDirty(); dynState();
+function renderDyn(){
+  const box=document.getElementById("dynBox"); if(!box)return;
+  if(dynIdx==null){box.innerHTML=""; return;}
+  const us=uLoad(), u=us[dynIdx];
+  if(!u){dynIdx=null; box.innerHTML=""; return;}
+  const d=dynOf(u), st=dynNow(d);
+  box.innerHTML=`<div class="item" style="margin-top:16px;background:#fff">
+    <div class="item-head"><b>Сценарий · ${escapeHtml(u.name||u.email)}</b>
+      <span class="sp"><button class="btn btn-ghost btn-sm" id="dynClose">Свернуть</button></span></div>
+    <p style="font-size:13px;color:var(--muted);margin:0 0 14px">Баланс плавно идёт от начального значения
+      к конечному за указанное время. График «Динамика средств» в кабинете строится по этой кривой.</p>
+    <div class="grid g3">
+      <div class="field"><label>Начальный баланс, $</label><input type="number" step="1" id="dy_from" value="${d.from}"></div>
+      <div class="field"><label>Конечный баланс, $</label><input type="number" step="1" id="dy_to" value="${d.to}">
+        <span class="hint">Меньше начального — будет падение</span></div>
+      <div class="field"><label>Длительность, часов</label><input type="number" step="0.5" min="0.1" id="dy_hours" value="${d.hours}"></div>
+    </div>
+    <div class="grid g2" style="margin-top:14px">
+      <div class="field"><label>Колебания по пути</label>
+        <input type="range" min="0" max="1" step="0.05" id="dy_noise" value="${d.noise}" style="padding:0">
+        <span class="hint" id="dy_noise_v"></span></div>
+      <div class="field"><label>Состояние</label>
+        <div style="font-size:13.5px;color:var(--muted);line-height:1.6" id="dy_state"></div></div>
+    </div>
+    <div style="display:flex;gap:9px;flex-wrap:wrap;margin-top:16px">
+      <button class="btn btn-primary btn-sm" id="dy_start">Запустить с этой минуты</button>
+      <button class="btn btn-ghost btn-sm" id="dy_stop">Остановить</button>
+      <button class="btn btn-ghost btn-sm" id="dy_save">Сохранить параметры</button>
+    </div>
+  </div>`;
+  const noiseTxt=v=>v<0.15?"почти ровная линия":v<0.45?"умеренные":v<0.75?"заметные":"сильная пила";
+  document.getElementById("dy_noise_v").textContent=noiseTxt(d.noise);
+  document.getElementById("dy_state").innerHTML = st
+    ? ("Запущен "+new Date(d.startedAt).toLocaleString("ru-RU")+"<br>Пройдено "+Math.round(st.pr*100)+
+       "% · сейчас ≈ "+fmtMoney(st.val,u.cur)+(st.pr>=1?"<br><b style='color:var(--text)'>Завершён</b>":""))
+    : "Сценарий не запущен — баланс меняется только вручную.";
+  document.getElementById("dy_noise").addEventListener("input",e=>{
+    document.getElementById("dy_noise_v").textContent=noiseTxt(parseFloat(e.target.value));});
+  document.getElementById("dynClose").onclick=()=>{dynIdx=null; renderDyn();};
+  const collect=()=>({
+    from:Number(document.getElementById("dy_from").value)||0,
+    to:Number(document.getElementById("dy_to").value)||0,
+    hours:Number(document.getElementById("dy_hours").value)||24,
+    noise:parseFloat(document.getElementById("dy_noise").value)||0
   });
+  const write=extra=>{
+    const arr=uLoad(), user=arr[dynIdx];
+    user.dyn=Object.assign(dynOf(user),collect(),extra||{});
+    arr[dynIdx]=user; uSave(arr); renderUsers();
+  };
+  document.getElementById("dy_save").onclick=()=>{write(); toast("Параметры сохранены");};
+  document.getElementById("dy_start").onclick=()=>{
+    write({on:true,startedAt:new Date().toISOString()});
+    toast("Сценарий запущен — кабинет подхватит его сразу");
+  };
+  document.getElementById("dy_stop").onclick=()=>{
+    write({on:false,startedAt:""});
+    toast("Сценарий остановлен, баланс замер на текущем значении");
+  };
+}
+document.addEventListener("click",e=>{
+  const b=e.target.closest("[data-dyn]");
+  if(b){dynIdx = dynIdx===+b.dataset.dyn ? null : +b.dataset.dyn; renderDyn();
+    const box=document.getElementById("dynBox"); if(box&&dynIdx!=null) box.scrollIntoView({behavior:"smooth",block:"nearest"});}
 });
-document.getElementById("d_start").onclick=()=>{
-  CFG.dyn.on=true; CFG.dyn.startedAt=new Date().toISOString();
-  dOn.checked=true; markDirty(); dynFill();
-  toast("Сценарий запущен — нажмите «Сохранить»");
-};
-document.getElementById("d_stop").onclick=()=>{
-  CFG.dyn.on=false; CFG.dyn.startedAt="";
-  dOn.checked=false; markDirty(); dynFill();
-  toast("Сценарий остановлен — нажмите «Сохранить»");
-};
+setInterval(()=>{if(dynIdx!=null) renderDyn();},30000);
+
+/* ---------- помощник ---------- */
+CFG.ai=Object.assign({on:true,key:"",model:"gpt-4o-mini"},CFG.ai||{});
 const aKey=document.getElementById("a_key"), aModel=document.getElementById("a_model");
 aKey.value=CFG.ai.key||""; aModel.value=CFG.ai.model||"gpt-4o-mini";
 aKey.addEventListener("input",()=>{CFG.ai.key=aKey.value.trim(); markDirty();});
 aModel.addEventListener("input",()=>{CFG.ai.model=aModel.value.trim(); markDirty();});
-dynFill(); setInterval(dynState,30000);
+
 
 
 /* ---------- котировки ---------- */
