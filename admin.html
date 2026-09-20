@@ -154,6 +154,53 @@ table.u tr:last-child td{border-bottom:0}
     </div>
   </div>
 
+  <div data-pane="dyn" hidden>
+    <div class="card">
+      <h2>Сценарий движения кошелька</h2>
+      <p class="sub">Баланс демо-кошелька плавно идёт от начального значения к конечному за заданное время.
+        График «Динамика средств» в кабинете строится по этой же кривой и показывает отметку «сейчас».</p>
+      <label class="check" style="margin-bottom:18px">
+        <input type="checkbox" id="d_on"> Включить сценарий
+      </label>
+      <div class="grid g3">
+        <div class="field"><label for="d_from">Начальный баланс, $</label><input id="d_from" type="number" step="1"></div>
+        <div class="field"><label for="d_to">Конечный баланс, $</label><input id="d_to" type="number" step="1">
+          <span class="hint">Меньше начального — будет падение</span></div>
+        <div class="field"><label for="d_hours">Длительность, часов</label><input id="d_hours" type="number" step="0.5" min="0.1"></div>
+      </div>
+      <div class="grid g2" style="margin-top:14px">
+        <div class="field"><label for="d_noise">Колебания по пути</label>
+          <input id="d_noise" type="range" min="0" max="1" step="0.05" style="padding:0">
+          <span class="hint" id="d_noise_v">умеренные</span></div>
+        <div class="field"><label>Состояние</label>
+          <div style="font-size:13.5px;color:var(--muted);line-height:1.6" id="d_state">—</div></div>
+      </div>
+      <div style="display:flex;gap:9px;flex-wrap:wrap;margin-top:18px">
+        <button class="btn btn-primary" id="d_start">Запустить с этой минуты</button>
+        <button class="btn btn-ghost" id="d_stop">Остановить</button>
+      </div>
+      <p style="font-size:12.5px;color:var(--dim);margin:16px 0 0">Пока сценарий идёт, ручные начисления
+        на вкладке «Пользователи» перекрываются кривой — остановите сценарий, если хотите управлять балансом вручную.</p>
+    </div>
+  </div>
+
+  <div data-pane="assist" hidden>
+    <div class="card">
+      <h2>Торговый помощник</h2>
+      <p class="sub">Раздел «Помощник» в кабинете. Без ключа отвечает встроенная база знаний:
+        спред, плечо, маржа и стоп-аут, стоп-лосс, лот, своп, волатильность, разбор открытых позиций и счёта.</p>
+      <div class="grid g2">
+        <div class="field"><label for="a_key">Ключ OpenAI</label><input id="a_key" placeholder="sk-...">
+          <span class="hint">Ключ попадёт в код страницы и будет виден любому посетителю.
+            Для учебного макета годится, для рабочего сайта — только через свой сервер.</span></div>
+        <div class="field"><label for="a_model">Модель</label><input id="a_model" placeholder="gpt-4o-mini"></div>
+      </div>
+      <p style="font-size:12.5px;color:var(--dim);margin:16px 0 0">Помощник не выдаёт сигналов на покупку
+        и продажу и не делает прогнозов цены — это зашито в его инструкции.
+        Скрыть раздел целиком можно на вкладке «Блоки».</p>
+    </div>
+  </div>
+
   <div data-pane="quotes" hidden>
     <div class="card">
       <h2>Реальные котировки</h2>
@@ -383,13 +430,15 @@ const DEFAULTS={
   achv:[{v:"1 240 000",k:"Открытых торговых счетов"},{v:"38",k:"Наград отраслевых изданий"},
     {v:"4.7",k:"Средняя оценка приложения"},{v:"9",k:"Платёжных методов"}],
   sections:{},panes:{},hidden:[],texts:{},css:"",
-  api:{td:"",live:true}
+  api:{td:"",live:true},
+  dyn:{on:false,from:1000,to:5000,hours:24,noise:0.35,startedAt:""},
+  ai:{on:true,key:"",model:"gpt-4o-mini"}
 };
 const SECTIONS=[["hero","Первый экран"],["markets","Котировки"],["benefits","Преимущества"],
   ["stats","Условия торговли"],["accounts","Типы счетов"],["platforms","Платформы"],
   ["classes","Классы активов"],["mobile","Мобильное приложение"],["achv","Компания в цифрах"],
   ["cta","Призыв к действию"],["footer","Футер"]];
-const PANES=[["dash","Обзор"],["term","Терминал"],["pay","Платежи"],["prof","Профиль"]];
+const PANES=[["dash","Обзор"],["term","Терминал"],["pay","Платежи"],["ai","Помощник"],["prof","Профиль"]];
 const ICON_LIST=[["globe","Глобус"],["shield","Щит"],["bolt","Молния"],["clock","Часы"],["chart","График"]];
 const clone=o=>JSON.parse(JSON.stringify(o));
 
@@ -397,13 +446,13 @@ let CFG=clone(DEFAULTS), dirty=false;
 try{
   const raw=localStorage.getItem(CFG_KEY);
   if(raw){const o=JSON.parse(raw); CFG={...CFG,...o};
-    ["brand","hero","heads","cta","foot","sections","panes","api"].forEach(k=>CFG[k]={...DEFAULTS[k],...(o[k]||{})});
+    ["brand","hero","heads","cta","foot","sections","panes","api","dyn","ai"].forEach(k=>CFG[k]={...DEFAULTS[k],...(o[k]||{})});
     CFG.hidden=o.hidden||[]; CFG.texts=o.texts||{}; CFG.css=o.css||"";}
 }catch(e){}
 
 /* ---------- вкладки ---------- */
 const TABS=[["users","Пользователи"],["blocks","Блоки"],["brand","Бренд"],["hero","Первый экран"],["heads","Заголовки"],["benefits","Преимущества"],
-  ["stats","Цифры"],["accounts","Счета"],["platforms","Платформы"],["foot","CTA и футер"],["quotes","Котировки"],["code","Код и правки"]];
+  ["stats","Цифры"],["accounts","Счета"],["platforms","Платформы"],["foot","CTA и футер"],["dyn","Динамика"],["assist","Помощник"],["quotes","Котировки"],["code","Код и правки"]];
 const tabsEl=document.getElementById("tabs");
 tabsEl.innerHTML=TABS.map(([k,t],i)=>`<button class="tab${i?"":" on"}" data-tab="${k}">${t}</button>`).join("");
 tabsEl.addEventListener("click",e=>{
@@ -671,6 +720,55 @@ const cssBox=document.getElementById("cssBox");
 cssBox.value=CFG.css||"";
 cssBox.addEventListener("input",()=>{CFG.css=cssBox.value; markDirty();});
 renderBlocks(); renderOverrides();
+
+/* ---------- сценарий и помощник ---------- */
+CFG.dyn=Object.assign({on:false,from:1000,to:5000,hours:24,noise:0.35,startedAt:""},CFG.dyn||{});
+CFG.ai=Object.assign({on:true,key:"",model:"gpt-4o-mini"},CFG.ai||{});
+const dOn=document.getElementById("d_on"), dFrom=document.getElementById("d_from"),
+      dTo=document.getElementById("d_to"), dHours=document.getElementById("d_hours"),
+      dNoise=document.getElementById("d_noise");
+function dynState(){
+  const d=CFG.dyn, el=document.getElementById("d_state");
+  if(!d.on||!d.startedAt){el.textContent="Сценарий не запущен."; return;}
+  const st=new Date(d.startedAt).getTime(), span=(Number(d.hours)||24)*3600000;
+  const pr=Math.max(0,Math.min(1,(Date.now()-st)/span));
+  const now=Number(d.from)+(Number(d.to)-Number(d.from))*pr;
+  el.innerHTML="Запущен "+new Date(st).toLocaleString("ru-RU")+"<br>Пройдено "+Math.round(pr*100)+
+    "% · текущее значение ≈ $"+now.toLocaleString("ru-RU",{maximumFractionDigits:2})+
+    (pr>=1?"<br><b style='color:var(--text)'>Сценарий завершён</b>":"");
+}
+function dynFill(){
+  const d=CFG.dyn;
+  dOn.checked=!!d.on; dFrom.value=d.from; dTo.value=d.to; dHours.value=d.hours; dNoise.value=d.noise;
+  document.getElementById("d_noise_v").textContent =
+    d.noise<0.15?"почти ровная линия":d.noise<0.45?"умеренные":d.noise<0.75?"заметные":"сильная пила";
+  dynState();
+}
+[["d_on","on"],["d_from","from"],["d_to","to"],["d_hours","hours"],["d_noise","noise"]].forEach(([id,key])=>{
+  const el=document.getElementById(id);
+  el.addEventListener("input",()=>{
+    CFG.dyn[key]= el.type==="checkbox"?el.checked:(key==="noise"?parseFloat(el.value):Number(el.value));
+    if(key==="noise") document.getElementById("d_noise_v").textContent =
+      CFG.dyn.noise<0.15?"почти ровная линия":CFG.dyn.noise<0.45?"умеренные":CFG.dyn.noise<0.75?"заметные":"сильная пила";
+    markDirty(); dynState();
+  });
+});
+document.getElementById("d_start").onclick=()=>{
+  CFG.dyn.on=true; CFG.dyn.startedAt=new Date().toISOString();
+  dOn.checked=true; markDirty(); dynFill();
+  toast("Сценарий запущен — нажмите «Сохранить»");
+};
+document.getElementById("d_stop").onclick=()=>{
+  CFG.dyn.on=false; CFG.dyn.startedAt="";
+  dOn.checked=false; markDirty(); dynFill();
+  toast("Сценарий остановлен — нажмите «Сохранить»");
+};
+const aKey=document.getElementById("a_key"), aModel=document.getElementById("a_model");
+aKey.value=CFG.ai.key||""; aModel.value=CFG.ai.model||"gpt-4o-mini";
+aKey.addEventListener("input",()=>{CFG.ai.key=aKey.value.trim(); markDirty();});
+aModel.addEventListener("input",()=>{CFG.ai.model=aModel.value.trim(); markDirty();});
+dynFill(); setInterval(dynState,30000);
+
 
 /* ---------- котировки ---------- */
 const qLive=document.getElementById("q_live"), qTd=document.getElementById("q_td");

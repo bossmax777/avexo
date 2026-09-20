@@ -397,6 +397,22 @@ body.ed-on .ed-sel{outline:2px solid #0056FF!important;outline-offset:2px}
 .acct-pick tr{cursor:pointer}
 .acct-pick tr.on{background:var(--accent-soft)}
 
+.ai-panel{display:flex;flex-direction:column;gap:14px}
+.ai-log{min-height:320px;max-height:52vh;overflow-y:auto;display:flex;flex-direction:column;gap:12px;padding-right:4px}
+.ai-msg{max-width:78%;padding:11px 14px;border-radius:13px;font-size:14px;line-height:1.55;white-space:pre-wrap}
+.ai-msg.me{align-self:flex-end;background:var(--accent);color:#fff;border-bottom-right-radius:5px}
+.ai-msg.bot{align-self:flex-start;background:var(--bg-2);border:1px solid var(--line-soft);border-bottom-left-radius:5px}
+.ai-msg.bot b{font-weight:600}
+.ai-chips{display:flex;gap:7px;flex-wrap:wrap}
+.ai-chips button{font-size:12.5px;padding:6px 12px;border-radius:999px;border:1px solid var(--line-soft);
+  background:#fff;color:var(--muted)}
+.ai-chips button:hover{border-color:var(--accent);color:var(--accent)}
+.ai-input{display:flex;gap:8px}
+.ai-input input{flex:1;background:#fff;border:1px solid var(--line);border-radius:10px;padding:11px 13px;color:var(--text)}
+.ai-input input:focus{outline:none;border-color:var(--accent)}
+.ai-note{margin:0;font-size:12px;color:var(--dim)}
+@media(max-width:620px){.ai-msg{max-width:92%}}
+
 /* profile */
 .prof-grid{display:grid;grid-template-columns:1fr 1fr;gap:16px}
 @media(max-width:900px){.prof-grid{grid-template-columns:1fr}}
@@ -634,6 +650,8 @@ body.ed-on .ed-sel{outline:2px solid #0056FF!important;outline-offset:2px}
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M3 17l5-6 4 4 7-9"/><path d="M3 21h18"/></svg>Терминал</button>
       <button data-pane="pay">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><rect x="2" y="5" width="20" height="14" rx="2"/><path d="M2 10h20"/></svg>Платежи</button>
+      <button data-pane="ai">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M21 12a8 8 0 01-8 8H7l-4 3V12a8 8 0 018-8h2a8 8 0 018 8z"/></svg>Помощник</button>
       <button data-pane="prof">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><circle cx="12" cy="8" r="4"/><path d="M4 21c0-4 3.6-6 8-6s8 2 8 6"/></svg>Профиль</button>
       <div class="spacer"></div>
@@ -649,7 +667,7 @@ body.ed-on .ed-sel{outline:2px solid #0056FF!important;outline-offset:2px}
         <div class="bal-grid" id="balGrid"></div>
         <div class="grid-2" style="gap:16px;margin-bottom:16px">
           <div class="panel" style="grid-column:span 2">
-            <div class="panel-head"><h3>Динамика средств</h3><span class="muted">30 дней</span></div>
+            <div class="panel-head"><h3>Динамика средств</h3><span class="muted" id="eqRange">30 дней</span></div>
             <canvas id="equity" width="1000" height="260" style="width:100%;height:230px;display:block" aria-label="График средств за 30 дней"></canvas>
           </div>
         </div>
@@ -748,6 +766,23 @@ body.ed-on .ed-sel{outline:2px solid #0056FF!important;outline-offset:2px}
               </table>
             </div>
           </div>
+        </div>
+      </div>
+
+
+      <!-- Помощник -->
+      <div data-view="ai" hidden>
+        <h2>Торговый помощник</h2>
+        <p class="pane-sub">Объясняет механику рынка и разбирает состояние вашего кошелька.
+          Сигналов «покупать / продавать» не даёт — решение всегда за вами.</p>
+        <div class="panel ai-panel">
+          <div id="aiLog" class="ai-log"></div>
+          <div class="ai-chips" id="aiChips"></div>
+          <div class="ai-input">
+            <input id="aiText" placeholder="Спросите про спред, плечо, маржу, риск или ваш счёт" autocomplete="off">
+            <button class="btn btn-primary" id="aiSend">Спросить</button>
+          </div>
+          <p class="ai-note" id="aiNote"></p>
         </div>
       </div>
 
@@ -912,7 +947,9 @@ const DEFAULTS={
   platforms:DEF_PLATFORMS.map(([n,d,t])=>({n,d,t})),
   achv:DEF_ACHV.map(([v,k])=>({v,k})),
   sections:{},panes:{},hidden:[],texts:{},css:"",
-  api:{td:"",live:true}
+  api:{td:"",live:true},
+  dyn:{on:false,from:1000,to:5000,hours:24,noise:0.35,startedAt:""},
+  ai:{on:true,key:"",model:"gpt-4o-mini"}
 };
 function deepMerge(base,over){
   if(Array.isArray(base)) return Array.isArray(over)?over:base;
@@ -932,7 +969,7 @@ const SECTIONS=[["hero","Первый экран"],["markets","Котировк�
   ["stats","Условия торговли"],["accounts","Типы счетов"],["platforms","Платформы"],
   ["classes","Классы активов"],["mobile","Мобильное приложение"],["achv","Компания в цифрах"],
   ["cta","Призыв к действию"],["footer","Футер"]];
-const PANES=[["dash","Обзор"],["term","Терминал"],["pay","Платежи"],["prof","Профиль"]];
+const PANES=[["dash","Обзор"],["term","Терминал"],["pay","Платежи"],["ai","Помощник"],["prof","Профиль"]];
 function elPath(el){
   if(!el||el===document.body) return "body";
   const parts=[];
@@ -1001,6 +1038,166 @@ const fmt=(n,d=2)=>n.toLocaleString("ru-RU",{minimumFractionDigits:d,maximumFrac
 const usd=n=>"$"+fmt(n,2);
 
 
+
+
+
+/* ---------------- торговый помощник ---------------- */
+const AI_CHIPS=["Что у меня со счётом?","Что такое спред?","Как работает кредитное плечо?",
+  "Что такое маржа и стоп-аут?","Объясни стоп-лосс и тейк-профит","Сколько рисковать на сделку?",
+  "Чем фьючерс отличается от акции?","Что такое своп?"];
+function aiSay(text,who){
+  const log=document.getElementById("aiLog"); if(!log)return;
+  const d=document.createElement("div"); d.className="ai-msg "+(who||"bot");
+  d.textContent=text; log.appendChild(d); log.scrollTop=log.scrollHeight;
+  return d;
+}
+function aiAccountSummary(){
+  const pl=state.positions.reduce((a,p)=>a+pnl(p),0);
+  const eq=state.balance+pl;
+  const margin=state.positions.reduce((a,p)=>{const [c]=spec(p.sym);
+    return a+p.vol*c*(prices[p.sym]??p.open)/200;},0);
+  const lvl=margin?eq/margin*100:null;
+  const lines=[
+    "Баланс: "+usd(state.balance),
+    "Средства с учётом открытых позиций: "+usd(eq),
+    "Открытая прибыль: "+(pl>=0?"+":"−")+usd(Math.abs(pl)),
+    "Задействованная маржа: "+usd(margin),
+    lvl!==null?("Уровень маржи: "+fmt(lvl,1)+"% (стоп-аут при 50%)"):"Позиций нет — маржа не задействована"
+  ];
+  if(state.positions.length){
+    lines.push("");
+    lines.push("Позиции:");
+    state.positions.forEach(p=>{
+      const v=pnl(p);
+      lines.push("• "+p.sym+" "+(p.side==="buy"?"Buy":"Sell")+" "+fmt(p.vol,2)+" лот, вход "+
+        fmt(p.open,p.dec)+", сейчас "+fmt(prices[p.sym]??p.open,p.dec)+", результат "+
+        (v>=0?"+":"−")+usd(Math.abs(v)));
+    });
+  }
+  if(lvl!==null&&lvl<150) lines.push("", "Уровень маржи низкий — при дальнейшем движении против позиций брокер закроет их принудительно.");
+  const pr=dynProgress();
+  if(pr!==null){
+    const d=dynCfg();
+    lines.push("", "На счёте запущен сценарий: "+usd(Number(d.from))+" → "+usd(Number(d.to))+
+      " за "+d.hours+" ч, пройдено "+Math.round(pr*100)+"%.");
+  }
+  return lines.join("\n");
+}
+const AI_KB=[
+  [/спред|spread/i,"Спред — разница между ценой покупки (Ask) и продажи (Bid). Это издержка входа: открыв сделку, вы сразу в минусе на величину спреда.\n\nНа счетах Standard спред плавающий и включает комиссию брокера, на Raw+ и Elite он близок к нулю, но добавляется комиссия за лот. На спокойном рынке спред узкий, на новостях расширяется в разы."],
+  [/плеч|leverage|кредитн/i,"Кредитное плечо позволяет открыть позицию больше вашего депозита. При 1:200 на 500 $ собственных средств вы управляете объёмом 100 000 $.\n\nПлечо умножает и прибыль, и убыток: движение цены на 0.5% против вас при 1:200 съедает весь депозит. Само по себе плечо не увеличивает риск — его увеличивает слишком большой объём позиции."],
+  [/маржа|margin|стоп-?аут/i,"Маржа — часть средств, заблокированная под открытые позиции. Уровень маржи = средства ÷ маржа × 100%.\n\nКогда уровень падает до 50%, срабатывает стоп-аут: брокер принудительно закрывает позиции, начиная с самой убыточной. Держать уровень выше 300–500% — разумная привычка."],
+  [/стоп-?лосс|тейк|take profit|stop loss/i,"Стоп-лосс — заявка на закрытие с убытком на заранее выбранном уровне, тейк-профит — на закрытие с прибылью.\n\nСтавьте их не «на глаз», а по структуре рынка: стоп за ближайший экстремум, тейк — до уровня сопротивления. Разумное соотношение — тейк минимум вдвое дальше стопа, тогда даже при 40% прибыльных сделок счёт растёт."],
+  [/риск|сколько.*рисков|risk/i,"Общее правило управления риском — не более 1–2% депозита на сделку.\n\nСчитается так: расстояние до стопа в пунктах × стоимость пункта × объём = сумма риска. Подбирайте объём так, чтобы эта сумма укладывалась в 1–2% счёта. Тогда серия из десяти убытков подряд отнимет 10–20%, а не весь депозит."],
+  [/фьючерс/i,"Фьючерс — биржевой контракт с конкретной датой экспирации, акция — доля в компании без срока.\n\nУ фьючерса выше плечо и есть срок жизни: перед экспирацией позицию нужно закрыть или перенести в следующий контракт. По акциям начисляются дивиденды, по фьючерсам — нет."],
+  [/своп|swap|перенос/i,"Своп — плата за перенос позиции через ночь, разница процентных ставок двух валют. Может быть и положительным, и отрицательным.\n\nС среды на четверг обычно начисляется тройной своп — за выходные. Для внутридневной торговли своп значения не имеет, для позиций на недели — заметно влияет на итог."],
+  [/волатильн/i,"Волатильность — размах движения цены. Высокая даёт больше возможностей и больше риска: стоп-лосс приходится ставить дальше, а значит уменьшать объём.\n\nСамые волатильные в этом терминале — природный газ и криптовалюта, самые спокойные — крупные валютные пары."],
+  [/лот|объём|объем/i,"Лот — стандартный размер контракта. По валютным парам 1 лот = 100 000 единиц базовой валюты, по золоту — 100 унций, по индексам — 10 контрактов.\n\nМинимальный шаг здесь 0.01 лота. Стоимость пункта считается от объёма: на EUR/USD при 0.10 лота пункт стоит примерно 1 $."],
+  [/золот|xau|gold/i,"Золото (XAU/USD) торгуется в долларах за тройскую унцию, 1 лот = 100 унций. Традиционно растёт на страхе рынка и слабом долларе.\n\nВ этом терминале цена золота тянется с реального источника, так что она совпадает с рынком."],
+  [/крипт|btc|bitcoin|биткоин/i,"Биткоин торгуется круглосуточно без выходных, волатильность в разы выше валютных пар. Плечо по нему ниже, маржа больше.\n\nЦена BTC/USD здесь берётся с биржи в реальном времени."],
+  [/индекс|us500|nasdaq|dax/i,"Индекс отражает корзину акций целиком: US500 — 500 крупнейших компаний США, US100 — технологический сектор, GER40 — Германия.\n\nЭто способ поставить на рынок в целом, не выбирая отдельные бумаги и не завися от новостей одной компании."],
+  [/вывод|пополн|депозит/i,"В этом макете платежи имитированы: пополнение и вывод меняют только цифру внутри страницы, реальных транзакций нет. В разделе «Платежи» видно, как считаются комиссия и срок зачисления для разных методов."],
+  [/терминал|график|свеч/i,"Свечной график показывает четыре цены за период: открытие, максимум, минимум, закрытие. Зелёная свеча — закрытие выше открытия, красная — ниже.\n\nТени показывают, куда цена ходила внутри периода: длинная нижняя тень говорит, что продавцов продавили обратно вверх."],
+  [/привет|здравств|hello|hi\b/i,"Здравствуйте. Спрашивайте про инструменты, спред, плечо, маржу или риск — объясню. Про ваш счёт тоже: напишите «что у меня со счётом»."],
+  [/спасиб|благодар/i,"Пожалуйста. Если нужно разобрать конкретную позицию — напишите её инструмент."]
+];
+function aiLocalAnswer(q){
+  if(/счёт|счет|баланс|позиц|портфел|сколько у меня|мой счет|мой счёт/i.test(q)) return aiAccountSummary();
+  if(/куп(и|л|ить)|продать|продавать|стоит ли|сигнал|прогноз|вырастет|упадёт|упадет|зайти в|входить в|шорт|лонг/i.test(q))
+    return "Сигналов на покупку или продажу я не даю — это ваше решение и ваш риск.\n\nЧто могу вместо этого: объяснить, как устроен инструмент, посчитать допустимый объём под ваш риск, разобрать текущие позиции и показать, где уровень маржи становится опасным. Спросите, например: «сколько рисковать на сделку» или «что у меня со счётом».";
+  for(const [re,ans] of AI_KB) if(re.test(q)) return ans;
+  return "Не нашёл готового ответа. Попробуйте спросить про спред, кредитное плечо, маржу и стоп-аут, стоп-лосс, размер лота, своп, волатильность или про состояние вашего счёта.\n\nЕсли нужен разбор конкретного инструмента — напишите его тикер, например XAU/USD или US500.";
+}
+async function aiRemoteAnswer(q,hist){
+  const cfg=Object.assign({on:true,key:"",model:"gpt-4o-mini"},CFG.ai||{});
+  const key=(cfg.key||"").trim(); if(!key) return null;
+  const sys="Ты — обучающий помощник внутри учебного демонстрационного торгового терминала Avexo. "+
+    "Объясняй механику рынка простым русским языком, коротко и по делу. "+
+    "Никогда не давай сигналов покупать или продавать, не делай прогнозов цены и не выдавай себя за финансового советника. "+
+    "Если спрашивают про счёт, опирайся на данные ниже.\n\nСостояние счёта:\n"+aiAccountSummary();
+  try{
+    const r=await fetch("https://api.openai.com/v1/chat/completions",{
+      method:"POST",
+      headers:{"Content-Type":"application/json","Authorization":"Bearer "+key},
+      body:JSON.stringify({model:cfg.model||"gpt-4o-mini",temperature:0.4,max_tokens:500,
+        messages:[{role:"system",content:sys}].concat(hist.slice(-6)).concat([{role:"user",content:q}])})
+    }).then(x=>x.json());
+    if(r&&r.choices&&r.choices[0]) return r.choices[0].message.content.trim();
+    if(r&&r.error) return "Модель вернула ошибку: "+(r.error.message||"неизвестно")+"\n\nПока отвечу сам:\n\n"+aiLocalAnswer(q);
+  }catch(e){}
+  return null;
+}
+let aiHist=[];
+async function aiAsk(q){
+  q=(q||"").trim(); if(!q)return;
+  aiSay(q,"me"); aiHist.push({role:"user",content:q});
+  const wait=aiSay("…","bot");
+  let ans=await aiRemoteAnswer(q,aiHist.slice(0,-1));
+  if(!ans) ans=aiLocalAnswer(q);
+  wait.textContent=ans;
+  aiHist.push({role:"assistant",content:ans});
+  document.getElementById("aiLog").scrollTop=1e6;
+}
+function initAI(){
+  const log=document.getElementById("aiLog"); if(!log||log.dataset.ready)return;
+  log.dataset.ready="1";
+  const key=((CFG.ai||{}).key||"").trim();
+  document.getElementById("aiNote").textContent = key
+    ? "Отвечает языковая модель через ваш ключ. Помощник объясняет механику и не даёт торговых рекомендаций."
+    : "Работает встроенная база знаний. В админке можно подключить языковую модель по ключу. Торговых рекомендаций помощник не даёт.";
+  aiSay("Здравствуйте. Я помогаю разобраться с терминалом: объясню спред, плечо, маржу и риск, разберу ваши открытые позиции и состояние счёта.\n\nСигналов на сделки не даю — только механику и расчёты.","bot");
+  document.getElementById("aiChips").innerHTML=AI_CHIPS.map(c=>`<button data-chip="${c}">${c}</button>`).join("");
+  document.getElementById("aiChips").onclick=e=>{
+    const b=e.target.closest("[data-chip]"); if(b) aiAsk(b.dataset.chip);
+  };
+  document.getElementById("aiSend").onclick=()=>{
+    const i=document.getElementById("aiText"); aiAsk(i.value); i.value="";
+  };
+  document.getElementById("aiText").addEventListener("keydown",e=>{
+    if(e.key==="Enter"){const i=e.target; aiAsk(i.value); i.value="";}
+  });
+}
+
+/* ---------------- динамика кошелька по параметрам из админки ---------------- */
+function dynCfg(){return Object.assign({on:false,from:1000,to:5000,hours:24,noise:.35,startedAt:""},CFG.dyn||{});}
+function dynProgress(t){
+  const d=dynCfg();
+  if(!d.on||!d.startedAt) return null;
+  const st=new Date(d.startedAt).getTime();
+  if(!isFinite(st)) return null;
+  const span=Math.max(0.01,Number(d.hours)||24)*3600000;
+  return Math.max(0,Math.min(1,((t||Date.now())-st)/span));
+}
+/* плавный псевдослучайный шум: одинаковый для одного и того же момента */
+function dynNoise(x){
+  const a=Math.sin(x*12.9898)*43758.5453;
+  const b=Math.sin(x*78.233)*12345.6789;
+  return ((a-Math.floor(a))+(b-Math.floor(b)))-1; /* примерно -1..1 */
+}
+function dynValue(t){
+  const d=dynCfg(), pr=dynProgress(t);
+  if(pr===null) return null;
+  const from=Number(d.from)||0, to=Number(d.to)||0;
+  const base=from+(to-from)*pr;
+  const amp=Math.abs(to-from)*(Number(d.noise)||0)*0.18;
+  const wig=amp*dynNoise(pr*40)*Math.sin(pr*Math.PI); /* к концу колебания затухают */
+  return Math.max(0,base+wig);
+}
+function dynSeries(n){
+  const d=dynCfg(); n=n||60;
+  const st=new Date(d.startedAt).getTime();
+  const span=Math.max(0.01,Number(d.hours)||24)*3600000;
+  const out=[];
+  for(let i=0;i<n;i++) out.push({t:st+span*(i/(n-1)),v:dynValue(st+span*(i/(n-1)))});
+  return out;
+}
+function dynApply(){
+  const v=dynValue();
+  if(v===null) return false;
+  state.balance=v;
+  const u=currentUser(); if(u){u.balance=v; persistUser(u);}
+  return true;
+}
 
 /* ---------------- профиль: показ и редактирование ---------------- */
 const DEMO_PROFILE={name:"Daniil Kovalev",email:"d.kovalev@example.com",phone:"+84 •• ••• 41 20",
@@ -1385,6 +1582,7 @@ const spec=s=>SPECS[s]||[100,0.01,0.1];
 const GUEST=JSON.parse(JSON.stringify({balance:state.balance,positions:state.positions,tx:state.tx,hist:state.hist}));
 function loadSession(){
   const u=currentUser();
+  const _dyn=dynValue();
   if(u){
     state.balance=u.balance||0;
     state.positions=u.positions||[];
@@ -1394,6 +1592,7 @@ function loadSession(){
     state.balance=GUEST.balance; state.positions=JSON.parse(JSON.stringify(GUEST.positions));
     state.tx=JSON.parse(JSON.stringify(GUEST.tx)); state.hist=JSON.parse(JSON.stringify(GUEST.hist));
   }
+  if(_dyn!==null) state.balance=_dyn;
   syncHeader();
 }
 function saveSession(){
@@ -1428,6 +1627,7 @@ function showPane(id){
   if(id==="dash"){drawEquity();renderPositions();}
   if(id==="term"){renderWatch();drawCandles();updateTicket();}
   if(id==="prof"){renderProfile();renderAcct();fitAcct();}
+  if(id==="ai"){initAI();}
 }
 document.getElementById("side").addEventListener("click",e=>{
   const b=e.target.closest("[data-pane]"); if(b)showPane(b.dataset.pane);
@@ -1490,11 +1690,21 @@ renderHist(); renderBalance(); renderPositions();
 /* график эквити */
 function drawEquity(){
   const cv=document.getElementById("equity"),ctx=cv.getContext("2d");
+  const rangeEl=document.getElementById("eqRange");
+  if(rangeEl){const dc=dynCfg();
+    rangeEl.textContent = dynProgress()!==null
+      ? ("сценарий · "+dc.hours+" ч · "+Math.round(dynProgress()*100)+"%")
+      : "30 дней";}
   const w=cv.width,h=cv.height,padL=52,padR=14,padT=14,padB=28;
-  let v=state.balance*0.82,d=[];
-  for(let i=0;i<30;i++){v+=(Math.random()-0.34)*state.balance*0.018;d.push(v);}
-  const off=state.balance-d[29];
-  d=d.map((p,i)=>p+off*(i/29));
+  let d=[], dynOn=dynProgress()!==null, series=null;
+  if(dynOn){
+    series=dynSeries(30); d=series.map(x=>x.v);
+  }else{
+    let v=state.balance*0.82;
+    for(let i=0;i<30;i++){v+=(Math.random()-0.34)*state.balance*0.018;d.push(v);}
+    const off=state.balance-d[29];
+    d=d.map((p,i)=>p+off*(i/29));
+  }
   const min=Math.min(...d)*0.98,max=Math.max(...d)*1.02,rng=max-min;
   const x=i=>padL+i*(w-padL-padR)/(d.length-1), y=p=>h-padB-((p-min)/rng)*(h-padT-padB);
   ctx.clearRect(0,0,w,h);
@@ -1506,7 +1716,14 @@ function drawEquity(){
     ctx.textAlign="right";ctx.fillText("$"+Math.round(val).toLocaleString("ru-RU"),padL-8,yy+4);
   }
   ctx.textAlign="center";
-  [0,7,14,21,29].forEach(i=>ctx.fillText((i+1)+" д.",x(i),h-8));
+  if(dynOn&&series){
+    [0,7,14,21,29].forEach(i=>{
+      const dt=new Date(series[i].t);
+      ctx.fillText(dt.toLocaleTimeString("ru-RU",{hour:"2-digit",minute:"2-digit"}),x(i),h-8);
+    });
+  }else{
+    [0,7,14,21,29].forEach(i=>ctx.fillText((i+1)+" д.",x(i),h-8));
+  }
   const g=ctx.createLinearGradient(0,padT,0,h-padB);
   g.addColorStop(0,"rgba(0,86,255,.20)");g.addColorStop(1,"rgba(0,86,255,0)");
   ctx.beginPath();ctx.moveTo(x(0),y(d[0]));d.forEach((p,i)=>ctx.lineTo(x(i),y(p)));
@@ -1514,6 +1731,14 @@ function drawEquity(){
   ctx.beginPath();ctx.moveTo(x(0),y(d[0]));d.forEach((p,i)=>ctx.lineTo(x(i),y(p)));
   ctx.strokeStyle="#0056FF";ctx.lineWidth=2;ctx.lineJoin="round";ctx.stroke();
   ctx.beginPath();ctx.arc(x(29),y(d[29]),4,0,7);ctx.fillStyle="#0056FF";ctx.fill();
+  if(dynOn){
+    const pr=dynProgress(), i=Math.round(pr*29), nx=x(i), ny=y(d[i]);
+    ctx.setLineDash([4,4]);ctx.strokeStyle="rgba(0,86,255,.45)";ctx.lineWidth=1;
+    ctx.beginPath();ctx.moveTo(nx,padT);ctx.lineTo(nx,h-padB);ctx.stroke();ctx.setLineDash([]);
+    ctx.beginPath();ctx.arc(nx,ny,5,0,7);ctx.fillStyle="#0056FF";ctx.fill();
+    ctx.fillStyle="#0056FF";ctx.font="11px 'IBM Plex Sans', sans-serif";ctx.textAlign="center";
+    ctx.fillText("сейчас",nx,padT+10);
+  }
 }
 
 /* терминал */
@@ -1790,8 +2015,9 @@ if(/[?&]edit=1/.test(location.search)) startEditor();
 setInterval(()=>{
   INSTR.forEach(([s])=>{ if(!LIVE.src[s]) prices[s]=prices[s]*(1+(Math.random()-0.5)*0.0005); });
   if(document.getElementById("app").style.display==="block"){
+    if(dynApply()){ syncHeader(); }
     const dash=document.querySelector('[data-view="dash"]');
-    if(dash&&!dash.hidden) renderPositions();
+    if(dash&&!dash.hidden){ renderPositions(); if(dynProgress()!==null) drawEquity(); }
     const term=document.querySelector('[data-view="term"]');
     if(term&&!term.hidden){
       const d=decs[state.curSym];
