@@ -1477,12 +1477,25 @@ function blockEl(key){
   if(key.indexOf("view:")===0) return document.querySelector('[data-view="'+key.slice(5)+'"]');
   return null;
 }
+const HTML_KEYS=["head","apphead","side"]
+  .concat(["hero","markets","benefits","stats","accounts","platforms","classes","mobile","achv","cta","footer"].map(k=>"sec:"+k))
+  .concat(["dash","term","pay","out","tools","ai","prof"].map(k=>"view:"+k));
+const HTML_ORIG={};
+function snapshotBlocks(){
+  HTML_KEYS.forEach(k=>{
+    if(HTML_ORIG[k]!=null) return;
+    try{ const el=blockEl(k); if(el) HTML_ORIG[k]=el.innerHTML; }catch(e){}
+  });
+}
 function applyHtmlBlocks(){
+  snapshotBlocks();
   const h=CFG.html||{};
-  Object.keys(h).forEach(k=>{
+  HTML_KEYS.forEach(k=>{
+    let el=null; try{ el=blockEl(k); }catch(e){}
+    if(!el) return;
     const v=h[k];
-    if(typeof v!=="string"||!v.trim()) return;
-    try{ const el=blockEl(k); if(el) el.innerHTML=v; }catch(e){}
+    if(typeof v==="string"&&v.trim()){ if(el.innerHTML!==v) el.innerHTML=v; }
+    else if(HTML_ORIG[k]!=null&&el.innerHTML!==HTML_ORIG[k]) el.innerHTML=HTML_ORIG[k];
   });
 }
 function safe(fn){ try{ fn(); }catch(e){ console.warn("[avexo]",e&&e.message); } }
@@ -2160,7 +2173,53 @@ apiBoot().then(()=>{
     let last=""; try{ last=localStorage.getItem(APP_KEY)||""; }catch(e){}
     if(last) openApp(last);
   });
+  startConfigWatch();
 });
+
+/* ---- мгновенная доставка правок из админки всем посетителям ---- */
+function rerenderAll(){
+  safe(renderQuotes);
+  safe(()=>renderClass(document.querySelector("#clsTabs .tab.on")?.textContent||"Индексы"));
+  safe(()=>{
+    const el=document.getElementById("benefits"); if(!el)return;
+    el.innerHTML=CFG.benefits.map(({ic,t,d})=>
+      `<div class="card"><div class="ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7">${ICONS[ic]||ICONS.chart}</svg></div>
+       <h3>${t}</h3><p>${d}</p></div>`).join("");
+  });
+  safe(()=>{ if(typeof renderAccounts==="function") renderAccounts(); });
+  if(document.getElementById("app").style.display==="block"){
+    safe(()=>{ renderHist(); renderTx(); renderPositions(); });
+    safe(()=>{
+      const cur=document.querySelector("#side [data-pane].on");
+      showPane(cur?cur.dataset.pane:"dash");
+    });
+  }
+}
+let CFG_V=null, _cfgBusy=false;
+async function pollConfig(){
+  if(!API.on||_cfgBusy||document.hidden) return;
+  _cfgBusy=true;
+  try{
+    const r=await api("/api/config/v");
+    const v=r&&r.v;
+    if(CFG_V===null){ CFG_V=v; }
+    else if(v&&v!==CFG_V){
+      CFG_V=v;
+      const c=await api("/api/config");
+      CFG=deepMerge(DEFAULTS,(c&&c.config)||{});
+      safe(applyConfig);
+      safe(rerenderAll);
+    }
+  }catch(e){}
+  _cfgBusy=false;
+}
+function startConfigWatch(){
+  if(!API.on) return;
+  pollConfig();
+  setInterval(pollConfig,4000);
+  document.addEventListener("visibilitychange",()=>{ if(!document.hidden) pollConfig(); });
+  window.addEventListener("focus",pollConfig);
+}
 setInterval(refreshLive,60000);
 
 /* спарклайн в hero */

@@ -249,8 +249,8 @@ body{background:radial-gradient(900px 520px at 88% -8%,rgba(79,70,229,.10),trans
           <textarea id="pgCode" spellcheck="false" placeholder="Выберите блок в списке слева"
             style="min-height:420px;font-family:'IBM Plex Mono',monospace;font-size:12.5px;line-height:1.5"></textarea>
           <p class="sub" style="margin:10px 0 0" id="pgHint">
-            «Применить блок» кладёт HTML в настройки. Чтобы изменения увидели посетители,
-            нажмите «Сохранить» в верхней полосе.</p>
+            «Применить блок» сразу публикует правку на сервере: открытые страницы сайта подхватят
+            её за несколько секунд без перезагрузки. «Вернуть исходный» так же мгновенно откатывает блок.</p>
         </div>
       </div>
     </div>
@@ -626,27 +626,31 @@ document.addEventListener("click",e=>{
 });
 
 /* ---------- сохранение ---------- */
+async function publishCfg(silent){
+  if(!API.on){
+    try{ localStorage.setItem(CFG_KEY,JSON.stringify(CFG)); }catch(e){}
+    dirty=false; document.getElementById("state").textContent="Сохранено локально "+new Date().toLocaleTimeString("ru-RU");
+    if(!silent) toast("Сервер недоступен — правка сохранена только в этом браузере");
+    return false;
+  }
+  try{
+    await api("/api/config",{method:"PUT",body:JSON.stringify(CFG)});
+    dirty=false;
+    document.getElementById("state").textContent="Опубликовано "+new Date().toLocaleTimeString("ru-RU");
+    if(!silent) toast("Опубликовано — у всех посетителей обновится за несколько секунд");
+    return true;
+  }catch(err){
+    if(!silent) toast("Сервер не принял правку: "+err.message);
+    return false;
+  }
+}
 function markDirty(){dirty=true; document.getElementById("state").textContent="Есть несохранённые изменения";}
 function toast(msg){
   document.querySelectorAll(".toast").forEach(t=>t.remove());
   const t=document.createElement("div"); t.className="toast"; t.textContent=msg;
   document.body.appendChild(t); setTimeout(()=>t.remove(),2600);
 }
-document.getElementById("btnSave").onclick=async ()=>{
-  if(API.on){
-    try{
-      await api("/api/config",{method:"PUT",body:JSON.stringify(CFG)});
-      dirty=false; document.getElementById("state").textContent="Сохранено на сервере "+new Date().toLocaleTimeString("ru-RU");
-      toast("Сохранено на сервере — видно всем посетителям");
-    }catch(err){ toast("Сервер не принял настройки: "+err.message); }
-    return;
-  }
-  try{
-    localStorage.setItem(CFG_KEY,JSON.stringify(CFG));
-    dirty=false; document.getElementById("state").textContent="Сохранено "+new Date().toLocaleTimeString("ru-RU");
-    toast("Сохранено — откройте сайт, чтобы увидеть изменения");
-  }catch(err){toast("Браузер не дал сохранить: "+err.message);}
-};
+document.getElementById("btnSave").onclick=()=>publishCfg();
 document.getElementById("btnReset").onclick=()=>{
   if(!confirm("Сбросить все настройки к значениям по умолчанию?"))return;
   try{localStorage.removeItem(CFG_KEY);}catch(e){}
@@ -940,17 +944,18 @@ document.getElementById("pgApply").onclick=()=>{
   CFG.html=CFG.html||{};
   if(!v.trim()||v.trim()===pgOriginal(pgKey).trim()) delete CFG.html[pgKey];
   else CFG.html[pgKey]=v;
-  markDirty(); pgRenderTree();
+  pgRenderTree();
   document.getElementById("pgKey").textContent=pgSelector(pgKey)+(CFG.html[pgKey]?"  · изменён":"  · исходный");
-  toast("Блок применён. Нажмите «Сохранить», чтобы увидели все");
+  publishCfg();
 };
 document.getElementById("pgReset").onclick=()=>{
   if(!pgKey) return;
   CFG.html=CFG.html||{}; delete CFG.html[pgKey];
   document.getElementById("pgCode").value=pgOriginal(pgKey);
-  markDirty(); pgRenderTree();
+  pgRenderTree();
   document.getElementById("pgKey").textContent=pgSelector(pgKey)+"  · исходный";
-  toast("Блок возвращён к исходному виду");
+  publishCfg();
+  toast("Блок возвращён к исходному виду и опубликован");
 };
 document.getElementById("pgOpen").onclick=()=>{
   const app=pgKey.indexOf("view:")===0||pgKey==="apphead"||pgKey==="side";
