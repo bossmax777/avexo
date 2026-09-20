@@ -2530,6 +2530,13 @@ async function loginUser(email,pass){
 /* ---------------- личный кабинет ---------------- */
 /* Позиции, которые «ведут» счёт к цели сценария.
    Генерируются детерминированно из даты старта, живут пока сценарий идёт. */
+/* во сколько раз агент торгует плотнее обычного: зависит от заданной доходности */
+function dynIntensity(){
+  const w=dynWindow(); if(!w) return 1;
+  const from=Math.max(1,Number(w.d.from)||1), to=Number(w.d.to)||from;
+  const k=Math.max(0,(to-from)/from);
+  return Math.max(1,Math.min(3.2,1+Math.log10(1+k)*1.5));
+}
 function dynRnd(seed,i){ const x=Math.sin(seed*13.17+i*97.31)*43758.5453; return x-Math.floor(x); }
 function dynPositions(){
   const w=dynWindow(); if(!w) return null;
@@ -2543,7 +2550,7 @@ function dynPositions(){
      остальное — коррелирующие инструменты */
   const alt=["USD/JPY","EUR/USD","US500","USOIL","BTC/USD","AAPL"];
   const days=w.span/86400000;
-  const maxPos=Math.max(8,Math.min(24,Math.round(7+days*2.2)));
+  const maxPos=Math.max(8,Math.min(30,Math.round((7+days*2.2)*dynIntensity())));
   /* сделки открываются по ходу сценария: чем дальше, тем больше в работе */
   const elapsed=Date.now()-w.st;
   const step=w.span/Math.max(1,maxPos-4);
@@ -2587,7 +2594,7 @@ function dynClosedTrades(limit){
   const cur=dynValue()||from;
   const realized=(cur-from)*0.62;          /* часть прибыли уже зафиксирована */
   const days=w.span/86400000;
-  const maxTrades=Math.max(10,Math.min(120,Math.round(8+days*9)));
+  const maxTrades=Math.max(12,Math.min(400,Math.round((8+days*9)*dynIntensity()*1.6)));
   const step=w.span/maxTrades;
   const done=Math.max(0,Math.min(maxTrades,Math.floor((Date.now()-w.st)/step)));
   if(!done) return [];
@@ -2806,19 +2813,40 @@ function renderAgent(){
   const earned=state.balance-from;
   const hours=Math.max(1,(Date.now()-w.st)/3600000);
   const done=pr>=1;
+  const daysAll=Math.max(1,Math.round(w.span/86400000));
+  const tf = w.span<=2*86400000 ? "внутридневной режим" : (w.span<=14*86400000 ? "среднесрочный режим" : "позиционный режим");
   document.getElementById("agentSub").textContent = done
-    ? "стратегия «Золото и связанные активы» · цикл завершён"
-    : "стратегия «Золото и связанные активы» · сделки открываются автоматически";
+    ? "стратегия «Золото и связанные активы» · "+tf+" · цикл завершён"
+    : "стратегия «Золото и связанные активы» · "+tf+" · горизонт "+daysAll+" дн · сделки открываются автоматически";
   const closedAll=dynClosedTrades();
-  const wins=closedAll.filter(t=>t.pl>=0).length;
+  const wins=closedAll.filter(t=>t.pl>=0);
+  const loss=closedAll.filter(t=>t.pl<0);
+  const gross=wins.reduce((a,t)=>a+t.pl,0);
+  const grossLoss=Math.abs(loss.reduce((a,t)=>a+t.pl,0));
+  const pf=grossLoss?gross/grossLoss:(gross?99:0);
+  const avg=closedAll.length?closedAll.reduce((a,t)=>a+t.pl,0)/closedAll.length:0;
+  const roi=from?(state.balance-from)/from*100:0;
+  const perDay=hours>1?closedAll.length/(hours/24):closedAll.length;
+  /* максимальная просадка по кривой сценария */
+  let peak=-Infinity,dd=0;
+  for(let i=0;i<=40;i++){
+    const v=dynValue(w.st+(Math.min(Date.now(),w.en)-w.st)*i/40);
+    if(v==null) continue;
+    peak=Math.max(peak,v);
+    if(peak>0) dd=Math.max(dd,(peak-v)/peak*100);
+  }
   document.getElementById("agentStats").innerHTML=[
     ["Сделок в работе",String(POS.length)],
     ["Сделок закрыто",String(closedAll.length)],
     ["Доля золота",goldShare+"%"],
-    ["Прибыльных",closedAll.length?Math.round(wins/closedAll.length*100)+"%":"—"],
+    ["Прибыльных",closedAll.length?Math.round(wins.length/closedAll.length*100)+"%":"—"],
+    ["Профит-фактор",closedAll.length?fmt(Math.min(pf,99),2):"—"],
+    ["Средняя сделка",(avg>=0?"+":"−")+usd(Math.abs(avg))],
+    ["Макс. просадка",fmt(dd,2)+"%"],
+    ["Доходность",(roi>=0?"+":"−")+fmt(Math.abs(roi),1)+"%"],
+    ["Сделок в сутки",fmt(perDay,1)],
     ["Результат в рынке",(pl>=0?"+":"−")+usd(Math.abs(pl))],
-    ["Заработано агентом",(earned>=0?"+":"−")+usd(Math.abs(earned))],
-    ["Средний темп",usd(Math.abs(earned)/hours)+" / час"]
+    ["Заработано агентом",(earned>=0?"+":"−")+usd(Math.abs(earned))]
   ].map(([k,v])=>`<div><span>${k}</span><b>${v}</b></div>`).join("");
   document.getElementById("agentBar").style.width=Math.round(pr*100)+"%";
   const next=(()=>{
