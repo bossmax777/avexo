@@ -2586,7 +2586,7 @@ function syncHeader(){
   if(label) label.textContent=u? ("Демо-кошелёк · "+u.name) : "Демо-счёт (гость)";
   const sub=document.getElementById("dashSub");
   if(sub) sub.innerHTML= u
-    ? 'Кошелёк <span class="num">#'+u.acct+'</span> · Demo · '+u.cur+' · сервер Avexo-DEMO'
+    ? 'Кошелёк <span class="num">#'+u.acct+'</span> · '+u.cur+' · сервер '+srvName(u.card&&u.card.srv)
     : 'Гостевой счёт · зарегистрируйтесь, чтобы завести свой кошелёк';
   /* баланс одинаковый в шапке, на карточке счёта и в разделе вывода */
   const hb=document.getElementById("hdrBal"); if(hb) hb.textContent=usd(state.balance);
