@@ -1421,7 +1421,6 @@ function applyOverrides(){
   st.textContent=CFG.css||"";
 }
 function applyConfig(){
-  safe(applyHtmlBlocks);
   const b=CFG.brand||{};
   document.documentElement.style.setProperty("--accent",b.accent||"#4F46E5");
   document.documentElement.style.setProperty("--brand",b.accent||"#4F46E5");
@@ -1446,6 +1445,7 @@ function applyConfig(){
   const c=CFG.cta||{}; setTxt("cfgCtaH",c.h); setTxt("cfgCtaP",c.p); setTxt("cfgCtaBtn",c.btn);
   const f=CFG.foot||{}; setTxt("cfgFootAbout",f.about); setTxt("cfgDemoNote",f.note); setTxt("cfgDisclaimer",f.disclaimer);
   document.title=(b.name||"Avexo")+" "+(b.suffix||"Trade");
+  safe(applyHtmlBlocks);   /* HTML из редактора страниц главнее полей */
   applyOverrides();
 }
 
