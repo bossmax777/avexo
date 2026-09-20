@@ -149,7 +149,7 @@ table.q tbody tr:hover{background:var(--bg-2)}
 .q-trade{font-size:13px;color:var(--accent);font-weight:600}
 .src{font-style:normal;font-size:10px;letter-spacing:.06em;text-transform:uppercase;
   padding:2px 6px;border-radius:5px;background:var(--bg-2);color:var(--dim);margin-left:6px;vertical-align:middle}
-.src.on{background:rgba(0,193,31,.12);color:#049A1F}
+.src.on{background:rgba(16,185,129,.14);color:#0E9F6E}
 #liveNote{margin-top:12px;font-size:12.5px;color:var(--dim)}
 
 /* benefit cards */
@@ -300,7 +300,7 @@ footer{background:var(--bg-2);padding-block:52px 34px;border-top:1px solid var(-
 .eq-val{font-family:"IBM Plex Mono",monospace;font-size:28px;font-weight:600;margin-top:10px;
   font-variant-numeric:tabular-nums;letter-spacing:-.01em}
 .eq-pl{font-size:13.5px;margin-top:4px;font-variant-numeric:tabular-nums;color:var(--muted)}
-.eq-pl.up{color:#049A1F}.eq-pl.down{color:var(--sell)}
+.eq-pl.up{color:#0E9F6E}.eq-pl.down{color:var(--sell)}
 #equity{width:100%;height:260px;display:block;margin-top:6px}
 
 .bal-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:14px;margin-bottom:20px}
@@ -310,7 +310,7 @@ footer{background:var(--bg-2);padding-block:52px 34px;border-top:1px solid var(-
 .bal-card .k{font-size:12px;color:var(--dim);text-transform:uppercase;letter-spacing:.08em}
 .bal-card .v{font-family:"IBM Plex Mono",monospace;font-size:24px;font-weight:600;margin-top:8px;font-variant-numeric:tabular-nums}
 .bal-card .d{font-size:12.5px;margin-top:5px;color:var(--muted)}
-.bal-card .v.up{color:#049A1F}.bal-card .v.down{color:var(--sell)}
+.bal-card .v.up{color:#0E9F6E}.bal-card .v.down{color:var(--sell)}
 .bal-card .d.up{color:rgba(4,154,31,.8)}.bal-card .d.down{color:rgba(244,17,18,.75)}
 
 table.data{width:100%;border-collapse:collapse;min-width:580px}
@@ -322,9 +322,9 @@ table.data td:first-child{text-align:left}
 table.data tr:last-child td{border-bottom:0}
 .tbl-scroll{overflow-x:auto}
 .badge{display:inline-block;font-size:11.5px;padding:3px 9px;border-radius:999px;border:1px solid transparent}
-.badge.ok{background:rgba(0,193,31,.1);color:#049A1F;border-color:rgba(0,193,31,.28)}
+.badge.ok{background:rgba(16,185,129,.12);color:#0E9F6E;border-color:rgba(16,185,129,.3)}
 .badge.wait{background:rgba(224,124,0,.1);color:var(--warn);border-color:rgba(224,124,0,.25)}
-.badge.buy{background:rgba(0,193,31,.1);color:#049A1F}
+.badge.buy{background:rgba(16,185,129,.12);color:#0E9F6E}
 .badge.sell{background:rgba(244,17,18,.08);color:var(--sell)}
 .empty{color:var(--dim);font-size:13.5px;padding:20px 0;text-align:center}
 
@@ -350,7 +350,7 @@ table.data tr:last-child td{border-bottom:0}
 .ticket{background:var(--surface);border:1px solid var(--line-soft);border-radius:var(--radius);padding:18px;box-shadow:var(--shadow)}
 .side-toggle{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:14px}
 .side-toggle button{padding:10px;border-radius:10px;font-weight:600;font-size:13.5px;border:1px solid var(--line);color:var(--muted)}
-.side-toggle button.on.b{background:rgba(0,193,31,.1);border-color:var(--buy);color:#049A1F}
+.side-toggle button.on.b{background:rgba(16,185,129,.12);border-color:var(--buy);color:#0E9F6E}
 .side-toggle button.on.s{background:rgba(244,17,18,.07);border-color:var(--sell);color:var(--sell)}
 .ticket .row{display:flex;justify-content:space-between;font-size:12.5px;color:var(--muted);margin:7px 0}
 .ticket .row b{color:var(--text);font-weight:600}
@@ -402,7 +402,7 @@ table.data tr:last-child td{border-bottom:0}
 #edBar button.off{background:#F41112}
 body.ed-on{padding-top:56px}
 body.ed-on [data-ed-hover]{outline:2px dashed rgba(0,86,255,.6);outline-offset:2px;cursor:pointer}
-body.ed-on .ed-sel{outline:2px solid #0056FF!important;outline-offset:2px}
+body.ed-on .ed-sel{outline:2px solid #4F46E5!important;outline-offset:2px}
 #edPanel{position:fixed;left:50%;transform:translateX(-50%);bottom:18px;z-index:300;width:min(620px,94vw);
   background:#fff;border:1px solid var(--line);border-radius:14px;box-shadow:0 26px 60px rgba(20,28,44,.3);padding:16px}
 #edPanel h4{margin:0 0 4px;font-size:14px;font-family:"Sora",sans-serif}
@@ -443,7 +443,7 @@ body.ed-on .ed-sel{outline:2px solid #0056FF!important;outline-offset:2px}
   border-radius:9px;background:var(--bg-2)}
 .step .n{width:24px;height:24px;border-radius:50%;display:grid;place-items:center;font-size:12px;flex:0 0 auto;
   background:#fff;border:1px solid var(--line);color:var(--muted)}
-.step.done .n{background:rgba(0,193,31,.12);border-color:rgba(0,193,31,.3);color:#049A1F}
+.step.done .n{background:rgba(16,185,129,.14);border-color:rgba(16,185,129,.32);color:#0E9F6E}
 .step b{display:block;font-size:13.5px;font-weight:600}
 .step small{color:var(--dim);font-size:12.5px}
 .step .st{margin-left:auto;flex:0 0 auto}
@@ -525,7 +525,7 @@ h1,h2,h3{letter-spacing:-.035em}
 .hero h1{font-size:clamp(38px,5.6vw,62px);font-weight:700;letter-spacing:-.045em}
 .hero h1 .grad{
   background:linear-gradient(115deg,#4F46E5 0%,#38BDF8 46%,#10B981 92%);
-  -webkit-background-clip:text;background-clip:text;color:transparent;
+  -webkit-background-clip:text;background-clip:text;color:transparent;-webkit-text-fill-color:transparent;
 }
 .hero p.lead{font-size:17.5px;color:#4E5567}
 .hero-card{
@@ -625,6 +625,23 @@ footer{background:linear-gradient(180deg,rgba(246,247,252,.6),rgba(240,242,250,.
 /* без стеклянных эффектов внутри карточки MT5 */
 .mt-stage,.mt-stage *{backdrop-filter:none!important;box-shadow:none!important}
 
+
+/* --- полировка контраста и деталей --- */
+body::after{opacity:.34}
+.hero-note{color:#6B7280}
+.sec-head p,.hero p.lead{color:#4E5567}
+.card p,.acc-card li,.class-box p{color:#535A6B}
+.stat .v,.grid-3 .v{letter-spacing:-.03em}
+.q tbody tr{transition:background .18s var(--ease)}
+.q tbody tr:hover{background:rgba(79,70,229,.045)}
+.q th{letter-spacing:.1em}
+footer a:hover{color:var(--accent)}
+.phone{background:rgba(255,255,255,.8);backdrop-filter:blur(18px);border:1px solid rgba(255,255,255,.9);
+  box-shadow:var(--shadow-lg)}
+.class-box{background:rgba(255,255,255,.72);backdrop-filter:blur(18px);border:1px solid rgba(255,255,255,.85);
+  box-shadow:var(--shadow-sm)}
+.eq-wrap,.panel canvas{border-radius:14px}
+.modal-box,.sheet{border-radius:var(--radius-lg)!important}
 </style>
 
 </head>
@@ -1134,7 +1151,7 @@ const ICONS = {
 /* ---------------- конфиг сайта (редактируется в admin.html) ---------------- */
 const CFG_KEY="avexo_site_config_v1";
 const DEFAULTS={
-  brand:{name:"Avexo",suffix:"Trade",mark:"A",accent:"#0056FF",red:"#F41112"},
+  brand:{name:"Avexo",suffix:"Trade",mark:"A",accent:"#4F46E5",red:"#EF4444"},
   hero:{eyebrow:"Учебный демонстрационный проект",
     h1:"Брокер, который работает\nна скорости рынка",
     lead:"2 100+ инструментов, исполнение от 12 мс и спред от 0 пунктов. Один счёт — валюты, металлы, индексы, фьючерсы, акции и ETF.",
@@ -1221,9 +1238,9 @@ function applyOverrides(){
 }
 function applyConfig(){
   const b=CFG.brand||{};
-  document.documentElement.style.setProperty("--accent",b.accent||"#0056FF");
-  document.documentElement.style.setProperty("--brand",b.red||"#F41112");
-  document.documentElement.style.setProperty("--sell",b.red||"#F41112");
+  document.documentElement.style.setProperty("--accent",b.accent||"#4F46E5");
+  document.documentElement.style.setProperty("--brand",b.accent||"#4F46E5");
+  document.documentElement.style.setProperty("--sell",b.red||"#EF4444");
   document.querySelectorAll(".cfgBrand").forEach(e=>e.textContent=b.name||"Avexo");
   document.querySelectorAll(".cfgBrand2").forEach(e=>e.textContent=b.suffix||"Trade");
   document.querySelectorAll(".cfgMark").forEach(e=>e.textContent=b.mark||"A");
@@ -2185,15 +2202,15 @@ function drawCandles(){
   }
   candleData.forEach((c,i)=>{
     const cx=padL+i*cw+cw/2, up=c.c>=c.o;
-    ctx.strokeStyle=up?"#00C11F":"#F41112";ctx.fillStyle=ctx.strokeStyle;ctx.lineWidth=1.6;
+    ctx.strokeStyle=up?"#10B981":"#EF4444";ctx.fillStyle=ctx.strokeStyle;ctx.lineWidth=1.6;
     ctx.beginPath();ctx.moveTo(cx,y(c.hi));ctx.lineTo(cx,y(c.lo));ctx.stroke();
     const top=y(Math.max(c.o,c.c)),bot=y(Math.min(c.o,c.c));
     ctx.fillRect(cx-cw*0.32,top,cw*0.64,Math.max(2,bot-top));
   });
   const last=candleData[59].c, ly=y(last);
-  ctx.setLineDash([5,4]);ctx.strokeStyle="rgba(0,86,255,.55)";
+  ctx.setLineDash([5,4]);ctx.strokeStyle="rgba(79,70,229,.55)";
   ctx.beginPath();ctx.moveTo(padL,ly);ctx.lineTo(w-padR,ly);ctx.stroke();ctx.setLineDash([]);
-  ctx.fillStyle="#0056FF";ctx.fillRect(w-padR+4,ly-12,padR-10,24);
+  ctx.fillStyle="#4F46E5";ctx.fillRect(w-padR+4,ly-12,padR-10,24);
   ctx.fillStyle="#fff";ctx.fillText(fmt(last,d),w-padR+10,ly+5);
   document.getElementById("tSym").textContent=state.curSym;
   document.getElementById("tPrice").textContent=fmt(last,d);
