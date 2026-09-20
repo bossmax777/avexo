@@ -1460,6 +1460,22 @@ function aiTyping(on){
   const st=document.getElementById("aiStatus");
   if(st) st.textContent=on?"формулирует ответ…":"на связи · следит за котировками";
 }
+/* дневное открытие: база для «изменения за день» */
+const DAY_CH={};
+Object.keys(CATS).forEach(k=>CATS[k].forEach(r=>{ if(DAY_CH[r[0]]==null) DAY_CH[r[0]]=r[4]; }));
+const DAY_OPEN={};
+function dayOpenOf(sym){
+  if(DAY_OPEN[sym]==null){
+    const base=prices[sym]??(INSTR.find(x=>x[0]===sym)||[,1])[1];
+    const ch=DAY_CH[sym]??0;
+    DAY_OPEN[sym]=base/(1+ch/100) || base;
+  }
+  return DAY_OPEN[sym];
+}
+function dayChange(sym){
+  const base=dayOpenOf(sym), cur=prices[sym]??base;
+  return base?(cur-base)/base*100:0;
+}
 /* --- живая правая колонка --- */
 function aiPanels(){
   const stEl=document.getElementById("aiStat"); if(!stEl) return;
@@ -1482,7 +1498,7 @@ function aiPanels(){
   const mk=document.getElementById("aiMkt");
   if(mk){
     mk.innerHTML=INSTR.map(([sym,base,dec])=>{
-      const cur=prices[sym]??base, ch=(cur-base)/base*100;
+      const cur=prices[sym]??base, ch=dayChange(sym);
       return `<a data-ai-sym="${sym}"><span>${sym}</span>
         <b class="${ch>=0?"up":"down"}">${fmt(cur,dec)} · ${ch>=0?"+":"−"}${fmt(Math.abs(ch),2)}%</b></a>`;
     }).join("");
@@ -1524,7 +1540,7 @@ function aiRiskCalc(q){
 function aiMarketReview(){
   const rows=INSTR.map(([sym,base,dec])=>{
     const cur=prices[sym]??base;
-    return {sym,cur,dec,ch:(cur-base)/base*100};
+    return {sym,cur,dec,ch:dayChange(sym)};
   }).sort((a,b)=>Math.abs(b.ch)-Math.abs(a.ch));
   const lines=["Обзор рынка по вашему списку инструментов",""];
   rows.forEach(r=>lines.push("• "+r.sym+": "+fmt(r.cur,r.dec)+"  ("+(r.ch>=0?"+":"−")+fmt(Math.abs(r.ch),2)+"%)"));
@@ -2751,7 +2767,7 @@ function calcTools(){
   const money=state.balance*riskPct/100;
   const suggest=pipVal&&stop?money/(stop*pipVal):0;
   const meta=SPEC_META[sym]||["—","0.01","—","0","0","—"];
-  const swap=parseFloat(meta[3])*vol;
+  const swap=(parseFloat(String(meta[3]).replace("−","-"))||0)*vol;
   const set=(id,v)=>{const e=document.getElementById(id); if(e) e.textContent=v;};
   set("cContract",meta[0]);
   set("cPip",usd(pipVal*vol)+" при "+fmt(vol,2)+" лота");
