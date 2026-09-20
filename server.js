@@ -185,9 +185,19 @@ app.put('/api/me/state', async (req, res) => {
 /* ---------- настройки сайта ---------- */
 app.get('/api/config', async (_req, res) => {
   try {
-    const r = await q('SELECT data FROM site_config WHERE id = 1');
-    res.json({ config: (r.rows[0] && r.rows[0].data) || {} });
-  } catch (e) { res.json({ config: {}, error: e.message }); }
+    const r = await q('SELECT data, updated_at FROM site_config WHERE id = 1');
+    res.json({
+      config: (r.rows[0] && r.rows[0].data) || {},
+      v: r.rows[0] ? new Date(r.rows[0].updated_at).getTime() : 0
+    });
+  } catch (e) { res.json({ config: {}, v: 0, error: e.message }); }
+});
+/* лёгкая проверка «не изменились ли настройки» — сайт опрашивает её раз в несколько секунд */
+app.get('/api/config/v', async (_req, res) => {
+  try {
+    const r = await q('SELECT updated_at FROM site_config WHERE id = 1');
+    res.json({ v: r.rows[0] ? new Date(r.rows[0].updated_at).getTime() : 0 });
+  } catch (e) { res.json({ v: 0 }); }
 });
 app.put('/api/config', requireAdmin, async (req, res) => {
   try {
