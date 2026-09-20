@@ -1,14 +1,24 @@
 'use strict';
 const { Pool } = require('pg');
 
-const url = process.env.DATABASE_URL || process.env.POSTGRES_URL || '';
-if (!url) console.warn('[db] DATABASE_URL не задан — сервер поднимется, но запросы к базе будут падать');
+/* Строку подключения берём либо целиком из DATABASE_URL,
+   либо собираем из отдельных переменных панели Timeweb. */
+const env = process.env;
+const host = env.POSTGRESQL_HOST || env.PGHOST || '';
+const url = env.DATABASE_URL || env.POSTGRES_URL || (host
+  ? `postgresql://${encodeURIComponent(env.POSTGRESQL_USER || env.PGUSER || 'gen_user')}:` +
+    `${encodeURIComponent(env.POSTGRESQL_PASSWORD || env.PGPASSWORD || '')}@${host}:` +
+    `${env.POSTGRESQL_PORT || env.PGPORT || 5432}/${env.POSTGRESQL_DBNAME || env.PGDATABASE || 'default_db'}`
+  : '');
+if (!url) console.warn('[db] не заданы ни DATABASE_URL, ни POSTGRESQL_HOST — запросы к базе будут падать');
+
+const needSsl = env.PGSSL === '0'
+  ? false
+  : /sslmode=(require|prefer|verify-ca|verify-full)/.test(url) || /twc1\.net|twc\d/.test(url) || env.PGSSL === '1';
 
 const pool = new Pool({
   connectionString: url,
-  ssl: /sslmode=(require|prefer|verify-ca|verify-full)/.test(url) || process.env.PGSSL === '1'
-    ? { rejectUnauthorized: false }
-    : false,
+  ssl: needSsl ? { rejectUnauthorized: false } : false,
   max: 5,
   idleTimeoutMillis: 30000
 });
