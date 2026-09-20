@@ -926,11 +926,15 @@ const PAGES=[
     ["view:out","Вывод средств","заявка на вывод и список заявок"],
     ["view:tools","Инструменты трейдера","калькулятор, спецификации, календарь"],
     ["view:ai","Помощник Copilot","чат и правая панель"],
-    ["view:prof","Профиль","карточка счёта и личные данные"]
+    ["view:prof","Профиль","карточка счёта и личные данные"],
+    ["text:dashSub","Обзор — подпись","строка под заголовком «Обзор счёта»"],
+    ["text:profSub","Профиль — подпись","строка под заголовком «Профиль»"],
+    ["text:payTitle","Платежи — заголовок","подпись формы пополнения"]
   ]]
 ];
 let PG_SRC=null, pgKey="";
 function pgSelector(k){
+  if(k.indexOf("text:")===0) return "#"+k.slice(5);
   if(k==="head")    return "header.site-head .head-in";
   if(k==="apphead") return "header.app-head .app-head-in";
   if(k==="side")    return "#side";

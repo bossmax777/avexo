@@ -1489,6 +1489,17 @@ function snapshotBlocks(){
     try{ const el=blockEl(k); if(el) HTML_ORIG[k]=el.innerHTML; }catch(e){}
   });
 }
+const HTML_ON={};   /* какие блоки сейчас заменены и каким текстом */
+const TEXT_KEYS=["profSub","dashSub","payTitle"];
+function applyTextBlocks(){
+  const h=CFG.html||{};
+  TEXT_KEYS.forEach(id=>{
+    const v=h["text:"+id];
+    if(typeof v!=="string"||!v.trim()) return;
+    const el=document.getElementById(id);
+    if(el&&el.innerHTML!==v) el.innerHTML=v;
+  });
+}
 function applyHtmlBlocks(){
   snapshotBlocks();
   const h=CFG.html||{};
@@ -1496,9 +1507,27 @@ function applyHtmlBlocks(){
     let el=null; try{ el=blockEl(k); }catch(e){}
     if(!el) return;
     const v=h[k];
-    if(typeof v==="string"&&v.trim()){ if(el.innerHTML!==v) el.innerHTML=v; }
-    else if(HTML_ORIG[k]!=null&&el.innerHTML!==HTML_ORIG[k]) el.innerHTML=HTML_ORIG[k];
+    if(typeof v==="string"&&v.trim()){
+      if(HTML_ON[k]!==v){ el.innerHTML=v; HTML_ON[k]=v; afterBlockSwap(k); }
+    }else if(HTML_ON[k]!==undefined){
+      if(HTML_ORIG[k]!=null) el.innerHTML=HTML_ORIG[k];
+      delete HTML_ON[k]; afterBlockSwap(k);
+    }
   });
+  applyTextBlocks();
+}
+/* после замены блока возвращаем к жизни то, что в нём живёт */
+function afterBlockSwap(k){
+  if(k==="sec:hero") safe(startSpark);
+  if(k==="sec:markets") safe(renderQuotes);
+  if(k==="view:dash"&&document.getElementById("app").style.display==="block")
+    safe(()=>{ renderPositions(); renderHist(); drawEquity(); });
+  if(k==="view:term"&&document.getElementById("app").style.display==="block")
+    safe(()=>{ renderWatch(); drawCandles(); updateTicket(); });
+  if(k==="view:prof") safe(()=>{ renderProfile(); renderAcct(); fitAcct(); renderIntegrations(); });
+  if(k==="view:out") safe(renderOut);
+  if(k==="view:tools") safe(renderTools);
+  if(k==="apphead") safe(syncHeader);
 }
 function safe(fn){ try{ fn(); }catch(e){ console.warn("[avexo]",e&&e.message); } }
 function applyOverrides(){
@@ -1930,6 +1959,7 @@ function renderProfile(){
   const set=(id,v)=>{const e=document.getElementById(id); if(e) e.textContent=v;};
   set("pfName",d.name); set("pfEmail",d.email); set("pfPhone",d.phone);
   set("pfCountry",d.country); set("pfSince",d.since);
+  if(typeof applyTextBlocks==="function") applyTextBlocks();
 }
 function editProfile(){
   const u=currentUser();
@@ -2225,8 +2255,11 @@ function startConfigWatch(){
 setInterval(refreshLive,60000);
 
 /* спарклайн в hero */
-(function(){
-  const cv=document.getElementById("spark"),ctx=cv.getContext("2d");
+let _sparkTimer=null;
+function startSpark(){
+  const cv=document.getElementById("spark"); if(!cv) return;
+  clearInterval(_sparkTimer);
+  const ctx=cv.getContext("2d");
   let data=[],v=1.0835;
   for(let i=0;i<90;i++){v+=(Math.random()-0.48)*0.0009;data.push(v);}
   function draw(){
@@ -2259,8 +2292,9 @@ setInterval(refreshLive,60000);
     el.className="num "+(ch>=0?"up":"down");
   }
   draw();
-  setInterval(()=>{data.shift();data.push(data[data.length-1]+(Math.random()-0.48)*0.0009);draw();},1400);
-})();
+  _sparkTimer=setInterval(()=>{data.shift();data.push(data[data.length-1]+(Math.random()-0.48)*0.0009);draw();},1400);
+}
+startSpark();
 
 /* плавное появление секций и карточек */
 (function(){
@@ -2560,6 +2594,7 @@ function syncHeader(){
   if(mb) mb.textContent=fmt(state.balance,2)+" "+((u&&u.cur)||"USD");
   const ob=document.getElementById("outAvail"); if(ob) ob.textContent=usd(outFree());
   const oe=document.getElementById("outEquity"); if(oe) oe.textContent=usd(state.balance);
+  if(typeof applyTextBlocks==="function") applyTextBlocks();
 }
 const APP_KEY="avexo_app_open_v1";
 function rememberApp(pane){ try{ localStorage.setItem(APP_KEY,pane||"dash"); }catch(e){} }
