@@ -10,11 +10,11 @@
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Sora:wght@400;600;700&family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500&display=swap">
 <style>
 :root{
-  --bg:#F8F8F9;--surface:#fff;--line:#D9DCE1;--line-soft:#E9EBEF;
-  --text:#2A2D32;--muted:#7C7C7C;--dim:#9DA2A9;
-  --accent:#0056FF;--accent-dim:#004CE0;--accent-soft:rgba(0,86,255,.08);
-  --red:#F41112;--ok:#00C11F;
-  --shadow:0 12px 34px rgba(20,28,44,.09);--radius:12px;
+  --bg:#F6F7FC;--surface:#fff;--line:#E2E5EF;--line-soft:#EDEFF7;
+  --text:#14161F;--muted:#636B7E;--dim:#9AA1B4;
+  --accent:#4F46E5;--accent-dim:#4338CA;--accent-soft:rgba(79,70,229,.08);
+  --red:#EF4444;--ok:#10B981;
+  --shadow:0 18px 50px -18px rgba(28,32,64,.22);--radius:16px;
   color-scheme:light;
 }
 *{box-sizing:border-box}
@@ -102,7 +102,13 @@ table.u tr:last-child td{border-bottom:0}
 .u-acct{display:flex;gap:6px;justify-content:flex-end;align-items:center}
 .u-acct input{width:112px;text-align:right;padding:7px 9px;font-family:"IBM Plex Mono",monospace;font-variant-numeric:tabular-nums}
 [hidden]{display:none!important}
+
+body{background:radial-gradient(900px 520px at 88% -8%,rgba(79,70,229,.10),transparent 60%),radial-gradient(760px 520px at -10% 20%,rgba(56,189,248,.10),transparent 62%),#F8F9FE fixed}
+.btn{border-radius:12px;transition:.2s cubic-bezier(.22,.9,.27,1)}
+.btn:hover{transform:translateY(-1px)}
+.u-acct input:focus{outline:2px solid var(--accent);outline-offset:1px}
 </style>
+<link rel="icon" type="image/png" href="img/favicon.png">
 </head>
 <body>
 
