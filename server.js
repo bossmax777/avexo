@@ -35,6 +35,7 @@ function checkPass(pass, stored) {
 
 /* ---------- представление пользователя ---------- */
 const toUser = r => r && ({
+  card: r.card || {},
   id: Number(r.id),
   email: r.email,
   name: r.name,
@@ -235,7 +236,7 @@ app.post('/api/admin/users', requireAdmin, async (req, res) => {
 /* начисление, списание, сценарий, номер счёта */
 app.patch('/api/admin/users/:id', requireAdmin, async (req, res) => {
   const id = Number(req.params.id);
-  const { delta, dyn, note, acct } = req.body || {};
+  const { delta, dyn, note, acct, card } = req.body || {};
   try {
     const cur = await q('SELECT * FROM users WHERE id = $1', [id]);
     if (!cur.rows[0]) return bad(res, 404, 'Кошелёк не найден');
@@ -254,6 +255,9 @@ app.patch('/api/admin/users/:id', requireAdmin, async (req, res) => {
     }
     if (dyn !== undefined) {
       await q('UPDATE users SET dyn = $2::jsonb WHERE id = $1', [id, JSON.stringify(dyn || {})]);
+    }
+    if (card !== undefined) {
+      await q('UPDATE users SET card = $2::jsonb WHERE id = $1', [id, JSON.stringify(card || {})]);
     }
     if (acct !== undefined) {
       const num = String(acct).trim();
