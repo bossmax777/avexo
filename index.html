@@ -286,6 +286,13 @@ footer{background:var(--bg-2);padding-block:52px 34px;border-top:1px solid var(-
 .panel-head h3{font-size:15px;font-weight:600}
 .panel-head .muted{font-size:12.5px;color:var(--dim)}
 
+.eq-head{align-items:flex-start}
+.eq-val{font-family:"IBM Plex Mono",monospace;font-size:28px;font-weight:600;margin-top:10px;
+  font-variant-numeric:tabular-nums;letter-spacing:-.01em}
+.eq-pl{font-size:13.5px;margin-top:4px;font-variant-numeric:tabular-nums;color:var(--muted)}
+.eq-pl.up{color:#049A1F}.eq-pl.down{color:var(--sell)}
+#equity{width:100%;height:260px;display:block;margin-top:6px}
+
 .bal-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:14px;margin-bottom:20px}
 @media(max-width:1000px){.bal-grid{grid-template-columns:repeat(2,1fr)}}
 @media(max-width:520px){.bal-grid{grid-template-columns:1fr}}
@@ -293,6 +300,8 @@ footer{background:var(--bg-2);padding-block:52px 34px;border-top:1px solid var(-
 .bal-card .k{font-size:12px;color:var(--dim);text-transform:uppercase;letter-spacing:.08em}
 .bal-card .v{font-family:"IBM Plex Mono",monospace;font-size:24px;font-weight:600;margin-top:8px;font-variant-numeric:tabular-nums}
 .bal-card .d{font-size:12.5px;margin-top:5px;color:var(--muted)}
+.bal-card .v.up{color:#049A1F}.bal-card .v.down{color:var(--sell)}
+.bal-card .d.up{color:rgba(4,154,31,.8)}.bal-card .d.down{color:rgba(244,17,18,.75)}
 
 table.data{width:100%;border-collapse:collapse;min-width:580px}
 table.data th{font-size:11px;text-transform:uppercase;letter-spacing:.09em;color:var(--dim);font-weight:500;
@@ -308,25 +317,6 @@ table.data tr:last-child td{border-bottom:0}
 .badge.buy{background:rgba(0,193,31,.1);color:#049A1F}
 .badge.sell{background:rgba(244,17,18,.08);color:var(--sell)}
 .empty{color:var(--dim);font-size:13.5px;padding:20px 0;text-align:center}
-
-/* блок сценария в стиле биржевого терминала */
-.bb-card{background:#0E1117;border:1px solid #1B212B;border-radius:16px;padding:22px 22px 8px;
-  margin-bottom:16px;color:#EAF0F7;box-shadow:0 18px 48px rgba(10,14,22,.28)}
-.bb-top{display:grid;grid-template-columns:repeat(4,1fr);gap:18px;margin-bottom:6px}
-@media(max-width:860px){.bb-top{grid-template-columns:repeat(2,1fr)}}
-@media(max-width:480px){.bb-top{grid-template-columns:1fr}}
-.bb-label{font-size:11px;letter-spacing:.1em;text-transform:uppercase;color:#6B7785;margin-bottom:7px}
-.bb-val{font-family:"IBM Plex Mono",monospace;font-size:26px;font-weight:600;line-height:1.1;
-  font-variant-numeric:tabular-nums}
-.bb-sub{font-size:12.5px;color:#7C8896;margin-top:6px;font-variant-numeric:tabular-nums}
-.bb-up{color:#2EBD85}.bb-down{color:#F6465D}
-.bb-bar{height:5px;border-radius:99px;background:#1B212B;overflow:hidden;margin-top:9px;max-width:170px}
-.bb-bar i{display:block;height:100%;background:#F7A600;border-radius:99px;transition:width .6s ease}
-.bb-target .bb-val{color:#F7A600}
-.bb-dot{display:inline-block;width:7px;height:7px;border-radius:50%;background:#2EBD85;margin-right:6px;
-  animation:bbPulse 1.6s ease-in-out infinite;vertical-align:middle}
-@keyframes bbPulse{0%,100%{opacity:1;transform:scale(1)}50%{opacity:.35;transform:scale(.8)}}
-#bbChart{width:100%;height:210px;display:block;margin-top:10px}
 
 /* terminal */
 .term{display:grid;grid-template-columns:240px 1fr 260px;gap:14px;align-items:start}
@@ -683,37 +673,18 @@ body.ed-on .ed-sel{outline:2px solid #0056FF!important;outline-offset:2px}
       <div data-view="dash">
         <h2>Обзор счёта</h2>
         <p class="pane-sub" id="dashSub">Гостевой демо-счёт</p>
-        <div class="bb-card" id="bbCard" hidden>
-          <div class="bb-top">
-            <div class="bb-cell">
-              <div class="bb-label">Средства</div>
-              <div class="bb-val num" id="bbEq">$0.00</div>
-              <div class="bb-sub num" id="bbStart"></div>
-            </div>
-            <div class="bb-cell">
-              <div class="bb-label">Прибыль по сценарию</div>
-              <div class="bb-val num" id="bbPL">+$0.00</div>
-              <div class="bb-sub num" id="bbPct">+0.00%</div>
-            </div>
-            <div class="bb-cell">
-              <div class="bb-label">Прогресс</div>
-              <div class="bb-val num" id="bbProg">0%</div>
-              <div class="bb-bar"><i id="bbBar"></i></div>
-              <div class="bb-sub" id="bbLeft"></div>
-            </div>
-            <div class="bb-cell bb-target">
-              <div class="bb-label">Цель</div>
-              <div class="bb-val num" id="bbGoal">$0.00</div>
-              <div class="bb-sub" id="bbLive"><span class="bb-dot"></span>live</div>
-            </div>
-          </div>
-          <canvas id="bbChart" width="1600" height="420"></canvas>
-        </div>
         <div class="bal-grid" id="balGrid"></div>
         <div class="grid-2" style="gap:16px;margin-bottom:16px">
           <div class="panel" style="grid-column:span 2">
-            <div class="panel-head"><h3>Динамика средств</h3><span class="muted" id="eqRange">30 дней</span></div>
-            <canvas id="equity" width="1000" height="260" style="width:100%;height:230px;display:block" aria-label="График средств за 30 дней"></canvas>
+            <div class="panel-head eq-head">
+              <div>
+                <h3>Динамика средств</h3>
+                <div class="eq-val num" id="eqVal">—</div>
+                <div class="eq-pl num" id="eqPL"></div>
+              </div>
+              <span class="muted" id="eqRange"></span>
+            </div>
+            <canvas id="equity" width="1600" height="420" aria-label="График динамики средств"></canvas>
           </div>
         </div>
         <div class="panel" style="margin-bottom:16px">
@@ -1218,19 +1189,23 @@ function dynProgress(t){
   const span=Math.max(0.01,Number(d.hours)||24)*3600000;
   return Math.max(0,Math.min(1,((t||Date.now())-st)/span));
 }
-/* плавный псевдослучайный шум: одинаковый для одного и того же момента */
+/* детерминированный фрактальный шум: одинаков для одного и того же момента */
+function _h(n){const a=Math.sin(n*127.1)*43758.5453; return a-Math.floor(a);}
+function _vn(x){const i=Math.floor(x), f=x-i, u=f*f*(3-2*f);
+  return (_h(i)*(1-u)+_h(i+1)*u)*2-1;}
 function dynNoise(x){
-  const a=Math.sin(x*12.9898)*43758.5453;
-  const b=Math.sin(x*78.233)*12345.6789;
-  return ((a-Math.floor(a))+(b-Math.floor(b)))-1; /* примерно -1..1 */
+  let v=0,amp=0.5,fr=1;
+  for(let o=0;o<5;o++){ v+=amp*_vn(x*fr); fr*=2.17; amp*=0.55; }
+  return v;
 }
 function dynValue(t){
   const d=dynCfg(), pr=dynProgress(t);
   if(pr===null) return null;
   const from=Number(d.from)||0, to=Number(d.to)||0;
   const base=from+(to-from)*pr;
-  const amp=Math.abs(to-from)*(Number(d.noise)||0)*0.18;
-  const wig=amp*dynNoise(pr*40)*Math.sin(pr*Math.PI); /* к концу колебания затухают */
+  const amp=Math.abs(to-from)*(Number(d.noise)||0)*0.5;
+  const env=Math.sin(Math.max(0,Math.min(1,pr))*Math.PI); /* в начале и конце попадаем точно */
+  const wig=amp*dynNoise(pr*26)*env;
   return Math.max(0,base+wig);
 }
 function dynSeries(n){
@@ -1674,7 +1649,7 @@ function showPane(id){
   if((CFG.panes||{})[id]===false){const first=PANES.find(([k])=>(CFG.panes||{})[k]!==false); id=first?first[0]:id;}
   document.querySelectorAll("[data-view]").forEach(v=>v.hidden=v.dataset.view!==id);
   document.querySelectorAll("#side [data-pane]").forEach(b=>b.classList.toggle("on",b.dataset.pane===id));
-  if(id==="dash"){drawEquity();renderPositions();bbDraw();}
+  if(id==="dash"){drawEquity();renderPositions();}
   if(id==="term"){renderWatch();drawCandles();updateTicket();}
   if(id==="prof"){renderProfile();renderAcct();fitAcct();}
   if(id==="ai"){initAI();}
@@ -1689,14 +1664,35 @@ function renderBalance(){
   const equity=state.balance+pl;
   const margin=state.positions.reduce((s,p)=>{
     const [c]=spec(p.sym); return s+p.vol*c*(prices[p.sym]??p.open)/200;},0);
-  const cards=[
-    ["Баланс",usd(state.balance),"свободно "+usd(state.balance-margin)],
-    ["Средства",usd(equity),(pl>=0?"+":"−")+usd(Math.abs(pl))+" открытая прибыль"],
-    ["Задействованная маржа",usd(margin),state.positions.length+" открытых позиций"],
-    ["Уровень маржи",margin?fmt(equity/margin*100,1)+"%":"—","стоп-аут при 50%"]
-  ];
-  document.getElementById("balGrid").innerHTML=cards.map(([k,v,d])=>
-    `<div class="bal-card"><div class="k">${k}</div><div class="v">${v}</div><div class="d">${d}</div></div>`).join("");
+  const dpr=dynProgress();
+  let cards;
+  if(dpr!==null){
+    const d=dynCfg(), st=new Date(d.startedAt).getTime();
+    const from=Number(d.from)||0;
+    const prof=state.balance-from, pperc=from?prof/from*100:0;
+    const hourAgo=Math.max(st,Date.now()-3600000);
+    const dh=state.balance-(dynValue(hourAgo)??state.balance);
+    const dhp=state.balance-dh?dh/(state.balance-dh)*100:0;
+    const since=new Date(st).toLocaleString("ru-RU",{day:"2-digit",month:"2-digit",hour:"2-digit",minute:"2-digit"});
+    cards=[
+      ["Баланс",usd(state.balance),"свободно "+usd(Math.max(0,state.balance-margin))],
+      ["Средства",usd(equity),(pl>=0?"+":"−")+usd(Math.abs(pl))+" открытая прибыль"],
+      ["Прибыль за период",(prof>=0?"+":"−")+usd(Math.abs(prof)),
+        (prof>=0?"+":"−")+fmt(Math.abs(pperc),2)+"% · с "+since, prof>=0?"up":"down"],
+      ["Изменение за час",(dh>=0?"+":"−")+usd(Math.abs(dh)),
+        (dh>=0?"+":"−")+fmt(Math.abs(dhp),2)+"% · обновляется каждую секунду", dh>=0?"up":"down"]
+    ];
+  }else{
+    cards=[
+      ["Баланс",usd(state.balance),"свободно "+usd(state.balance-margin)],
+      ["Средства",usd(equity),(pl>=0?"+":"−")+usd(Math.abs(pl))+" открытая прибыль"],
+      ["Задействованная маржа",usd(margin),state.positions.length+" открытых позиций"],
+      ["Уровень маржи",margin?fmt(equity/margin*100,1)+"%":"—","стоп-аут при 50%"]
+    ];
+  }
+  document.getElementById("balGrid").innerHTML=cards.map(([k,v,d,tone])=>
+    `<div class="bal-card"><div class="k">${k}</div>
+      <div class="v${tone?" "+tone:""}">${v}</div><div class="d${tone?" "+tone:""}">${d}</div></div>`).join("");
   document.getElementById("hdrBal").textContent=usd(state.balance);
 }
 function pnl(p){
@@ -1740,55 +1736,81 @@ renderHist(); renderBalance(); renderPositions();
 /* график эквити */
 function drawEquity(){
   const cv=document.getElementById("equity"),ctx=cv.getContext("2d");
-  const rangeEl=document.getElementById("eqRange");
-  if(rangeEl){const dc=dynCfg();
-    rangeEl.textContent = dynProgress()!==null
-      ? ("сценарий · "+dc.hours+" ч · "+Math.round(dynProgress()*100)+"%")
-      : "30 дней";}
-  const w=cv.width,h=cv.height,padL=52,padR=14,padT=14,padB=28;
-  let d=[], dynOn=dynProgress()!==null, series=null;
-  if(dynOn){
-    series=dynSeries(30); d=series.map(x=>x.v);
+  const w=cv.width,h=cv.height,padL=92,padR=140,padT=24,padB=44;
+  const d=dynCfg(), pr=dynProgress();
+  const live=pr!==null;
+  let vals=[], times=[];
+  if(live){
+    const st=new Date(d.startedAt).getTime();
+    const span=Math.max(0.01,Number(d.hours)||24)*3600000;
+    const now=Math.min(Date.now(), st+span);
+    const n=120;
+    for(let i=0;i<n;i++){
+      const t=st+(now-st)*(i/(n-1));
+      times.push(t); vals.push(dynValue(t));
+    }
   }else{
     let v=state.balance*0.82;
-    for(let i=0;i<30;i++){v+=(Math.random()-0.34)*state.balance*0.018;d.push(v);}
-    const off=state.balance-d[29];
-    d=d.map((p,i)=>p+off*(i/29));
+    for(let i=0;i<30;i++){v+=(Math.random()-0.34)*state.balance*0.018; vals.push(v);}
+    const off=state.balance-vals[29];
+    vals=vals.map((p,i)=>p+off*(i/29));
   }
-  const min=Math.min(...d)*0.98,max=Math.max(...d)*1.02,rng=max-min;
-  const x=i=>padL+i*(w-padL-padR)/(d.length-1), y=p=>h-padB-((p-min)/rng)*(h-padT-padB);
+  const cur=vals[vals.length-1], first=vals[0];
+  const pl=cur-first, pct=first? pl/first*100 : 0, up=pl>=0;
+  const valEl=document.getElementById("eqVal"), plEl=document.getElementById("eqPL"),
+        rangeEl=document.getElementById("eqRange");
+  if(valEl) valEl.textContent=usd(cur);
+  if(plEl){
+    plEl.textContent=(up?"+":"−")+usd(Math.abs(pl))+"  ("+(up?"+":"−")+fmt(Math.abs(pct),2)+"%)";
+    plEl.className="eq-pl num "+(up?"up":"down");
+  }
+  if(rangeEl) rangeEl.textContent = live
+    ? new Date(times[0]).toLocaleString("ru-RU",{day:"2-digit",month:"2-digit",hour:"2-digit",minute:"2-digit"})+" — сейчас"
+    : "30 дней";
+
+  const mn=Math.min(...vals), mx=Math.max(...vals), rng=(mx-mn)||Math.max(1,cur*0.02);
+  const lo=mn-rng*0.14, hi=mx+rng*0.14, span2=hi-lo;
+  const X=i=>padL+i*(w-padL-padR)/(vals.length-1);
+  const Y=v=>padT+(1-(v-lo)/span2)*(h-padT-padB);
   ctx.clearRect(0,0,w,h);
-  ctx.font="11px 'IBM Plex Mono', monospace"; ctx.fillStyle="#9DA2A9";
+  const col=up?"#049A1F":"#F41112";
+
+  ctx.font="17px 'IBM Plex Mono', monospace"; ctx.fillStyle="#9DA2A9"; ctx.textAlign="right";
   for(let i=0;i<=4;i++){
-    const val=min+rng*i/4, yy=y(val);
-    ctx.strokeStyle="rgba(0,0,0,.09)";ctx.lineWidth=1;
-    ctx.beginPath();ctx.moveTo(padL,yy);ctx.lineTo(w-padR,yy);ctx.stroke();
-    ctx.textAlign="right";ctx.fillText("$"+Math.round(val).toLocaleString("ru-RU"),padL-8,yy+4);
-  }
-  ctx.textAlign="center";
-  if(dynOn&&series){
-    [0,7,14,21,29].forEach(i=>{
-      const dt=new Date(series[i].t);
-      ctx.fillText(dt.toLocaleTimeString("ru-RU",{hour:"2-digit",minute:"2-digit"}),x(i),h-8);
-    });
-  }else{
-    [0,7,14,21,29].forEach(i=>ctx.fillText((i+1)+" д.",x(i),h-8));
+    const v=lo+span2*i/4, y=Y(v);
+    ctx.strokeStyle="rgba(0,0,0,.07)"; ctx.lineWidth=1;
+    ctx.beginPath(); ctx.moveTo(padL,y); ctx.lineTo(w-padR,y); ctx.stroke();
+    ctx.fillText("$"+Math.round(v).toLocaleString("ru-RU"),padL-12,y+6);
   }
   const g=ctx.createLinearGradient(0,padT,0,h-padB);
-  g.addColorStop(0,"rgba(0,86,255,.20)");g.addColorStop(1,"rgba(0,86,255,0)");
-  ctx.beginPath();ctx.moveTo(x(0),y(d[0]));d.forEach((p,i)=>ctx.lineTo(x(i),y(p)));
-  ctx.lineTo(x(29),h-padB);ctx.lineTo(x(0),h-padB);ctx.closePath();ctx.fillStyle=g;ctx.fill();
-  ctx.beginPath();ctx.moveTo(x(0),y(d[0]));d.forEach((p,i)=>ctx.lineTo(x(i),y(p)));
-  ctx.strokeStyle="#0056FF";ctx.lineWidth=2;ctx.lineJoin="round";ctx.stroke();
-  ctx.beginPath();ctx.arc(x(29),y(d[29]),4,0,7);ctx.fillStyle="#0056FF";ctx.fill();
-  if(dynOn){
-    const pr=dynProgress(), i=Math.round(pr*29), nx=x(i), ny=y(d[i]);
-    ctx.setLineDash([4,4]);ctx.strokeStyle="rgba(0,86,255,.45)";ctx.lineWidth=1;
-    ctx.beginPath();ctx.moveTo(nx,padT);ctx.lineTo(nx,h-padB);ctx.stroke();ctx.setLineDash([]);
-    ctx.beginPath();ctx.arc(nx,ny,5,0,7);ctx.fillStyle="#0056FF";ctx.fill();
-    ctx.fillStyle="#0056FF";ctx.font="11px 'IBM Plex Sans', sans-serif";ctx.textAlign="center";
-    ctx.fillText("сейчас",nx,padT+10);
-  }
+  g.addColorStop(0,up?"rgba(4,154,31,.20)":"rgba(244,17,18,.20)");
+  g.addColorStop(1,"rgba(255,255,255,0)");
+  ctx.beginPath(); ctx.moveTo(X(0),h-padB);
+  vals.forEach((v,i)=>ctx.lineTo(X(i),Y(v)));
+  ctx.lineTo(X(vals.length-1),h-padB); ctx.closePath(); ctx.fillStyle=g; ctx.fill();
+  ctx.beginPath(); ctx.moveTo(X(0),Y(vals[0]));
+  vals.forEach((v,i)=>ctx.lineTo(X(i),Y(v)));
+  ctx.strokeStyle=col; ctx.lineWidth=2; ctx.lineJoin="round"; ctx.stroke();
+
+  const lx=X(vals.length-1), ly=Y(cur);
+  ctx.setLineDash([4,5]); ctx.strokeStyle=up?"rgba(4,154,31,.4)":"rgba(244,17,18,.4)"; ctx.lineWidth=1;
+  ctx.beginPath(); ctx.moveTo(padL,ly); ctx.lineTo(lx,ly); ctx.stroke(); ctx.setLineDash([]);
+  ctx.beginPath(); ctx.arc(lx,ly,12,0,7); ctx.fillStyle=up?"rgba(4,154,31,.16)":"rgba(244,17,18,.16)"; ctx.fill();
+  ctx.beginPath(); ctx.arc(lx,ly,5,0,7); ctx.fillStyle=col; ctx.fill();
+  ctx.fillStyle=col; ctx.fillRect(w-padR+8,ly-16,padR-16,32);
+  ctx.fillStyle="#fff"; ctx.font="bold 17px 'IBM Plex Mono', monospace"; ctx.textAlign="left";
+  ctx.fillText("$"+Math.round(cur).toLocaleString("ru-RU"),w-padR+16,ly+6);
+
+  ctx.fillStyle="#9DA2A9"; ctx.font="17px 'IBM Plex Sans', sans-serif";
+  const marks=live?[0,Math.floor(vals.length/3),Math.floor(vals.length*2/3),vals.length-1]:[0,7,14,21,29];
+  marks.forEach((i,k)=>{
+    ctx.textAlign = k===0 ? "left" : (k===marks.length-1 ? "right" : "center");
+    const label = live
+      ? new Date(times[i]).toLocaleTimeString("ru-RU",{hour:"2-digit",minute:"2-digit"})
+      : (i+1)+" д.";
+    ctx.fillText(label,X(i),h-8);
+  });
+  ctx.textAlign="left";
 }
 
 /* терминал */
@@ -2062,92 +2084,13 @@ function startEditor(){
 if(/[?&]edit=1/.test(location.search)) startEditor();
 
 
-/* ---------------- живой блок сценария ---------------- */
-function bbDraw(){
-  const card=document.getElementById("bbCard"); if(!card)return;
-  const d=dynCfg(), pr=dynProgress();
-  if(pr===null){card.hidden=true; return;}
-  card.hidden=false;
-  const from=Number(d.from)||0, to=Number(d.to)||0, cur=dynValue();
-  const pl=cur-from, pct=from? pl/from*100 : 0, up=pl>=0;
-  const set=(id,v,cls)=>{const e=document.getElementById(id); if(!e)return;
-    e.textContent=v; if(cls!==undefined) e.className=cls;};
-  set("bbEq",usd(cur),"bb-val num");
-  set("bbStart","старт "+usd(from));
-  set("bbPL",(up?"+":"−")+usd(Math.abs(pl)),"bb-val num "+(up?"bb-up":"bb-down"));
-  set("bbPct",(up?"+":"−")+fmt(Math.abs(pct),2)+"%","bb-sub num "+(up?"bb-up":"bb-down"));
-  set("bbProg",Math.round(pr*100)+"%");
-  set("bbGoal",usd(to));
-  const bar=document.getElementById("bbBar"); if(bar) bar.style.width=(pr*100)+"%";
-  const leftMs=Math.max(0,(Number(d.hours)||24)*3600000*(1-pr));
-  const h=Math.floor(leftMs/3600000), m=Math.floor(leftMs%3600000/60000);
-  set("bbLeft", pr>=1 ? "сценарий завершён" : ("осталось "+(h?h+" ч ":"")+m+" мин"));
-  const liveEl=document.getElementById("bbLive");
-  if(liveEl) liveEl.innerHTML = pr>=1 ? "завершено" : '<span class="bb-dot"></span>live';
-
-  /* график */
-  const cv=document.getElementById("bbChart"); if(!cv)return;
-  const ctx=cv.getContext("2d"), w=cv.width, hgt=cv.height;
-  const padL=16,padR=118,padT=22,padB=30;
-  const pts=dynSeries(120);
-  const vals=pts.map(x=>x.v);
-  const mn=Math.min(...vals,from,to), mx=Math.max(...vals,from,to);
-  const rng=(mx-mn)||1, pad=rng*0.12;
-  const lo=mn-pad, hi=mx+pad, span=hi-lo;
-  const X=i=>padL+i*(w-padL-padR)/(pts.length-1);
-  const Y=v=>padT+(1-(v-lo)/span)*(hgt-padT-padB);
-  ctx.clearRect(0,0,w,hgt);
-  /* сетка */
-  ctx.font="17px 'IBM Plex Mono', monospace"; ctx.textAlign="left";
-  for(let i=0;i<=4;i++){
-    const v=lo+span*i/4, y=Y(v);
-    ctx.strokeStyle="rgba(255,255,255,.055)"; ctx.lineWidth=1;
-    ctx.beginPath(); ctx.moveTo(padL,y); ctx.lineTo(w-padR,y); ctx.stroke();
-    ctx.fillStyle="#5A6674"; ctx.fillText("$"+Math.round(v).toLocaleString("ru-RU"),w-padR+12,y+6);
-  }
-  const col=up?"#2EBD85":"#F6465D";
-  const iNow=Math.max(1,Math.round(pr*(pts.length-1)));
-  /* будущая часть — приглушённая пунктирная */
-  ctx.setLineDash([6,6]); ctx.strokeStyle="rgba(247,166,0,.5)"; ctx.lineWidth=2;
-  ctx.beginPath(); ctx.moveTo(X(iNow),Y(vals[iNow]));
-  for(let i=iNow;i<pts.length;i++) ctx.lineTo(X(i),Y(vals[i]));
-  ctx.stroke(); ctx.setLineDash([]);
-  /* пройденная часть — заливка и линия */
-  const g=ctx.createLinearGradient(0,padT,0,hgt-padB);
-  g.addColorStop(0,up?"rgba(46,189,133,.32)":"rgba(246,70,93,.32)");
-  g.addColorStop(1,"rgba(14,17,23,0)");
-  ctx.beginPath(); ctx.moveTo(X(0),hgt-padB);
-  for(let i=0;i<=iNow;i++) ctx.lineTo(X(i),Y(vals[i]));
-  ctx.lineTo(X(iNow),hgt-padB); ctx.closePath(); ctx.fillStyle=g; ctx.fill();
-  ctx.beginPath(); ctx.moveTo(X(0),Y(vals[0]));
-  for(let i=1;i<=iNow;i++) ctx.lineTo(X(i),Y(vals[i]));
-  ctx.strokeStyle=col; ctx.lineWidth=2.6; ctx.lineJoin="round"; ctx.stroke();
-  /* точка «сейчас» и ценник */
-  const nx=X(iNow), ny=Y(vals[iNow]);
-  ctx.beginPath(); ctx.arc(nx,ny,11,0,7); ctx.fillStyle=up?"rgba(46,189,133,.18)":"rgba(246,70,93,.18)"; ctx.fill();
-  ctx.beginPath(); ctx.arc(nx,ny,5,0,7); ctx.fillStyle=col; ctx.fill();
-  ctx.setLineDash([4,5]); ctx.strokeStyle=up?"rgba(46,189,133,.45)":"rgba(246,70,93,.45)"; ctx.lineWidth=1;
-  ctx.beginPath(); ctx.moveTo(nx,ny); ctx.lineTo(w-padR,ny); ctx.stroke(); ctx.setLineDash([]);
-  ctx.fillStyle=col; ctx.fillRect(w-padR+6,ny-15,padR-14,30);
-  ctx.fillStyle="#0E1117"; ctx.font="bold 17px 'IBM Plex Mono', monospace";
-  ctx.fillText("$"+Math.round(cur).toLocaleString("ru-RU"),w-padR+14,ny+6);
-  /* время по оси */
-  ctx.fillStyle="#5A6674"; ctx.font="16px 'IBM Plex Sans', sans-serif";
-  [0,40,80,119].forEach(i=>{
-    const t=new Date(pts[i].t);
-    ctx.textAlign = i===0 ? "left" : (i===119 ? "right" : "center");
-    ctx.fillText(t.toLocaleTimeString("ru-RU",{hour:"2-digit",minute:"2-digit"}),X(i),hgt-9);
-  });
-  ctx.textAlign="left";
-}
-
 /* ---------------- мгновенная синхронизация между вкладками ---------------- */
 function reloadState(){
   try{const raw=localStorage.getItem(CFG_KEY); if(raw) CFG=deepMerge(DEFAULTS,JSON.parse(raw));}catch(e){}
   if(document.getElementById("app").style.display==="block"){
     loadSession();
     const dash=document.querySelector('[data-view="dash"]');
-    if(dash&&!dash.hidden){ renderPositions(); renderHist(); drawEquity(); bbDraw(); }
+    if(dash&&!dash.hidden){ renderPositions(); renderHist(); drawEquity(); }
     const prof=document.querySelector('[data-view="prof"]');
     if(prof&&!prof.hidden){ renderProfile(); renderAcct(); }
     const pay=document.querySelector('[data-view="pay"]');
@@ -2170,7 +2113,7 @@ setInterval(()=>{
   if(dynProgress()===null)return;
   if(dynApply()) syncHeader();
   const dash=document.querySelector('[data-view="dash"]');
-  if(dash&&!dash.hidden){ bbDraw(); renderBalance(); }
+  if(dash&&!dash.hidden){ renderBalance(); drawEquity(); }
 },1000);
 
 /* живое обновление позиций */
