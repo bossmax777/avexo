@@ -393,8 +393,7 @@ body.ed-on .ed-sel{outline:2px solid #0056FF!important;outline-offset:2px}
   font:inherit;font-size:14px;resize:vertical}
 #edPanel .row{display:flex;gap:8px;margin-top:12px;flex-wrap:wrap}
 #edPanel .row .sp{margin-left:auto;display:flex;gap:8px}
-.mt-demo{right:36px;bottom:34px;font-size:22px;font-weight:700;letter-spacing:.18em;
-  color:#fff;background:#E07C00;border-radius:8px;padding:8px 18px}
+
 .acct-pick tr{cursor:pointer}
 .acct-pick tr.on{background:var(--accent-soft)}
 
@@ -755,7 +754,7 @@ body.ed-on .ed-sel{outline:2px solid #0056FF!important;outline-offset:2px}
       <!-- Профиль -->
       <div data-view="prof" hidden>
         <h2>Профиль и верификация</h2>
-        <p class="pane-sub">Вымышленные данные демо-пользователя.</p>
+        <p class="pane-sub" id="profSub">Данные демо-кошелька.</p>
         <div class="mt-acct" id="mtAcct">
           <div class="mt-stage">
             <div class="mt-name" id="mtName"></div>
@@ -765,17 +764,17 @@ body.ed-on .ed-sel{outline:2px solid #0056FF!important;outline-offset:2px}
             <div class="mt-val1" id="mtRowName"></div>
             <div class="mt-lbl2">Сервер</div>
             <div class="mt-val2" id="mtRowSrv"></div>
-            <div class="mt-demo">ДЕМО</div>
           </div>
         </div>
         <div class="prof-grid">
           <div class="panel">
-            <div class="panel-head"><h3>Личные данные</h3><button class="btn btn-ghost" style="padding:6px 12px;font-size:13px">Изменить</button></div>
-            <div class="kv"><span>Имя</span><b>Daniil Kovalev</b></div>
-            <div class="kv"><span>Email</span><b>d.kovalev@example.com</b></div>
-            <div class="kv"><span>Телефон</span><b class="num">+84 •• ••• 41 20</b></div>
-            <div class="kv"><span>Страна</span><b>Вьетнам</b></div>
-            <div class="kv"><span>Клиент с</span><b>14 марта 2024</b></div>
+            <div class="panel-head"><h3>Личные данные</h3>
+              <button class="btn btn-ghost" style="padding:6px 12px;font-size:13px" id="pfEdit">Изменить</button></div>
+            <div class="kv"><span>Имя</span><b id="pfName">—</b></div>
+            <div class="kv"><span>Email</span><b id="pfEmail">—</b></div>
+            <div class="kv"><span>Телефон</span><b class="num" id="pfPhone">—</b></div>
+            <div class="kv"><span>Страна</span><b id="pfCountry">—</b></div>
+            <div class="kv"><span>Клиент с</span><b id="pfSince">—</b></div>
             <div class="kv"><span>Двухфакторная защита</span><span class="badge ok">включена</span></div>
           </div>
           <div class="panel">
@@ -1002,6 +1001,77 @@ const fmt=(n,d=2)=>n.toLocaleString("ru-RU",{minimumFractionDigits:d,maximumFrac
 const usd=n=>"$"+fmt(n,2);
 
 
+
+/* ---------------- профиль: показ и редактирование ---------------- */
+const DEMO_PROFILE={name:"Daniil Kovalev",email:"d.kovalev@example.com",phone:"+84 •• ••• 41 20",
+  country:"Вьетнам",since:"14 марта 2024"};
+function profileData(){
+  const u=currentUser();
+  if(!u) return {...DEMO_PROFILE,guest:true};
+  return {name:u.name||"—",email:u.email,phone:u.phone||"не указан",country:u.country||"не указана",
+    since:new Date(u.created||Date.now()).toLocaleDateString("ru-RU",{day:"numeric",month:"long",year:"numeric"}),
+    guest:false};
+}
+function renderProfile(){
+  const d=profileData();
+  const sub=document.getElementById("profSub");
+  if(sub) sub.textContent = d.guest
+    ? "Гостевой просмотр — зарегистрируйтесь, чтобы завести свой кошелёк."
+    : "Данные вашего демо-кошелька. Кнопка «Изменить» правит их прямо здесь.";
+  const set=(id,v)=>{const e=document.getElementById(id); if(e) e.textContent=v;};
+  set("pfName",d.name); set("pfEmail",d.email); set("pfPhone",d.phone);
+  set("pfCountry",d.country); set("pfSince",d.since);
+}
+function editProfile(){
+  const u=currentUser();
+  if(!u){toast("Войдите в кошелёк, чтобы менять профиль"); return;}
+  const el=document.createElement("div"); el.className="overlay";
+  el.innerHTML=`<div class="modal" role="dialog" aria-modal="true">
+    <button class="modal-x" aria-label="Закрыть">×</button>
+    <h3>Личные данные</h3>
+    <p class="sub">Изменения видны сразу в карточке счёта и в кабинете.</p>
+    <div class="field"><label for="p-name">Имя и фамилия</label><input id="p-name"></div>
+    <div class="field"><label for="p-mail">Email</label><input id="p-mail" type="email"></div>
+    <div class="field"><label for="p-phone">Телефон</label><input id="p-phone" placeholder="+84 ..."></div>
+    <div class="field"><label for="p-country">Страна</label><input id="p-country"></div>
+    <div class="field"><label for="p-pass">Новый пароль</label><input id="p-pass" type="password" placeholder="оставьте пустым, чтобы не менять"></div>
+    <p id="p-err" class="sub" style="color:var(--sell);margin:0 0 12px" hidden></p>
+    <button class="btn btn-primary btn-block" id="p-go">Сохранить</button>
+  </div>`;
+  document.body.appendChild(el);
+  const close=()=>el.remove();
+  const err=m=>{const e=el.querySelector("#p-err"); e.textContent=m; e.hidden=!m;};
+  el.querySelector("#p-name").value=u.name||"";
+  el.querySelector("#p-mail").value=u.email||"";
+  el.querySelector("#p-phone").value=u.phone||"";
+  el.querySelector("#p-country").value=u.country||"";
+  el.querySelector(".modal-x").onclick=close;
+  el.onclick=e=>{if(e.target===el)close();};
+  el.querySelector("#p-go").onclick=()=>{
+    const name=el.querySelector("#p-name").value.trim();
+    const mail=el.querySelector("#p-mail").value.trim();
+    const pass=el.querySelector("#p-pass").value;
+    if(!name) return err("Укажите имя");
+    if(!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(mail)) return err("Введите корректный email");
+    if(pass && pass.length<6) return err("Пароль не короче 6 символов");
+    const us=loadUsers();
+    if(mail.toLowerCase()!==u.email.toLowerCase() &&
+       us.some(x=>x.email.toLowerCase()===mail.toLowerCase())) return err("Этот email уже занят");
+    const old=u.email;
+    u.name=name; u.phone=el.querySelector("#p-phone").value.trim();
+    u.country=el.querySelector("#p-country").value.trim();
+    if(pass) u.pass=pass;
+    u.email=mail;
+    const i=us.findIndex(x=>x.email===old);
+    if(i>=0){us[i]=u; saveUsers(us);} else persistUser(u);
+    setSession(mail);
+    close(); renderProfile(); renderAcct(); syncHeader();
+    toast("Профиль обновлён");
+  };
+  el.querySelector("#p-name").focus();
+}
+document.addEventListener("click",e=>{ if(e.target.closest("#pfEdit")) editProfile(); });
+
 /* ---------------- реальные котировки ---------------- */
 const LIVE={src:{},at:null};
 const TD_MAP={ /* символ на сайте -> символ Twelve Data */
@@ -1035,6 +1105,15 @@ async function pullCrypto(){
     if(r&&r.data&&r.data.amount) setLive("BTC/USD",r.data.amount,"coinbase");
   }catch(e){}
 }
+async function pullMetals(){
+  const map={"XAU/USD":"XAU","XAG/USD":"XAG","XPT/USD":"XPT","XPD/USD":"XPD"};
+  await Promise.all(Object.keys(map).map(async sym=>{
+    try{
+      const r=await fetch("https://api.gold-api.com/price/"+map[sym]).then(x=>x.json());
+      if(r&&r.price) setLive(sym,r.price,"gold-api");
+    }catch(e){}
+  }));
+}
 async function pullTwelveData(){
   const key=((CFG.api||{}).td||"").trim(); if(!key) return;
   const ours=Object.keys(TD_MAP);
@@ -1052,7 +1131,7 @@ async function pullTwelveData(){
 }
 async function refreshLive(){
   if((CFG.api||{}).live===false) return;
-  await Promise.all([pullForex(),pullCrypto(),pullTwelveData()]);
+  await Promise.all([pullForex(),pullCrypto(),pullMetals(),pullTwelveData()]);
   LIVE.at=new Date();
   renderQuotes(); renderLiveNote();
   if(document.getElementById("app").style.display==="block"){ renderWatch(); renderPositions(); }
@@ -1064,7 +1143,7 @@ function renderLiveNote(){
   if((CFG.api||{}).live===false){ el.textContent="Реальные котировки выключены в настройках — все цены имитируются."; return; }
   el.innerHTML = n
     ? "Реальные данные по "+n+" инструментам"+(LIVE.at?", обновлено в "+LIVE.at.toLocaleTimeString("ru-RU"):"")+
-      ": валюты — open.er-api.com, криптовалюта — Binance"+(key?", акции, индексы и металлы — Twelve Data":"")+
+      ": валюты — open.er-api.com, криптовалюта — Binance, металлы — gold-api.com"+(key?", акции, индексы и металлы — Twelve Data":"")+
       ". Остальные инструменты помечены как «демо» и имитируются."+
       (key?"":" Чтобы подтянуть акции, индексы и металлы, добавьте бесплатный ключ Twelve Data в админке.")
     : "Не удалось получить реальные котировки — показаны имитированные цены.";
@@ -1348,7 +1427,7 @@ function showPane(id){
   document.querySelectorAll("#side [data-pane]").forEach(b=>b.classList.toggle("on",b.dataset.pane===id));
   if(id==="dash"){drawEquity();renderPositions();}
   if(id==="term"){renderWatch();drawCandles();updateTicket();}
-  if(id==="prof"){renderAcct();fitAcct();}
+  if(id==="prof"){renderProfile();renderAcct();fitAcct();}
 }
 document.getElementById("side").addEventListener("click",e=>{
   const b=e.target.closest("[data-pane]"); if(b)showPane(b.dataset.pane);

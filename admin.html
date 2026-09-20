@@ -166,15 +166,16 @@ table.u tr:last-child td{border-bottom:0}
         <div class="field">
           <label for="q_td">Ключ Twelve Data</label>
           <input id="q_td" placeholder="вставьте API key">
-          <span class="hint">Бесплатный ключ на twelvedata.com даёт акции, индексы, металлы и ETF.
-            Без ключа реальными остаются валютные пары и криптовалюта.</span>
+          <span class="hint">Бесплатный ключ на twelvedata.com даёт акции, индексы и ETF.
+            Валюты, криптовалюта и металлы работают без ключа.</span>
         </div>
       </div>
       <div style="margin-top:16px;font-size:13px;color:var(--muted);line-height:1.7">
         <b style="color:var(--text)">Что откуда берётся</b><br>
         EUR/USD, USD/JPY — open.er-api.com, без ключа, обновление раз в сутки<br>
-        BTC/USD — Binance, без ключа, обновление раз в минуту<br>
-        Акции, индексы, металлы, ETF — Twelve Data, нужен ключ<br>
+        BTC/USD — Binance, запасной Coinbase, без ключа<br>
+        Золото, серебро, платина, палладий — gold-api.com, без ключа<br>
+        Акции, индексы и ETF — Twelve Data, нужен ключ<br>
         Фьючерсы и энергоносители — имитация, помечены как «демо»
       </div>
     </div>
