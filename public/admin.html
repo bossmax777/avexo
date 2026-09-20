@@ -45,12 +45,6 @@ textarea{resize:vertical;min-height:76px}
 .btn-sm{padding:6px 11px;font-size:12.5px;border-radius:7px}
 
 .wrap{max-width:1080px;margin:0 auto;padding:26px 20px 90px}
-.intro{background:#fff;border:1px solid var(--line-soft);border-radius:var(--radius);
-  box-shadow:var(--shadow);padding:20px;margin-bottom:22px}
-.intro h1{font-size:23px;margin-bottom:8px}
-.intro p{color:var(--muted);margin:0;font-size:14px;max-width:70ch}
-.intro .warn{margin-top:14px;font-size:13px;color:#8A5A00;background:rgba(224,124,0,.08);
-  border:1px solid rgba(224,124,0,.22);border-radius:9px;padding:10px 13px}
 
 .tabs{display:flex;gap:6px;overflow-x:auto;padding-bottom:6px;margin-bottom:18px}
 .tab{padding:8px 15px;border-radius:999px;font-size:13.5px;color:var(--muted);
@@ -129,6 +123,59 @@ body{background:radial-gradient(900px 520px at 88% -8%,rgba(79,70,229,.10),trans
 .badge.appr{background:rgba(79,70,229,.12);color:var(--accent)}
 .badge.rej{background:rgba(239,68,68,.1);color:var(--red)}
 .po-sel{background:#fff;border:1px solid var(--line);border-radius:9px;padding:7px 10px;font-size:12.5px;color:var(--text)}
+
+/* ---------- широкий каркас с боковым меню ---------- */
+.head-in{max-width:1680px;height:66px}
+.head .right{gap:10px}
+.state-top{font-size:12.5px;color:var(--dim);margin-right:4px}
+.shell{max-width:1680px;margin:0 auto;padding:22px 22px 96px;display:grid;
+  grid-template-columns:248px minmax(0,1fr);gap:22px;align-items:start}
+@media(max-width:1000px){.shell{grid-template-columns:1fr;padding:16px 14px 96px}}
+.nav{position:sticky;top:86px;background:#fff;border:1px solid var(--line-soft);border-radius:18px;
+  box-shadow:var(--shadow);padding:10px;display:flex;flex-direction:column;gap:2px}
+@media(max-width:1000px){.nav{position:static;flex-direction:row;overflow-x:auto;padding:8px}}
+.nav h4{margin:12px 12px 6px;font-size:10.5px;letter-spacing:.11em;text-transform:uppercase;color:var(--dim)}
+@media(max-width:1000px){.nav h4{display:none}}
+.nav button{display:flex;align-items:center;gap:10px;width:100%;text-align:left;
+  padding:10px 12px;border-radius:12px;font-size:13.5px;color:var(--muted);transition:.16s;white-space:nowrap}
+.nav button:hover{background:var(--accent-soft);color:var(--text)}
+.nav button.on{background:linear-gradient(135deg,rgba(79,70,229,.14),rgba(56,189,248,.14));
+  color:var(--accent);font-weight:600;box-shadow:inset 0 0 0 1px rgba(79,70,229,.16)}
+.nav button i{width:7px;height:7px;border-radius:50%;background:currentColor;opacity:.35;flex:0 0 auto}
+.nav button.on i{opacity:1}
+.content{min-width:0}
+.card{padding:24px}
+.card-head{display:flex;justify-content:space-between;align-items:flex-start;gap:14px;
+  flex-wrap:wrap;margin-bottom:18px}
+.card-head h2{font-size:17px;margin:0}
+.g3{grid-template-columns:repeat(3,minmax(0,1fr))}
+@media(min-width:1400px){.g3{grid-template-columns:repeat(4,minmax(0,1fr))}}
+
+/* ---------- дашборд ---------- */
+.dash-kpi{display:grid;grid-template-columns:repeat(auto-fit,minmax(190px,1fr));gap:14px;margin-bottom:16px}
+.kpi{background:#fff;border:1px solid var(--line-soft);border-radius:18px;box-shadow:var(--shadow);
+  padding:18px 20px}
+.kpi span{display:block;font-size:11px;letter-spacing:.08em;text-transform:uppercase;color:var(--dim);margin-bottom:7px}
+.kpi b{font-family:"IBM Plex Mono",monospace;font-size:24px;font-variant-numeric:tabular-nums;letter-spacing:-.02em}
+.kpi small{display:block;margin-top:5px;font-size:12px;color:var(--muted)}
+.kpi.accent{background:linear-gradient(135deg,rgba(79,70,229,.09),rgba(56,189,248,.09)),#fff;
+  border-color:rgba(79,70,229,.2)}
+.d-tbl{width:100%;border-collapse:collapse;min-width:900px}
+.d-tbl th{font-size:10.5px;letter-spacing:.09em;text-transform:uppercase;color:var(--dim);
+  text-align:left;padding:0 12px 10px;border-bottom:1px solid var(--line-soft)}
+.d-tbl td{padding:13px 12px;border-bottom:1px solid var(--line-soft);font-size:13.5px;vertical-align:middle}
+.d-tbl tr:last-child td{border-bottom:0}
+.d-tbl tr:hover td{background:rgba(79,70,229,.035)}
+.d-user b{display:block}
+.d-user small{color:var(--dim);font-size:12px}
+.d-num{font-family:"IBM Plex Mono",monospace;font-variant-numeric:tabular-nums}
+.d-prog{display:flex;align-items:center;gap:9px;min-width:150px}
+.d-prog .track{flex:1;height:6px;border-radius:99px;background:rgba(79,70,229,.14);overflow:hidden}
+.d-prog .track i{display:block;height:100%;border-radius:99px;
+  background:linear-gradient(90deg,#4F46E5,#38BDF8 60%,#10B981)}
+.d-prog span{font-size:12px;color:var(--muted);font-family:"IBM Plex Mono",monospace}
+.d-goal{font-size:12px;color:var(--dim);display:block;margin-top:2px}
+.d-act{display:flex;gap:6px;justify-content:flex-end;flex-wrap:wrap}
 </style>
 <link rel="icon" type="image/png" href="img/favicon.png">
 </head>
@@ -138,27 +185,33 @@ body{background:radial-gradient(900px 520px at 88% -8%,rgba(79,70,229,.10),trans
   <div class="head-in">
     <div class="logo"><span class="mark" id="hMark"></span> Avexo · админка</div>
     <div class="right">
+      <span class="state-top" id="stateTop"></span>
       <a class="btn btn-ghost" href="./" target="_blank" rel="noopener">Открыть сайт ↗</a>
-      <button class="btn btn-ghost" id="btnExport">Скачать JSON</button>
-      <button class="btn btn-ghost" id="btnImport">Загрузить JSON</button>
-      <input type="file" id="fileIn" accept="application/json" hidden>
+      <button class="btn btn-primary" id="btnSaveTop">Сохранить</button>
     </div>
   </div>
 </header>
 
-<div class="wrap">
-  <div class="intro">
-    <h1>Настройки сайта Avexo</h1>
-    <p>Здесь меняются тексты лендинга, тарифы, платформы, цифры и оформление. Изменения сохраняются
-      в этом браузере и применяются к сайту сразу после нажатия «Сохранить».</p>
-    <div class="warn">Настройки живут только в вашем браузере на этом домене — на других устройствах сайт
-      покажет значения по умолчанию. Чтобы закрепить их для всех, скачайте JSON и передайте мне: вшью его
-      в репозиторий. Страница без пароля, адрес лучше никому не давать.</div>
+<div class="shell">
+  <aside class="nav" id="tabs"></aside>
+  <main class="content">
+
+  <div data-pane="dash">
+    <div class="dash-kpi" id="dashKpi"></div>
+    <div class="card">
+      <div class="card-head">
+        <div><h2>Кошельки и сценарии</h2>
+          <p class="sub" style="margin:2px 0 0">Все зарегистрированные кошельки, их балансы и состояние сценариев.</p></div>
+        <div style="display:flex;gap:8px;flex-wrap:wrap">
+          <button class="btn btn-ghost btn-sm" id="dReload">Обновить</button>
+          <button class="btn btn-ghost btn-sm" data-goto="users">К управлению кошельками</button>
+        </div>
+      </div>
+      <div id="dashTable"></div>
+    </div>
   </div>
 
-  <div class="tabs" id="tabs"></div>
-
-  <div data-pane="users">
+  <div data-pane="users" hidden>
     <div class="card">
       <h2>Демо-кошельки пользователей</h2>
       <p class="sub">Те, кто зарегистрировался на сайте в этом браузере. Начисления учебные — реальных денег
@@ -422,6 +475,8 @@ body{background:radial-gradient(900px 520px at 88% -8%,rgba(79,70,229,.10),trans
       </div>
     </div>
   </div>
+
+  </main>
 </div>
 
 <div class="bar">
@@ -542,15 +597,30 @@ try{
 }catch(e){}
 
 /* ---------- вкладки ---------- */
-const TABS=[["users","Пользователи"],["payouts","Заявки"],["pages","Страницы и HTML"],["blocks","Блоки"],["brand","Бренд"],["hero","Первый экран"],["heads","Заголовки"],["benefits","Преимущества"],
-  ["stats","Цифры"],["accounts","Счета"],["platforms","Платформы"],["foot","CTA и футер"],["assist","Помощник"],["quotes","Котировки"],["code","Код и правки"]];
+const NAV=[
+  ["Обзор",[["dash","Дашборд"]]],
+  ["Клиенты",[["users","Кошельки"],["payouts","Заявки"]]],
+  ["Контент сайта",[["pages","Страницы и HTML"],["blocks","Блоки"],["brand","Бренд"],
+    ["hero","Первый экран"],["heads","Заголовки"],["benefits","Преимущества"],["stats","Цифры"],
+    ["accounts","Счета"],["platforms","Платформы"],["foot","CTA и футер"]]],
+  ["Система",[["assist","Помощник"],["quotes","Котировки"],["code","Код и правки"]]]
+];
 const tabsEl=document.getElementById("tabs");
-tabsEl.innerHTML=TABS.map(([k,t],i)=>`<button class="tab${i?"":" on"}" data-tab="${k}">${t}</button>`).join("");
+tabsEl.innerHTML=NAV.map(([group,items])=>
+  "<h4>"+group+"</h4>"+items.map(([k,t],i)=>
+    `<button data-tab="${k}"${k==="dash"?' class="on"':""}><i></i>${t}</button>`).join("")).join("");
+function showTab(k){
+  tabsEl.querySelectorAll("button").forEach(x=>x.classList.toggle("on",x.dataset.tab===k));
+  document.querySelectorAll("[data-pane]").forEach(p=>p.hidden=p.dataset.pane!==k);
+  if(k==="payouts"&&typeof renderPayouts==="function") renderPayouts();
+  if(k==="dash"&&typeof renderDash==="function") renderDash();
+  window.scrollTo({top:0,behavior:"smooth"});
+}
 tabsEl.addEventListener("click",e=>{
-  const b=e.target.closest("[data-tab]"); if(!b)return;
-  tabsEl.querySelectorAll(".tab").forEach(x=>x.classList.remove("on")); b.classList.add("on");
-  document.querySelectorAll("[data-pane]").forEach(p=>p.hidden=p.dataset.pane!==b.dataset.tab);
-  if(b.dataset.tab==="payouts"&&typeof renderPayouts==="function") renderPayouts();
+  const b=e.target.closest("[data-tab]"); if(b) showTab(b.dataset.tab);
+});
+document.addEventListener("click",e=>{
+  const g=e.target.closest("[data-goto]"); if(g) showTab(g.dataset.goto);
 });
 
 /* ---------- простые поля ---------- */
@@ -646,14 +716,14 @@ document.addEventListener("click",e=>{
 async function publishCfg(silent){
   if(!API.on){
     try{ localStorage.setItem(CFG_KEY,JSON.stringify(CFG)); }catch(e){}
-    dirty=false; document.getElementById("state").textContent="Сохранено локально "+new Date().toLocaleTimeString("ru-RU");
+    dirty=false; syncState("Сохранено локально "+new Date().toLocaleTimeString("ru-RU"));
     if(!silent) toast("Сервер недоступен — правка сохранена только в этом браузере");
     return false;
   }
   try{
     await api("/api/config",{method:"PUT",body:JSON.stringify(CFG)});
     dirty=false;
-    document.getElementById("state").textContent="Опубликовано "+new Date().toLocaleTimeString("ru-RU");
+    syncState("Опубликовано "+new Date().toLocaleTimeString("ru-RU"));
     if(!silent) toast("Опубликовано — у всех посетителей обновится за несколько секунд");
     return true;
   }catch(err){
@@ -661,12 +731,17 @@ async function publishCfg(silent){
     return false;
   }
 }
-function markDirty(){dirty=true; document.getElementById("state").textContent="Есть несохранённые изменения";}
+function markDirty(){dirty=true; syncState("Есть несохранённые изменения");}
 function toast(msg){
   document.querySelectorAll(".toast").forEach(t=>t.remove());
   const t=document.createElement("div"); t.className="toast"; t.textContent=msg;
   document.body.appendChild(t); setTimeout(()=>t.remove(),2600);
 }
+function syncState(t){
+  const a=document.getElementById("state"), b=document.getElementById("stateTop");
+  if(a) a.textContent=t; if(b) b.textContent=t;
+}
+document.getElementById("btnSaveTop").onclick=()=>document.getElementById("btnSave").click();
 document.getElementById("btnSave").onclick=()=>{
   /* если открыт блок в HTML-редакторе — сначала забираем его текст */
   const code=document.getElementById("pgCode");
@@ -683,39 +758,8 @@ document.getElementById("btnReset").onclick=()=>{
   if(!confirm("Сбросить все настройки к значениям по умолчанию?"))return;
   try{localStorage.removeItem(CFG_KEY);}catch(e){}
   CFG=clone(DEFAULTS); fillFields(); Object.keys(LIST_EL).forEach(renderList);
-  dirty=false; document.getElementById("state").textContent="Сброшено";
+  dirty=false; syncState("Сброшено");
   toast("Настройки сброшены");
-};
-document.getElementById("btnExport").onclick=()=>{
-  const txt=JSON.stringify(CFG,null,2);
-  try{
-    const url=URL.createObjectURL(new Blob([txt],{type:"application/json"}));
-    const a=document.createElement("a");
-    a.href=url; a.download="avexo-config.json";
-    document.body.appendChild(a); a.click(); a.remove();
-    setTimeout(()=>URL.revokeObjectURL(url),1000);
-    toast("Файл avexo-config.json скачан");
-  }catch(err){
-    navigator.clipboard?.writeText(txt).then(
-      ()=>toast("Скачивание недоступно — JSON скопирован в буфер"),
-      ()=>toast("Скопируйте JSON из консоли браузера"));
-    console.log(txt);
-  }
-};
-document.getElementById("btnImport").onclick=()=>document.getElementById("fileIn").click();
-document.getElementById("fileIn").onchange=e=>{
-  const f=e.target.files[0]; if(!f)return;
-  const r=new FileReader();
-  r.onload=()=>{
-    try{
-      const o=JSON.parse(r.result);
-      CFG={...clone(DEFAULTS),...o};
-      ["brand","hero","heads","cta","foot"].forEach(k=>CFG[k]={...DEFAULTS[k],...(o[k]||{})});
-      fillFields(); Object.keys(LIST_EL).forEach(renderList); markDirty();
-      toast("JSON загружен — нажмите «Сохранить»");
-    }catch(err){toast("Не похоже на настройки: "+err.message);}
-  };
-  r.readAsText(f); e.target.value="";
 };
 window.addEventListener("beforeunload",e=>{if(dirty){e.preventDefault(); e.returnValue="";}});
 
@@ -957,6 +1001,82 @@ const cssBox=document.getElementById("cssBox");
 cssBox.value=CFG.css||"";
 cssBox.addEventListener("input",()=>{CFG.css=cssBox.value; markDirty();});
 renderBlocks(); renderOverrides();
+setTimeout(()=>{ if(typeof renderDash==="function") renderDash(); },50);
+
+/* ---------- дашборд ---------- */
+function renderDash(){
+  const kpi=document.getElementById("dashKpi"), tbl=document.getElementById("dashTable");
+  if(!kpi||!tbl) return;
+  const us=uLoad();
+  const money=n=>"$"+Number(n||0).toLocaleString("ru-RU",{minimumFractionDigits:2,maximumFractionDigits:2});
+  const total=us.reduce((a,u)=>a+Number(u.balance||0),0);
+  const withDyn=us.filter(u=>u.dyn&&u.dyn.on&&u.dyn.startedAt);
+  const running=withDyn.filter(u=>{const n=dynNow(dynOf(u)); return n&&n.pr<1;});
+  const finished=withDyn.length-running.length;
+  let pend=0, pendSum=0;
+  us.forEach(u=>(u.tx||[]).forEach(t=>{
+    if(["wait","appr"].includes(t[3])){ pend++;
+      pendSum+=Math.abs(parseFloat(String(t[2]).replace(/[^\d.,]/g,"").replace(",","."))||0); }
+  }));
+  const goal=withDyn.reduce((a,u)=>a+(Number(dynOf(u).to)||0),0);
+  kpi.innerHTML=[
+    ["Кошельков",String(us.length),us.length?"зарегистрировано на сайте":"пока никто не зарегистрировался",""],
+    ["Суммарный баланс",money(total),"по всем кошелькам","accent"],
+    ["Сценарии активны",String(running.length),finished?finished+" завершено":"идут прямо сейчас",""],
+    ["Целевая сумма сценариев",money(goal),"куда ведут активные сценарии",""],
+    ["Заявки в ожидании",String(pend),pend?money(pendSum)+" суммарно":"новых заявок нет",""]
+  ].map(([k,v,d,cls])=>`<div class="kpi ${cls}"><span>${k}</span><b>${v}</b><small>${d}</small></div>`).join("");
+
+  if(!us.length){
+    tbl.innerHTML='<p style="color:var(--dim);font-size:13.5px">Пока никто не зарегистрировался. '+
+      'Откройте сайт, нажмите «Регистрация» — кошелёк появится здесь.</p>';
+    return;
+  }
+  tbl.innerHTML='<div class="u-scroll"><table class="d-tbl"><thead><tr>'+
+    '<th>Пользователь</th><th>Счёт</th><th>Баланс</th><th>Сценарий</th><th>Прогресс</th>'+
+    '<th>Тип / статус</th><th>Заявки</th><th></th></tr></thead><tbody>'+
+    us.map((u,i)=>{
+      const d=dynOf(u), n=d.on&&d.startedAt?dynNow(d):null;
+      const c=u.card||{};
+      const STS={active:["ok","активен"],hold:["wait","приостановлен"],arch:["rej","архив"]};
+      const st=STS[c.status]||STS.active;
+      const pend=(u.tx||[]).filter(t=>["wait","appr"].includes(t[3])).length;
+      const scen = n
+        ? `<b class="d-num">${money(d.from)} → ${money(d.to)}</b>
+           <span class="d-goal">${new Date(n.st).toLocaleDateString("ru-RU")} — ${new Date(n.en).toLocaleDateString("ru-RU")}</span>`
+        : (d.on?'<span style="color:var(--dim)">включён, не запущен</span>'
+               :'<span style="color:var(--dim)">не задан</span>');
+      const prog = n
+        ? `<div class="d-prog"><div class="track"><i style="width:${Math.round(n.pr*100)}%"></i></div>
+           <span>${Math.round(n.pr*100)}%</span></div>`
+        : '<span style="color:var(--dim)">—</span>';
+      return `<tr>
+        <td class="d-user"><b>${escapeHtml(u.name||"—")}</b><small>${escapeHtml(u.email)}</small></td>
+        <td class="d-num">${escapeHtml(u.acct||"—")}</td>
+        <td class="d-num"><b>${money(u.balance)}</b> <small style="color:var(--dim)">${escapeHtml(u.cur||"USD")}</small></td>
+        <td>${scen}</td>
+        <td>${prog}</td>
+        <td>${escapeHtml(c.type||"Standard")}<span class="d-goal"><span class="badge ${st[0]}">${st[1]}</span></span></td>
+        <td class="d-num">${pend?'<span class="badge wait">'+pend+'</span>':'<span style="color:var(--dim)">—</span>'}</td>
+        <td><div class="d-act">
+          <button class="btn btn-ghost btn-sm" data-dgo="dyn" data-i="${i}">Сценарий</button>
+          <button class="btn btn-ghost btn-sm" data-dgo="card" data-i="${i}">Карточка</button>
+        </div></td></tr>`;
+    }).join("")+'</tbody></table></div>';
+  tbl.querySelectorAll("[data-dgo]").forEach(b=>b.onclick=()=>{
+    const i=+b.dataset.i;
+    showTab("users");
+    setTimeout(()=>{
+      if(b.dataset.dgo==="dyn"){ dynIdx=i; cardIdx=null; }
+      else { cardIdx=i; dynIdx=null; }
+      renderUsers();
+      const box=document.getElementById(b.dataset.dgo==="dyn"?"dynBox":"cardBox");
+      if(box) box.scrollIntoView({behavior:"smooth",block:"center"});
+    },60);
+  });
+}
+document.getElementById("dReload").onclick=async ()=>{ await uFetch(); renderDash(); toast("Данные обновлены"); };
+setInterval(()=>{ const p=document.querySelector('[data-pane="dash"]'); if(p&&!p.hidden) renderDash(); },30000);
 
 /* ---------- заявки на вывод ---------- */
 const PO_ST={wait:["На рассмотрении","wait"],appr:["Одобрено","appr"],ok:["Выплачено","ok"],rej:["Отклонено","rej"]};
@@ -1295,16 +1415,15 @@ qTd.addEventListener("input",()=>{CFG.api.td=qTd.value.trim(); markDirty();});
 
 
 fillFields(); Object.keys(LIST_EL).forEach(renderList);
-document.getElementById("state").textContent="Загружено";
+syncState("Загружено");
 apiBoot().then(async ()=>{
   await uFetch();
   fillFields(); Object.keys(LIST_EL).forEach(renderList);
-  renderBlocks(); renderOverrides(); renderUsers();
-  const warn=document.querySelector(".intro .warn");
-  if(warn) warn.innerHTML = API.on
-    ? "Данные хранятся в PostgreSQL на сервере: регистрации, балансы и настройки сайта видны со всех устройств. Ключ администратора спрашивается один раз за сессию браузера."
-    : "Сервер недоступен — страница работает в локальном режиме, настройки живут только в этом браузере.";
-  if(API.on) setInterval(async()=>{ if(dynIdx==null){ await uFetch(); renderUsers(); } },10000);
+  renderBlocks(); renderOverrides(); renderUsers(); renderDash();
+  syncState(API.on?"Подключено к серверу":"Локальный режим — сервер недоступен");
+  if(API.on) setInterval(async()=>{
+    if(dynIdx==null&&cardIdx==null){ await uFetch(); renderUsers(); renderDash(); }
+  },10000);
 });
 
 </script>
