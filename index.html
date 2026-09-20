@@ -137,6 +137,10 @@ table.q tbody tr:hover{background:var(--bg-2)}
 .sym b{display:block;font-weight:600;font-size:14px}
 .sym small{color:var(--dim);font-size:12px}
 .q-trade{font-size:13px;color:var(--accent);font-weight:600}
+.src{font-style:normal;font-size:10px;letter-spacing:.06em;text-transform:uppercase;
+  padding:2px 6px;border-radius:5px;background:var(--bg-2);color:var(--dim);margin-left:6px;vertical-align:middle}
+.src.on{background:rgba(0,193,31,.12);color:#049A1F}
+#liveNote{margin-top:12px;font-size:12.5px;color:var(--dim)}
 
 /* benefit cards */
 .grid-4{display:grid;grid-template-columns:repeat(4,1fr);gap:16px}
@@ -366,6 +370,29 @@ table.data tr:last-child td{border-bottom:0}
 .mt-val1{left:373px;top:193px;font-size:32px}
 .mt-lbl2{left:36px;top:244px;font-size:32px}
 .mt-val2{left:373px;top:244px;font-size:32px}
+
+/* ---------- режим правки ---------- */
+#edBar{position:fixed;left:0;right:0;top:0;z-index:300;background:#1B2330;color:#fff;
+  padding:10px 16px calc(10px + env(safe-area-inset-top,0px));display:flex;align-items:center;gap:10px;
+  font-size:13.5px;flex-wrap:wrap;box-shadow:0 6px 24px rgba(0,0,0,.25)}
+#edBar b{font-weight:600}
+#edBar .sp{margin-left:auto;display:flex;gap:8px;flex-wrap:wrap}
+#edBar button{background:rgba(255,255,255,.14);color:#fff;border-radius:8px;padding:7px 13px;font-size:13px;font-weight:600}
+#edBar button:hover{background:rgba(255,255,255,.24)}
+#edBar button.go{background:#19C37D}
+#edBar button.off{background:#F41112}
+body.ed-on{padding-top:56px}
+body.ed-on [data-ed-hover]{outline:2px dashed rgba(0,86,255,.6);outline-offset:2px;cursor:pointer}
+body.ed-on .ed-sel{outline:2px solid #0056FF!important;outline-offset:2px}
+#edPanel{position:fixed;left:50%;transform:translateX(-50%);bottom:18px;z-index:300;width:min(620px,94vw);
+  background:#fff;border:1px solid var(--line);border-radius:14px;box-shadow:0 26px 60px rgba(20,28,44,.3);padding:16px}
+#edPanel h4{margin:0 0 4px;font-size:14px;font-family:"Sora",sans-serif}
+#edPanel .path{font-size:11.5px;color:var(--dim);font-family:"IBM Plex Mono",monospace;
+  overflow:hidden;text-overflow:ellipsis;white-space:nowrap;margin-bottom:10px}
+#edPanel textarea{width:100%;min-height:74px;border:1px solid var(--line);border-radius:9px;padding:10px 12px;
+  font:inherit;font-size:14px;resize:vertical}
+#edPanel .row{display:flex;gap:8px;margin-top:12px;flex-wrap:wrap}
+#edPanel .row .sp{margin-left:auto;display:flex;gap:8px}
 .mt-demo{right:36px;bottom:34px;font-size:22px;font-weight:700;letter-spacing:.18em;
   color:#fff;background:#E07C00;border-radius:8px;padding:8px 18px}
 .acct-pick tr{cursor:pointer}
@@ -413,7 +440,7 @@ table.data tr:last-child td{border-bottom:0}
   </div>
 </header>
 
-<section class="hero">
+<section class="hero" data-sec="hero">
   <div class="wrap hero-in">
     <div>
       <span class="eyebrow" id="cfgEyebrow">Учебный демонстрационный проект</span>
@@ -445,7 +472,7 @@ table.data tr:last-child td{border-bottom:0}
 </section>
 
 <!-- Котировки -->
-<section class="band" id="markets">
+<section class="band" id="markets" data-sec="markets">
   <div class="wrap">
     <div class="sec-head">
       <h2 id="cfgMarketsH">Торгуйте тем, что движет рынком</h2>
@@ -458,11 +485,12 @@ table.data tr:last-child td{border-bottom:0}
         <tbody id="qBody"></tbody>
       </table>
     </div></div>
+    <p id="liveNote"></p>
   </div>
 </section>
 
 <!-- Преимущества -->
-<section class="band alt">
+<section class="band alt" data-sec="benefits">
   <div class="wrap">
     <div class="sec-head"><h2 id="cfgBenefitsH">Почему трейдеры выбирают Avexo</h2></div>
     <div class="grid-4" id="benefits"></div>
@@ -470,7 +498,7 @@ table.data tr:last-child td{border-bottom:0}
 </section>
 
 <!-- Цифры -->
-<section class="band">
+<section class="band" data-sec="stats">
   <div class="wrap">
     <div class="sec-head"><h2 id="cfgStatsH">Условия торговли</h2>
       <p id="cfgStatsP">Одинаковые условия для всех клиентов — без скрытых наценок к спреду.</p></div>
@@ -479,7 +507,7 @@ table.data tr:last-child td{border-bottom:0}
 </section>
 
 <!-- Счета -->
-<section class="band alt" id="accounts">
+<section class="band alt" id="accounts" data-sec="accounts">
   <div class="wrap">
     <div class="sec-head"><h2 id="cfgAccH">Четыре типа счетов</h2>
       <p id="cfgAccP">От первого депозита до институционального объёма. Тип счёта можно сменить в личном кабинете.</p></div>
@@ -488,7 +516,7 @@ table.data tr:last-child td{border-bottom:0}
 </section>
 
 <!-- Платформы -->
-<section class="band" id="platforms">
+<section class="band" id="platforms" data-sec="platforms">
   <div class="wrap">
     <div class="sec-head"><h2 id="cfgPlatH">Торговые платформы</h2>
       <p id="cfgPlatP">Один счёт — пять способов торговать. Десктоп, браузер и мобильные приложения синхронизированы.</p></div>
@@ -497,7 +525,7 @@ table.data tr:last-child td{border-bottom:0}
 </section>
 
 <!-- Классы активов -->
-<section class="band alt">
+<section class="band alt" data-sec="classes">
   <div class="wrap">
     <div class="sec-head"><h2 id="cfgClsH">Классы активов</h2></div>
     <div class="tabs" id="clsTabs"></div>
@@ -513,7 +541,7 @@ table.data tr:last-child td{border-bottom:0}
 </section>
 
 <!-- Мобильное приложение -->
-<section class="band">
+<section class="band" data-sec="mobile">
   <div class="wrap mob">
     <div>
       <h2 style="font-size:clamp(26px,3.4vw,36px);font-weight:600;letter-spacing:-.02em" id="cfgMobH">Терминал в кармане</h2>
@@ -536,14 +564,14 @@ table.data tr:last-child td{border-bottom:0}
 </section>
 
 <!-- Достижения -->
-<section class="band alt" id="about">
+<section class="band alt" id="about" data-sec="achv">
   <div class="wrap">
     <div class="sec-head"><h2 id="cfgAchvH">Компания в цифрах</h2></div>
     <div class="grid-4" id="achv"></div>
   </div>
 </section>
 
-<section class="cta">
+<section class="cta" data-sec="cta">
   <div class="wrap">
     <h2 id="cfgCtaH">Торгуйте как профессионал</h2>
     <p id="cfgCtaP">Откройте счёт за пять минут или попробуйте демо-кабинет без регистрации.</p>
@@ -554,7 +582,7 @@ table.data tr:last-child td{border-bottom:0}
   </div>
 </section>
 
-<footer>
+<footer data-sec="footer">
   <div class="wrap">
     <div class="foot-grid">
       <div class="foot-col foot-about">
@@ -883,7 +911,9 @@ const DEFAULTS={
   stats:DEF_STATS.map(([v,k,hl])=>({v,k,hl:!!hl})),
   accounts:DEF_ACCOUNTS.map(([n,tag,dep,spr,com,lev,f])=>({n,tag,dep,spr,com,lev,f:!!f})),
   platforms:DEF_PLATFORMS.map(([n,d,t])=>({n,d,t})),
-  achv:DEF_ACHV.map(([v,k])=>({v,k}))
+  achv:DEF_ACHV.map(([v,k])=>({v,k})),
+  sections:{},panes:{},hidden:[],texts:{},css:"",
+  api:{td:"",live:true}
 };
 function deepMerge(base,over){
   if(Array.isArray(base)) return Array.isArray(over)?over:base;
@@ -897,6 +927,52 @@ function deepMerge(base,over){
 let CFG=DEFAULTS;
 try{const raw=localStorage.getItem(CFG_KEY); if(raw) CFG=deepMerge(DEFAULTS,JSON.parse(raw));}catch(e){}
 function setTxt(id,v){const el=document.getElementById(id); if(el&&v!=null) el.textContent=v;}
+
+/* ---------------- конструктор: блоки, правки текста, свой CSS ---------------- */
+const SECTIONS=[["hero","Первый экран"],["markets","Котировки"],["benefits","Преимущества"],
+  ["stats","Условия торговли"],["accounts","Типы счетов"],["platforms","Платформы"],
+  ["classes","Классы активов"],["mobile","Мобильное приложение"],["achv","Компания в цифрах"],
+  ["cta","Призыв к действию"],["footer","Футер"]];
+const PANES=[["dash","Обзор"],["term","Терминал"],["pay","Платежи"],["prof","Профиль"]];
+function elPath(el){
+  if(!el||el===document.body) return "body";
+  const parts=[];
+  while(el&&el!==document.body&&parts.length<12){
+    let sel=el.tagName.toLowerCase();
+    if(el.id) {parts.unshift("#"+CSS.escape(el.id)); break;}
+    const par=el.parentElement; if(!par) break;
+    const same=[...par.children].filter(c=>c.tagName===el.tagName);
+    if(same.length>1) sel+=":nth-of-type("+(same.indexOf(el)+1)+")";
+    parts.unshift(sel); el=par;
+  }
+  return parts.join(">");
+}
+function applyOverrides(){
+  const o=CFG.sections||{};
+  SECTIONS.forEach(([k])=>{
+    const el=document.querySelector('[data-sec="'+k+'"]');
+    if(el) el.style.display = o[k]===false ? "none" : "";
+  });
+  const pv=CFG.panes||{};
+  PANES.forEach(([k])=>{
+    const b=document.querySelector('#side [data-pane="'+k+'"]');
+    if(b) b.style.display = pv[k]===false ? "none" : "";
+  });
+  (CFG.hidden||[]).forEach(sel=>{
+    try{document.querySelectorAll(sel).forEach(e=>e.style.display="none");}catch(err){}
+  });
+  const t=CFG.texts||{};
+  Object.keys(t).forEach(sel=>{
+    try{const e=document.querySelector(sel);
+      if(e){const v=t[sel];
+        if(String(v).includes("\n")) e.innerHTML=String(v).split("\n").map(x=>x.replace(/[<>]/g,"")).join("<br>");
+        else e.textContent=v;}
+    }catch(err){}
+  });
+  let st=document.getElementById("cfgCustomCss");
+  if(!st){st=document.createElement("style"); st.id="cfgCustomCss"; document.head.appendChild(st);}
+  st.textContent=CFG.css||"";
+}
 function applyConfig(){
   const b=CFG.brand||{};
   document.documentElement.style.setProperty("--accent",b.accent||"#0056FF");
@@ -919,10 +995,80 @@ function applyConfig(){
   const c=CFG.cta||{}; setTxt("cfgCtaH",c.h); setTxt("cfgCtaP",c.p); setTxt("cfgCtaBtn",c.btn);
   const f=CFG.foot||{}; setTxt("cfgFootAbout",f.about); setTxt("cfgDemoNote",f.note); setTxt("cfgDisclaimer",f.disclaimer);
   document.title=(b.name||"Avexo")+" "+(b.suffix||"Trade");
+  applyOverrides();
 }
 
 const fmt=(n,d=2)=>n.toLocaleString("ru-RU",{minimumFractionDigits:d,maximumFractionDigits:d});
 const usd=n=>"$"+fmt(n,2);
+
+
+/* ---------------- реальные котировки ---------------- */
+const LIVE={src:{},at:null};
+const TD_MAP={ /* символ на сайте -> символ Twelve Data */
+  "AAPL":"AAPL","TSLA":"TSLA","NVDA":"NVDA","MSFT":"MSFT","AMZN":"AMZN","META":"META",
+  "SPY":"SPY","QQQ":"QQQ","GLD":"GLD","ARKK":"ARKK","EEM":"EEM",
+  "XAU/USD":"XAU/USD","XAG/USD":"XAG/USD","XPT/USD":"XPT/USD","XPD/USD":"XPD/USD",
+  "US500":"SPX","US100":"NDX","US30":"DJI","GER40":"DAX","UK100":"UKX","JP225":"N225"};
+function setLive(sym,price,src){
+  const v=Number(price);
+  if(!isFinite(v)||v<=0) return false;
+  live[sym]=v; if(sym in prices) prices[sym]=v;
+  LIVE.src[sym]=src; return true;
+}
+async function pullForex(){
+  try{
+    const r=await fetch("https://open.er-api.com/v6/latest/USD").then(x=>x.json());
+    if(!r||!r.rates) return;
+    if(r.rates.EUR) setLive("EUR/USD",1/r.rates.EUR,"er-api");
+    if(r.rates.JPY) setLive("USD/JPY",r.rates.JPY,"er-api");
+  }catch(e){}
+}
+async function pullCrypto(){
+  try{
+    const r=await fetch('https://api.binance.com/api/v3/ticker/price?symbols=["BTCUSDT"]').then(x=>x.json());
+    let ok=false;
+    (Array.isArray(r)?r:[]).forEach(t=>{ if(t.symbol==="BTCUSDT") ok=setLive("BTC/USD",t.price,"binance"); });
+    if(ok) return;
+  }catch(e){}
+  try{ /* запасной источник, если Binance недоступен в стране */
+    const r=await fetch("https://api.coinbase.com/v2/prices/BTC-USD/spot").then(x=>x.json());
+    if(r&&r.data&&r.data.amount) setLive("BTC/USD",r.data.amount,"coinbase");
+  }catch(e){}
+}
+async function pullTwelveData(){
+  const key=((CFG.api||{}).td||"").trim(); if(!key) return;
+  const ours=Object.keys(TD_MAP);
+  const url="https://api.twelvedata.com/price?symbol="+encodeURIComponent(ours.map(k=>TD_MAP[k]).join(","))+
+            "&apikey="+encodeURIComponent(key);
+  try{
+    const r=await fetch(url).then(x=>x.json());
+    if(!r||r.status==="error") return;
+    ours.forEach(sym=>{
+      const td=TD_MAP[sym], node=r[td];
+      const v=node&&node.price!==undefined?node.price:(r.price&&ours.length===1?r.price:null);
+      if(v!=null) setLive(sym,v,"twelvedata");
+    });
+  }catch(e){}
+}
+async function refreshLive(){
+  if((CFG.api||{}).live===false) return;
+  await Promise.all([pullForex(),pullCrypto(),pullTwelveData()]);
+  LIVE.at=new Date();
+  renderQuotes(); renderLiveNote();
+  if(document.getElementById("app").style.display==="block"){ renderWatch(); renderPositions(); }
+}
+function renderLiveNote(){
+  const el=document.getElementById("liveNote"); if(!el)return;
+  const n=Object.keys(LIVE.src).length;
+  const key=((CFG.api||{}).td||"").trim();
+  if((CFG.api||{}).live===false){ el.textContent="Реальные котировки выключены в настройках — все цены имитируются."; return; }
+  el.innerHTML = n
+    ? "Реальные данные по "+n+" инструментам"+(LIVE.at?", обновлено в "+LIVE.at.toLocaleTimeString("ru-RU"):"")+
+      ": валюты — open.er-api.com, криптовалюта — Binance"+(key?", акции, индексы и металлы — Twelve Data":"")+
+      ". Остальные инструменты помечены как «демо» и имитируются."+
+      (key?"":" Чтобы подтянуть акции, индексы и металлы, добавьте бесплатный ключ Twelve Data в админке.")
+    : "Не удалось получить реальные котировки — показаны имитированные цены.";
+}
 
 /* ---------------- лендинг: котировки ---------------- */
 let curCat="Популярное", live={};
@@ -940,7 +1086,7 @@ function renderQuotes(){
     const sp=+(price*(dec>2?0.00008:0.0004)).toFixed(dec);
     const tr=document.createElement("tr");
     tr.innerHTML=`<td><div class="sym"><span class="sym-ic">${sym.slice(0,2)}</span>
-        <span><b>${sym}</b><small>${name}</small></span></div></td>
+        <span><b>${sym} <em class="src ${LIVE.src[sym]?"on":""}">${LIVE.src[sym]?"live":"демо"}</em></b><small>${name}</small></span></div></td>
       <td class="num" data-bid="${key}">${fmt(live[key],dec)}</td>
       <td class="num" data-ask="${key}">${fmt(live[key]+sp,dec)}</td>
       <td class="num ${chg>=0?"up":"down"}">${chg>=0?"+":""}${chg.toFixed(2)}%</td>
@@ -955,7 +1101,7 @@ renderQuotes();
 setInterval(()=>{
   [...qBody.children].forEach(tr=>{
     const k=tr.dataset.key,dec=+tr.dataset.dec,sp=+tr.dataset.sp;
-    live[k]=live[k]*(1+(Math.random()-0.5)*0.0006);
+    if(!LIVE.src[k]) live[k]=live[k]*(1+(Math.random()-0.5)*0.0006);
     const bid=tr.querySelector("[data-bid]"),ask=tr.querySelector("[data-ask]");
     const prev=parseFloat(bid.textContent.replace(/\s/g,"").replace(",","."));
     bid.textContent=fmt(live[k],dec); ask.textContent=fmt(live[k]+sp,dec);
@@ -1008,6 +1154,7 @@ function renderClass(c){
      <span class="num ${ch.startsWith("-")?"down":"up"}">${ch}</span></div>`).join("");
 }
 renderClass("Индексы");
+renderLiveNote(); refreshLive(); setInterval(refreshLive,60000);
 
 /* спарклайн в hero */
 (function(){
@@ -1196,6 +1343,7 @@ function openApp(pane,sym){
   showPane(pane||"dash");
 }
 function showPane(id){
+  if((CFG.panes||{})[id]===false){const first=PANES.find(([k])=>(CFG.panes||{})[k]!==false); id=first?first[0]:id;}
   document.querySelectorAll("[data-view]").forEach(v=>v.hidden=v.dataset.view!==id);
   document.querySelectorAll("#side [data-pane]").forEach(b=>b.classList.toggle("on",b.dataset.pane===id));
   if(id==="dash"){drawEquity();renderPositions();}
@@ -1487,9 +1635,81 @@ function toast(msg){
   toastT=setTimeout(()=>t.remove(),2600);
 }
 
+
+/* ---------------- режим правки страницы (?edit=1) ---------------- */
+function saveCFG(){try{localStorage.setItem(CFG_KEY,JSON.stringify(CFG));return true}catch(e){return false}}
+function startEditor(){
+  document.body.classList.add("ed-on");
+  const bar=document.createElement("div"); bar.id="edBar";
+  bar.innerHTML='<b>Режим правки</b><span style="opacity:.75">кликните по тексту или кнопке</span>'+
+    '<span class="sp"><button id="edReset">Сбросить все правки</button>'+
+    '<button id="edSave" class="go">Сохранить</button>'+
+    '<button id="edExit" class="off">Выйти</button></span>';
+  document.body.appendChild(bar);
+  let sel=null, panel=null;
+  const skip=e=>e.closest("#edBar")||e.closest("#edPanel");
+  document.addEventListener("mouseover",e=>{
+    const t=e.target; if(skip(t))return;
+    document.querySelectorAll("[data-ed-hover]").forEach(x=>x.removeAttribute("data-ed-hover"));
+    t.setAttribute("data-ed-hover","1");
+  },true);
+  document.addEventListener("click",e=>{
+    if(skip(e.target))return;
+    e.preventDefault(); e.stopPropagation();
+    pick(e.target);
+  },true);
+  function pick(el){
+    if(sel) sel.classList.remove("ed-sel");
+    sel=el; sel.classList.add("ed-sel");
+    const path=elPath(el);
+    const kids=[...el.childNodes];
+    const hasBr=kids.some(n=>n.nodeName==="BR");
+    const onlyText=kids.length>0 && kids.every(n=>n.nodeType===3||n.nodeName==="BR");
+    if(!panel){panel=document.createElement("div"); panel.id="edPanel"; document.body.appendChild(panel);}
+    const cls=(typeof el.className==="string"?el.className:"").split(" ").filter(c=>c&&c!=="ed-sel");
+    panel.innerHTML='<h4>'+el.tagName.toLowerCase()+(cls.length?" ."+cls[0]:"")+'</h4>'+
+      '<div class="path">'+path+'</div>'+
+      (onlyText?'<textarea id="edTxt"></textarea>':'<p style="font-size:13px;color:var(--muted);margin:0">Внутри этого блока есть другие элементы — текст правится в них. Блок целиком можно скрыть.</p>')+
+      '<div class="row"><button class="btn btn-ghost" id="edHide" style="padding:8px 14px">Скрыть элемент</button>'+
+      '<button class="btn btn-ghost" id="edUp" style="padding:8px 14px">Выбрать родителя</button>'+
+      '<span class="sp"><button class="btn btn-ghost" id="edClose" style="padding:8px 14px">Закрыть</button>'+
+      (onlyText?'<button class="btn btn-primary" id="edApply" style="padding:8px 14px">Применить текст</button>':'')+
+      '</span></div>';
+    if(onlyText){const ta=panel.querySelector("#edTxt");
+      ta.value = hasBr ? [...kids].map(n=>n.nodeName==="BR"?"\n":n.textContent).join("") : el.textContent;
+      ta.focus();}
+    panel.querySelector("#edClose").onclick=()=>{panel.remove(); panel=null; if(sel){sel.classList.remove("ed-sel"); sel=null;}};
+    panel.querySelector("#edUp").onclick=()=>{if(sel&&sel.parentElement&&sel.parentElement!==document.body) pick(sel.parentElement);};
+    panel.querySelector("#edHide").onclick=()=>{
+      CFG.hidden=CFG.hidden||[]; if(!CFG.hidden.includes(path)) CFG.hidden.push(path);
+      el.style.display="none"; toast("Элемент скрыт — не забудьте «Сохранить»");
+      panel.remove(); panel=null; sel=null;
+    };
+    const ap=panel.querySelector("#edApply");
+    if(ap) ap.onclick=()=>{
+      const v=panel.querySelector("#edTxt").value;
+      CFG.texts=CFG.texts||{}; CFG.texts[path]=v;
+      if(v.includes("\n")) el.innerHTML=v.split("\n").map(x=>x.replace(/[<>]/g,"")).join("<br>");
+      else el.textContent=v;
+      toast("Текст изменён — не забудьте «Сохранить»");
+    };
+  }
+  document.getElementById("edSave").onclick=()=>{
+    toast(saveCFG()?"Правки сохранены":"Браузер не дал сохранить");
+  };
+  document.getElementById("edReset").onclick=()=>{
+    if(!confirm("Убрать все правки текста и скрытые элементы?"))return;
+    CFG.texts={}; CFG.hidden=[]; saveCFG(); location.reload();
+  };
+  document.getElementById("edExit").onclick=()=>{
+    location.href=location.pathname;
+  };
+}
+if(/[?&]edit=1/.test(location.search)) startEditor();
+
 /* живое обновление позиций */
 setInterval(()=>{
-  INSTR.forEach(([s])=>prices[s]=prices[s]*(1+(Math.random()-0.5)*0.0005));
+  INSTR.forEach(([s])=>{ if(!LIVE.src[s]) prices[s]=prices[s]*(1+(Math.random()-0.5)*0.0005); });
   if(document.getElementById("app").style.display==="block"){
     const dash=document.querySelector('[data-view="dash"]');
     if(dash&&!dash.hidden) renderPositions();

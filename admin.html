@@ -141,6 +141,71 @@ table.u tr:last-child td{border-bottom:0}
     </div>
   </div>
 
+  <div data-pane="blocks" hidden>
+    <div class="card">
+      <h2>Блоки лендинга</h2>
+      <p class="sub">Снимите галочку — раздел исчезнет с сайта целиком.</p>
+      <div class="grid g2" id="secBox"></div>
+    </div>
+    <div class="card">
+      <h2>Разделы личного кабинета</h2>
+      <p class="sub">Пункты левого меню кабинета.</p>
+      <div class="grid g2" id="paneBox"></div>
+    </div>
+  </div>
+
+  <div data-pane="quotes" hidden>
+    <div class="card">
+      <h2>Реальные котировки</h2>
+      <p class="sub">Сайт подтягивает живые цены и помечает такие инструменты меткой «live».
+        Остальные помечаются «демо» и имитируются.</p>
+      <label class="check" style="margin-bottom:16px">
+        <input type="checkbox" id="q_live"> Использовать реальные данные
+      </label>
+      <div class="grid">
+        <div class="field">
+          <label for="q_td">Ключ Twelve Data</label>
+          <input id="q_td" placeholder="вставьте API key">
+          <span class="hint">Бесплатный ключ на twelvedata.com даёт акции, индексы, металлы и ETF.
+            Без ключа реальными остаются валютные пары и криптовалюта.</span>
+        </div>
+      </div>
+      <div style="margin-top:16px;font-size:13px;color:var(--muted);line-height:1.7">
+        <b style="color:var(--text)">Что откуда берётся</b><br>
+        EUR/USD, USD/JPY — open.er-api.com, без ключа, обновление раз в сутки<br>
+        BTC/USD — Binance, без ключа, обновление раз в минуту<br>
+        Акции, индексы, металлы, ETF — Twelve Data, нужен ключ<br>
+        Фьючерсы и энергоносители — имитация, помечены как «демо»
+      </div>
+    </div>
+  </div>
+
+  <div data-pane="code" hidden>
+    <div class="card">
+      <h2>Правка прямо на сайте</h2>
+      <p class="sub">Откройте сайт в режиме правки, кликайте по любому тексту или кнопке — меняйте
+        надпись или скрывайте элемент. Не забудьте нажать «Сохранить» в верхней полосе.</p>
+      <a class="btn btn-primary" href="./?edit=1" target="_blank" rel="noopener">Открыть сайт в режиме правки ↗</a>
+    </div>
+    <div class="card">
+      <h2>Свой CSS</h2>
+      <p class="sub">Применяется поверх стилей сайта — сдвинуть, перекрасить, спрятать что угодно.</p>
+      <textarea id="cssBox" spellcheck="false"
+        style="min-height:220px;font-family:'IBM Plex Mono',monospace;font-size:13px"
+        placeholder=".hero h1 { font-size: 48px }&#10;.demo-note { display: none }"></textarea>
+    </div>
+    <div class="card">
+      <h2>Скрытые элементы</h2>
+      <p class="sub">Скрытое в режиме правки. Удалите строку — элемент вернётся.</p>
+      <div id="hiddenBox"></div>
+    </div>
+    <div class="card">
+      <h2>Изменённые надписи</h2>
+      <p class="sub">Тексты, переписанные в режиме правки.</p>
+      <div id="textsBox"></div>
+    </div>
+  </div>
+
   <div data-pane="brand" hidden>
     <div class="card">
       <h2>Бренд и цвета</h2>
@@ -315,8 +380,15 @@ const DEFAULTS={
     {n:"API и FIX 4.4",d:"Прямое подключение для алгоритмической торговли, REST и WebSocket, песочница для тестов.",t:"Для разработчиков"},
     {n:"Копи-трейдинг",d:"Подписка на стратегии с публичной статистикой просадки и прозрачной комиссией успеха.",t:"В приложении и вебе"}],
   achv:[{v:"1 240 000",k:"Открытых торговых счетов"},{v:"38",k:"Наград отраслевых изданий"},
-    {v:"4.7",k:"Средняя оценка приложения"},{v:"9",k:"Платёжных методов"}]
+    {v:"4.7",k:"Средняя оценка приложения"},{v:"9",k:"Платёжных методов"}],
+  sections:{},panes:{},hidden:[],texts:{},css:"",
+  api:{td:"",live:true}
 };
+const SECTIONS=[["hero","Первый экран"],["markets","Котировки"],["benefits","Преимущества"],
+  ["stats","Условия торговли"],["accounts","Типы счетов"],["platforms","Платформы"],
+  ["classes","Классы активов"],["mobile","Мобильное приложение"],["achv","Компания в цифрах"],
+  ["cta","Призыв к действию"],["footer","Футер"]];
+const PANES=[["dash","Обзор"],["term","Терминал"],["pay","Платежи"],["prof","Профиль"]];
 const ICON_LIST=[["globe","Глобус"],["shield","Щит"],["bolt","Молния"],["clock","Часы"],["chart","График"]];
 const clone=o=>JSON.parse(JSON.stringify(o));
 
@@ -324,12 +396,13 @@ let CFG=clone(DEFAULTS), dirty=false;
 try{
   const raw=localStorage.getItem(CFG_KEY);
   if(raw){const o=JSON.parse(raw); CFG={...CFG,...o};
-    ["brand","hero","heads","cta","foot"].forEach(k=>CFG[k]={...DEFAULTS[k],...(o[k]||{})});}
+    ["brand","hero","heads","cta","foot","sections","panes","api"].forEach(k=>CFG[k]={...DEFAULTS[k],...(o[k]||{})});
+    CFG.hidden=o.hidden||[]; CFG.texts=o.texts||{}; CFG.css=o.css||"";}
 }catch(e){}
 
 /* ---------- вкладки ---------- */
-const TABS=[["users","Пользователи"],["brand","Бренд"],["hero","Первый экран"],["heads","Заголовки"],["benefits","Преимущества"],
-  ["stats","Цифры"],["accounts","Счета"],["platforms","Платформы"],["foot","CTA и футер"]];
+const TABS=[["users","Пользователи"],["blocks","Блоки"],["brand","Бренд"],["hero","Первый экран"],["heads","Заголовки"],["benefits","Преимущества"],
+  ["stats","Цифры"],["accounts","Счета"],["platforms","Платформы"],["foot","CTA и футер"],["quotes","Котировки"],["code","Код и правки"]];
 const tabsEl=document.getElementById("tabs");
 tabsEl.innerHTML=TABS.map(([k,t],i)=>`<button class="tab${i?"":" on"}" data-tab="${k}">${t}</button>`).join("");
 tabsEl.addEventListener("click",e=>{
@@ -529,6 +602,7 @@ function adjust(i,sign){
     sign>0?"Исполнено":"Списано"]);
   u.hist.unshift([date,sign>0?"Начисление":"Списание","—",(sign>0?"+":"−")+"$"+amt.toFixed(2),"ok"]);
   us[i]=u; uSave(us); renderUsers();
+
   if(inp) inp.value="";
   toast((sign>0?"Начислено ":"Списано ")+fmtMoney(amt,u.cur)+" — "+(u.name||u.email));
 }
@@ -552,6 +626,59 @@ document.getElementById("uAdd").onclick=()=>{
   uSave(us); renderUsers(); toast("Кошелёк создан, пароль demo123");
 };
 renderUsers();
+
+/* ---------- блоки, CSS, правки ---------- */
+function renderBlocks(){
+  document.getElementById("secBox").innerHTML=SECTIONS.map(([k,t])=>
+    `<label class="check"><input type="checkbox" data-sec="${k}"${CFG.sections[k]===false?"":" checked"}> ${t}</label>`).join("");
+  document.getElementById("paneBox").innerHTML=PANES.map(([k,t])=>
+    `<label class="check"><input type="checkbox" data-pane-v="${k}"${CFG.panes[k]===false?"":" checked"}> ${t}</label>`).join("");
+}
+function renderOverrides(){
+  const h=CFG.hidden||[];
+  document.getElementById("hiddenBox").innerHTML = h.length
+    ? h.map((sel,i)=>`<div class="item" style="display:flex;align-items:center;gap:10px;padding:11px 14px">
+        <code style="font-size:12px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;flex:1">${escapeHtml(sel)}</code>
+        <button class="btn btn-danger btn-sm" data-unhide="${i}">Вернуть</button></div>`).join("")
+    : '<p style="color:var(--dim);font-size:13.5px">Ничего не скрыто.</p>';
+  const t=CFG.texts||{}, keys=Object.keys(t);
+  document.getElementById("textsBox").innerHTML = keys.length
+    ? keys.map(sel=>`<div class="item" style="padding:12px 14px">
+        <code style="font-size:11.5px;color:var(--dim);display:block;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${escapeHtml(sel)}</code>
+        <div style="display:flex;gap:10px;align-items:center;margin-top:8px">
+          <input value="${escapeHtml(t[sel])}" data-textsel="${escapeHtml(sel)}">
+          <button class="btn btn-danger btn-sm" data-untext="${escapeHtml(sel)}">Вернуть</button></div></div>`).join("")
+    : '<p style="color:var(--dim);font-size:13.5px">Надписи не менялись.</p>';
+}
+document.addEventListener("change",e=>{
+  const sc=e.target.closest("[data-sec]");
+  if(sc){CFG.sections[sc.dataset.sec]=sc.checked?true:false; markDirty(); return;}
+  const pc=e.target.closest("[data-pane-v]");
+  if(pc){CFG.panes[pc.dataset.paneV]=pc.checked?true:false; markDirty();}
+});
+document.addEventListener("click",e=>{
+  const u=e.target.closest("[data-unhide]");
+  if(u){CFG.hidden.splice(+u.dataset.unhide,1); renderOverrides(); markDirty(); return;}
+  const ut=e.target.closest("[data-untext]");
+  if(ut){delete CFG.texts[ut.dataset.untext]; renderOverrides(); markDirty();}
+});
+document.addEventListener("input",e=>{
+  const ti=e.target.closest("[data-textsel]");
+  if(ti){CFG.texts[ti.dataset.textsel]=ti.value; markDirty();}
+});
+const cssBox=document.getElementById("cssBox");
+cssBox.value=CFG.css||"";
+cssBox.addEventListener("input",()=>{CFG.css=cssBox.value; markDirty();});
+renderBlocks(); renderOverrides();
+
+/* ---------- котировки ---------- */
+const qLive=document.getElementById("q_live"), qTd=document.getElementById("q_td");
+CFG.api=CFG.api||{td:"",live:true};
+qLive.checked=CFG.api.live!==false;
+qTd.value=CFG.api.td||"";
+qLive.addEventListener("change",()=>{CFG.api.live=qLive.checked; markDirty();});
+qTd.addEventListener("input",()=>{CFG.api.td=qTd.value.trim(); markDirty();});
+
 
 fillFields(); Object.keys(LIST_EL).forEach(renderList);
 document.getElementById("state").textContent="Загружено";
