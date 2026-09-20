@@ -99,6 +99,8 @@ table.u tr:last-child td{border-bottom:0}
 .u-bal{font-family:"IBM Plex Mono",monospace;font-weight:600;font-variant-numeric:tabular-nums}
 .u-ops{display:flex;gap:6px;justify-content:flex-end;flex-wrap:wrap}
 .u-ops input{width:110px;text-align:right;padding:7px 9px;font-family:"IBM Plex Mono",monospace}
+.u-acct{display:flex;gap:6px;justify-content:flex-end;align-items:center}
+.u-acct input{width:112px;text-align:right;padding:7px 9px;font-family:"IBM Plex Mono",monospace;font-variant-numeric:tabular-nums}
 [hidden]{display:none!important}
 </style>
 </head>
@@ -658,11 +660,14 @@ function renderUsers(){
       'Откройте сайт, нажмите «Регистрация» — кошелёк появится здесь.</p>'; return;
   }
   box.innerHTML='<div class="u-scroll"><table class="u"><thead><tr>'+
-    '<th>Пользователь</th><th>Кошелёк</th><th>Баланс</th><th>Операция</th><th></th>'+
+    '<th>Пользователь</th><th>Номер счёта</th><th>Баланс</th><th>Операция</th><th></th>'+
     '</tr></thead><tbody>'+us.map((u,i)=>
     `<tr>
       <td class="u-name"><b>${escapeHtml(u.name||"—")}</b><small>${escapeHtml(u.email)}</small></td>
-      <td class="num">${escapeHtml(u.acct||"—")}</td>
+      <td><div class="u-acct">
+        <input type="text" inputmode="numeric" maxlength="12" value="${escapeHtml(u.acct||"")}" data-acct="${i}">
+        <button class="btn btn-ghost btn-sm" data-acctsave="${i}">Сохранить</button>
+      </div></td>
       <td class="u-bal">${fmtMoney(u.balance,u.cur)}</td>
       <td><div class="u-ops">
         <input type="number" step="0.01" min="0" placeholder="сумма" data-amt="${i}">
@@ -675,7 +680,8 @@ function renderUsers(){
     '<div id="dynBox"></div>'+
     '<p style="color:var(--dim);font-size:12.5px;margin:14px 0 0">Операция записывается в историю кошелька '+
     'и сразу видна пользователю в кабинете. Кнопка «Сценарий» задаёт движение баланса во времени '+
-    'отдельно для каждого кошелька.</p>';
+    'отдельно для каждого кошелька. Номер счёта можно изменить прямо в таблице — '+
+    'он сразу подставится в карточку кошелька в кабинете. Сервер остаётся Avexo-DEMO.</p>';
   if(typeof dynIdx!=="undefined" && dynIdx!=null) renderDyn();
 }
 function escapeHtml(s){return String(s??"").replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;").replace(/"/g,"&quot;");}
@@ -710,7 +716,24 @@ async function adjust(i,sign){
   if(inp) inp.value="";
   toast((sign>0?"Начислено ":"Списано ")+fmtMoney(amt,u.cur)+" — "+(u.name||u.email));
 }
+async function saveAcct(i){
+  const us=uLoad(), u=us[i]; if(!u) return;
+  const inp=document.querySelector(`[data-acct="${i}"]`);
+  const num=String(inp&&inp.value||"").trim();
+  if(!/^\d{5,12}$/.test(num)) return toast("Номер счёта — от 5 до 12 цифр");
+  if(num===String(u.acct||"")) return toast("Номер не изменился");
+  if(us.some((o,j)=>j!==i&&String(o.acct||"")===num)) return toast("Такой номер уже занят другим кошельком");
+  if(API.on){
+    try{
+      await api("/api/admin/users/"+u.id,{method:"PATCH",body:JSON.stringify({acct:num})});
+      await uFetch(); renderUsers(); toast("Номер счёта обновлён: "+num);
+    }catch(err){ toast(err.message); }
+    return;
+  }
+  u.acct=num; us[i]=u; uSave(us); renderUsers(); toast("Номер счёта обновлён: "+num);
+}
 document.addEventListener("click",e=>{
+  const a=e.target.closest("[data-acctsave]"); if(a) return saveAcct(+a.dataset.acctsave);
   const c=e.target.closest("[data-credit]"); if(c) return adjust(+c.dataset.credit,1);
   const d=e.target.closest("[data-debit]");  if(d) return adjust(+d.dataset.debit,-1);
   const x=e.target.closest("[data-udel]");
