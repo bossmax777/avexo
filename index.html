@@ -1176,44 +1176,59 @@ function initAI(){
 
 /* ---------------- динамика кошелька по параметрам из админки ---------------- */
 function dynCfg(){
-  const base={on:false,from:1000,to:5000,hours:24,noise:.35,startedAt:""};
+  const base={on:false,from:1000,to:5000,hours:24,noise:.35,startedAt:"",endsAt:""};
   const u=currentUser();
-  if(u&&u.dyn) return Object.assign(base,u.dyn);      /* сценарий конкретного кошелька */
-  return Object.assign(base,CFG.dyn||{});             /* запасной общий сценарий (гость) */
+  const c=(u&&u.dyn)?Object.assign(base,u.dyn):Object.assign(base,CFG.dyn||{});
+  if(!c.endsAt&&c.startedAt){
+    const st=new Date(c.startedAt).getTime();
+    if(isFinite(st)) c.endsAt=new Date(st+(Number(c.hours)||24)*3600000).toISOString();
+  }
+  return c;
 }
-function dynProgress(t){
+function dynWindow(){
   const d=dynCfg();
   if(!d.on||!d.startedAt) return null;
-  const st=new Date(d.startedAt).getTime();
-  if(!isFinite(st)) return null;
-  const span=Math.max(0.01,Number(d.hours)||24)*3600000;
-  return Math.max(0,Math.min(1,((t||Date.now())-st)/span));
+  const st=new Date(d.startedAt).getTime(), en=new Date(d.endsAt).getTime();
+  if(!isFinite(st)||!isFinite(en)||en<=st) return null;
+  return {d,st,en,span:en-st};
 }
-/* детерминированный фрактальный шум: одинаков для одного и того же момента */
-function _h(n){const a=Math.sin(n*127.1)*43758.5453; return a-Math.floor(a);}
-function _vn(x){const i=Math.floor(x), f=x-i, u=f*f*(3-2*f);
-  return (_h(i)*(1-u)+_h(i+1)*u)*2-1;}
-function dynNoise(x){
-  let v=0,amp=0.5,fr=1;
-  for(let o=0;o<5;o++){ v+=amp*_vn(x*fr); fr*=2.17; amp*=0.55; }
+function dynProgress(t){
+  const w=dynWindow(); if(!w) return null;
+  return Math.max(0,Math.min(1,((t||Date.now())-w.st)/w.span));
+}
+/* многочастотная волна: даёт и микроколебания, и затяжные просадки */
+function _phase(i,seed){const a=Math.sin(i*374.761+seed*911.13)*43758.5453; return (a-Math.floor(a))*Math.PI*2;}
+const _FREQ=[1,2,3,5,8,13,21,34,55,89];
+function _wave(p,seed){
+  let v=0;
+  for(let i=0;i<_FREQ.length;i++){
+    const f=_FREQ[i];
+    v+=Math.sin(2*Math.PI*f*p+_phase(i,seed))/Math.pow(f,0.78);
+  }
   return v;
 }
+/* концы закреплены: в начале ровно from, в конце ровно to */
+function dynPath(p,seed){
+  const w0=_wave(0,seed), w1=_wave(1,seed);
+  return (_wave(p,seed)-((1-p)*w0+p*w1))/1.9;
+}
+function dynSeed(){
+  const w=dynWindow(); if(!w) return 1;
+  return (w.st/60000)%9973;
+}
 function dynValue(t){
-  const d=dynCfg(), pr=dynProgress(t);
-  if(pr===null) return null;
-  const from=Number(d.from)||0, to=Number(d.to)||0;
+  const w=dynWindow(); if(!w) return null;
+  const pr=Math.max(0,Math.min(1,((t||Date.now())-w.st)/w.span));
+  const from=Number(w.d.from)||0, to=Number(w.d.to)||0;
   const base=from+(to-from)*pr;
-  const amp=Math.abs(to-from)*(Number(d.noise)||0)*0.5;
-  const env=Math.sin(Math.max(0,Math.min(1,pr))*Math.PI); /* в начале и конце попадаем точно */
-  const wig=amp*dynNoise(pr*26)*env;
-  return Math.max(0,base+wig);
+  const amp=Math.max(Math.abs(to-from),from*0.25)*(Number(w.d.noise)||0)*0.55;
+  return Math.max(0,base+amp*dynPath(pr,dynSeed()));
 }
 function dynSeries(n){
-  const d=dynCfg(); n=n||60;
-  const st=new Date(d.startedAt).getTime();
-  const span=Math.max(0.01,Number(d.hours)||24)*3600000;
+  const w=dynWindow(); if(!w) return [];
+  n=n||60;
   const out=[];
-  for(let i=0;i<n;i++) out.push({t:st+span*(i/(n-1)),v:dynValue(st+span*(i/(n-1)))});
+  for(let i=0;i<n;i++){const t=w.st+w.span*(i/(n-1)); out.push({t,v:dynValue(t)});}
   return out;
 }
 function dynApply(){
@@ -1670,17 +1685,21 @@ function renderBalance(){
     const d=dynCfg(), st=new Date(d.startedAt).getTime();
     const from=Number(d.from)||0;
     const prof=state.balance-from, pperc=from?prof/from*100:0;
-    const hourAgo=Math.max(st,Date.now()-3600000);
-    const dh=state.balance-(dynValue(hourAgo)??state.balance);
+    const wnd=dynWindow();
+    const longRun=wnd&&wnd.span>3*86400000;
+    const back=longRun?7*86400000:3600000;
+    const agoT=Math.max(st,Date.now()-back);
+    const dh=state.balance-(dynValue(agoT)??state.balance);
     const dhp=state.balance-dh?dh/(state.balance-dh)*100:0;
+    const backLabel=longRun?"Изменение за неделю":"Изменение за час";
     const since=new Date(st).toLocaleString("ru-RU",{day:"2-digit",month:"2-digit",hour:"2-digit",minute:"2-digit"});
     cards=[
       ["Баланс",usd(state.balance),"свободно "+usd(Math.max(0,state.balance-margin))],
       ["Средства",usd(equity),(pl>=0?"+":"−")+usd(Math.abs(pl))+" открытая прибыль"],
       ["Прибыль за период",(prof>=0?"+":"−")+usd(Math.abs(prof)),
         (prof>=0?"+":"−")+fmt(Math.abs(pperc),2)+"% · с "+since, prof>=0?"up":"down"],
-      ["Изменение за час",(dh>=0?"+":"−")+usd(Math.abs(dh)),
-        (dh>=0?"+":"−")+fmt(Math.abs(dhp),2)+"% · обновляется каждую секунду", dh>=0?"up":"down"]
+      [backLabel,(dh>=0?"+":"−")+usd(Math.abs(dh)),
+        (dh>=0?"+":"−")+fmt(Math.abs(dhp),2)+"%", dh>=0?"up":"down"]
     ];
   }else{
     cards=[
@@ -1741,12 +1760,11 @@ function drawEquity(){
   const live=pr!==null;
   let vals=[], times=[];
   if(live){
-    const st=new Date(d.startedAt).getTime();
-    const span=Math.max(0.01,Number(d.hours)||24)*3600000;
-    const now=Math.min(Date.now(), st+span);
-    const n=120;
+    const wnd=dynWindow();
+    const now=Math.min(Date.now(), wnd.en);
+    const n=180;
     for(let i=0;i<n;i++){
-      const t=st+(now-st)*(i/(n-1));
+      const t=wnd.st+(now-wnd.st)*(i/(n-1));
       times.push(t); vals.push(dynValue(t));
     }
   }else{
@@ -1764,8 +1782,11 @@ function drawEquity(){
     plEl.textContent=(up?"+":"−")+usd(Math.abs(pl))+"  ("+(up?"+":"−")+fmt(Math.abs(pct),2)+"%)";
     plEl.className="eq-pl num "+(up?"up":"down");
   }
+  const longRun = live && (times[times.length-1]-times[0])>3*86400000;
   if(rangeEl) rangeEl.textContent = live
-    ? new Date(times[0]).toLocaleString("ru-RU",{day:"2-digit",month:"2-digit",hour:"2-digit",minute:"2-digit"})+" — сейчас"
+    ? (longRun
+        ? new Date(times[0]).toLocaleDateString("ru-RU",{day:"2-digit",month:"long",year:"numeric"})+" — сейчас"
+        : new Date(times[0]).toLocaleString("ru-RU",{day:"2-digit",month:"2-digit",hour:"2-digit",minute:"2-digit"})+" — сейчас")
     : "30 дней";
 
   const mn=Math.min(...vals), mx=Math.max(...vals), rng=(mx-mn)||Math.max(1,cur*0.02);
@@ -1802,11 +1823,13 @@ function drawEquity(){
   ctx.fillText("$"+Math.round(cur).toLocaleString("ru-RU"),w-padR+16,ly+6);
 
   ctx.fillStyle="#9DA2A9"; ctx.font="17px 'IBM Plex Sans', sans-serif";
-  const marks=live?[0,Math.floor(vals.length/3),Math.floor(vals.length*2/3),vals.length-1]:[0,7,14,21,29];
+  const marks=live?[0,Math.floor(vals.length/4),Math.floor(vals.length/2),Math.floor(vals.length*3/4),vals.length-1]:[0,7,14,21,29];
   marks.forEach((i,k)=>{
     ctx.textAlign = k===0 ? "left" : (k===marks.length-1 ? "right" : "center");
     const label = live
-      ? new Date(times[i]).toLocaleTimeString("ru-RU",{hour:"2-digit",minute:"2-digit"})
+      ? (longRun
+          ? new Date(times[i]).toLocaleDateString("ru-RU",{day:"2-digit",month:"short"})
+          : new Date(times[i]).toLocaleTimeString("ru-RU",{hour:"2-digit",minute:"2-digit"}))
       : (i+1)+" д.";
     ctx.fillText(label,X(i),h-8);
   });

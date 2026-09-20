@@ -700,7 +700,7 @@ renderBlocks(); renderOverrides();
 
 /* ---------- сценарий роста/падения для конкретного кошелька ---------- */
 var dynIdx=null;
-const DYN_DEF={on:false,from:1000,to:5000,hours:24,noise:0.35,startedAt:""};
+const DYN_DEF={on:false,from:1000,to:5000,hours:24,noise:0.35,startedAt:"",endsAt:""};
 function dynOf(u){return Object.assign({},DYN_DEF,u.dyn||{});}
 function dynNow(d){
   if(!d.on||!d.startedAt) return null;
@@ -708,6 +708,33 @@ function dynNow(d){
   const span=Math.max(0.01,Number(d.hours)||24)*3600000;
   const pr=Math.max(0,Math.min(1,(Date.now()-st)/span));
   return {pr,val:Number(d.from)+(Number(d.to)-Number(d.from))*pr};
+}
+function toLocalInput(iso){
+  const d=iso?new Date(iso):new Date();
+  if(!isFinite(d.getTime())) return "";
+  const p=n=>String(n).padStart(2,"0");
+  return d.getFullYear()+"-"+p(d.getMonth()+1)+"-"+p(d.getDate())+"T"+p(d.getHours())+":"+p(d.getMinutes());
+}
+function dynEnd(d){
+  if(d.endsAt) return d.endsAt;
+  const st=new Date(d.startedAt||Date.now()).getTime();
+  return new Date(st+(Number(d.hours)||24)*3600000).toISOString();
+}
+function dynNow(d){
+  if(!d.on||!d.startedAt) return null;
+  const st=new Date(d.startedAt).getTime(), en=new Date(dynEnd(d)).getTime();
+  if(!isFinite(st)||!isFinite(en)||en<=st) return null;
+  const pr=Math.max(0,Math.min(1,(Date.now()-st)/(en-st)));
+  return {pr,val:Number(d.from)+(Number(d.to)-Number(d.from))*pr,st,en};
+}
+function humanSpan(ms){
+  const days=ms/86400000;
+  if(days>=1){
+    const d=Math.floor(days), h=Math.round((days-d)*24);
+    return d+" дн"+(h?" "+h+" ч":"");
+  }
+  const h=Math.floor(ms/3600000), m=Math.round(ms%3600000/60000);
+  return (h?h+" ч ":"")+m+" мин";
 }
 function renderDyn(){
   const box=document.getElementById("dynBox"); if(!box)return;
@@ -718,56 +745,79 @@ function renderDyn(){
   box.innerHTML=`<div class="item" style="margin-top:16px;background:#fff">
     <div class="item-head"><b>Сценарий · ${escapeHtml(u.name||u.email)}</b>
       <span class="sp"><button class="btn btn-ghost btn-sm" id="dynClose">Свернуть</button></span></div>
-    <p style="font-size:13px;color:var(--muted);margin:0 0 14px">Баланс плавно идёт от начального значения
-      к конечному за указанное время. График «Динамика средств» в кабинете строится по этой кривой.</p>
-    <div class="grid g3">
+    <p style="font-size:13px;color:var(--muted);margin:0 0 14px">Баланс идёт от начального значения к конечному
+      между указанными датами. По пути кривая даёт просадки и локальные вершины — график в кабинете строится
+      именно по ней.</p>
+    <div class="grid g2">
       <div class="field"><label>Начальный баланс, $</label><input type="number" step="1" id="dy_from" value="${d.from}"></div>
-      <div class="field"><label>Конечный баланс, $</label><input type="number" step="1" id="dy_to" value="${d.to}">
-        <span class="hint">Меньше начального — будет падение</span></div>
-      <div class="field"><label>Длительность, часов</label><input type="number" step="0.5" min="0.1" id="dy_hours" value="${d.hours}"></div>
+      <div class="field"><label>Текущий / конечный баланс, $</label><input type="number" step="1" id="dy_to" value="${d.to}">
+        <span class="hint">Меньше начального — счёт будет в минусе</span></div>
+      <div class="field"><label>Дата и время зачисления</label>
+        <input type="datetime-local" id="dy_start" value="${toLocalInput(d.startedAt||new Date().toISOString())}">
+        <span class="hint">С этого момента начинается график</span></div>
+      <div class="field"><label>Дата и время окончания</label>
+        <input type="datetime-local" id="dy_end" value="${toLocalInput(dynEnd(d))}">
+        <span class="hint">Поставьте будущую дату, чтобы счёт рос и дальше</span></div>
     </div>
     <div class="grid g2" style="margin-top:14px">
-      <div class="field"><label>Колебания по пути</label>
+      <div class="field"><label>Волатильность — глубина просадок</label>
         <input type="range" min="0" max="1" step="0.05" id="dy_noise" value="${d.noise}" style="padding:0">
         <span class="hint" id="dy_noise_v"></span></div>
       <div class="field"><label>Состояние</label>
         <div style="font-size:13.5px;color:var(--muted);line-height:1.6" id="dy_state"></div></div>
     </div>
     <div style="display:flex;gap:9px;flex-wrap:wrap;margin-top:16px">
-      <button class="btn btn-primary btn-sm" id="dy_start">Запустить с этой минуты</button>
-      <button class="btn btn-ghost btn-sm" id="dy_stop">Остановить</button>
+      <button class="btn btn-primary btn-sm" id="dy_on">Включить сценарий</button>
+      <button class="btn btn-ghost btn-sm" id="dy_off">Выключить</button>
       <button class="btn btn-ghost btn-sm" id="dy_save">Сохранить параметры</button>
+      <span style="margin-left:auto;display:flex;gap:6px">
+        <button class="btn btn-ghost btn-sm" data-preset="3">Последние 3 месяца</button>
+        <button class="btn btn-ghost btn-sm" data-preset="6">Полгода</button>
+        <button class="btn btn-ghost btn-sm" data-preset="12">Год</button>
+      </span>
     </div>
   </div>`;
-  const noiseTxt=v=>v<0.15?"почти ровная линия":v<0.45?"умеренные":v<0.75?"заметные":"сильная пила";
+  const noiseTxt=v=>v<0.15?"почти ровный рост":v<0.4?"умеренные просадки":v<0.7?"заметные просадки":"сильные качели";
   document.getElementById("dy_noise_v").textContent=noiseTxt(d.noise);
-  document.getElementById("dy_state").innerHTML = st
-    ? ("Запущен "+new Date(d.startedAt).toLocaleString("ru-RU")+"<br>Пройдено "+Math.round(st.pr*100)+
-       "% · сейчас ≈ "+fmtMoney(st.val,u.cur)+(st.pr>=1?"<br><b style='color:var(--text)'>Завершён</b>":""))
-    : "Сценарий не запущен — баланс меняется только вручную.";
+  const stEl=document.getElementById("dy_state");
+  if(st){
+    const span=st.en-st.st;
+    stEl.innerHTML="С "+new Date(st.st).toLocaleString("ru-RU",{day:"2-digit",month:"long",year:"numeric"})+
+      "<br>Период "+humanSpan(span)+" · пройдено "+Math.round(st.pr*100)+"%"+
+      "<br>Сейчас ≈ "+fmtMoney(st.val,u.cur)+(st.pr>=1?"<br><b style='color:var(--text)'>Период завершён</b>":"");
+  }else{
+    stEl.textContent = d.on ? "Проверьте даты: окончание должно быть позже начала." : "Сценарий выключен.";
+  }
   document.getElementById("dy_noise").addEventListener("input",e=>{
     document.getElementById("dy_noise_v").textContent=noiseTxt(parseFloat(e.target.value));});
   document.getElementById("dynClose").onclick=()=>{dynIdx=null; renderDyn();};
-  const collect=()=>({
-    from:Number(document.getElementById("dy_from").value)||0,
-    to:Number(document.getElementById("dy_to").value)||0,
-    hours:Number(document.getElementById("dy_hours").value)||24,
-    noise:parseFloat(document.getElementById("dy_noise").value)||0
-  });
+  const collect=()=>{
+    const sIso=new Date(document.getElementById("dy_start").value).toISOString();
+    const eIso=new Date(document.getElementById("dy_end").value).toISOString();
+    return {
+      from:Number(document.getElementById("dy_from").value)||0,
+      to:Number(document.getElementById("dy_to").value)||0,
+      startedAt:sIso, endsAt:eIso,
+      hours:Math.max(0.1,(new Date(eIso)-new Date(sIso))/3600000),
+      noise:parseFloat(document.getElementById("dy_noise").value)||0
+    };
+  };
   const write=extra=>{
     const arr=uLoad(), user=arr[dynIdx];
-    user.dyn=Object.assign(dynOf(user),collect(),extra||{});
+    try{ user.dyn=Object.assign(dynOf(user),collect(),extra||{}); }
+    catch(err){ return toast("Проверьте даты — они заполнены не полностью"); }
     arr[dynIdx]=user; uSave(arr); renderUsers();
   };
   document.getElementById("dy_save").onclick=()=>{write(); toast("Параметры сохранены");};
-  document.getElementById("dy_start").onclick=()=>{
-    write({on:true,startedAt:new Date().toISOString()});
-    toast("Сценарий запущен — кабинет подхватит его сразу");
-  };
-  document.getElementById("dy_stop").onclick=()=>{
-    write({on:false,startedAt:""});
-    toast("Сценарий остановлен, баланс замер на текущем значении");
-  };
+  document.getElementById("dy_on").onclick=()=>{write({on:true}); toast("Сценарий включён — кабинет подхватит его сразу");};
+  document.getElementById("dy_off").onclick=()=>{write({on:false}); toast("Сценарий выключен, баланс замер на текущем значении");};
+  box.querySelectorAll("[data-preset]").forEach(btn=>btn.onclick=()=>{
+    const months=+btn.dataset.preset, now=new Date();
+    const from=new Date(now.getTime()); from.setMonth(from.getMonth()-months);
+    document.getElementById("dy_start").value=toLocalInput(from.toISOString());
+    document.getElementById("dy_end").value=toLocalInput(now.toISOString());
+    toast("Период: последние "+months+" мес — нажмите «Включить сценарий»");
+  });
 }
 document.addEventListener("click",e=>{
   const b=e.target.closest("[data-dyn]");
