@@ -1247,7 +1247,10 @@ function applyConfig(){
   const h=CFG.hero||{};
   setTxt("cfgEyebrow",h.eyebrow);
   const h1=document.getElementById("cfgH1");
-  if(h1&&h.h1!=null) h1.innerHTML=String(h.h1).split("\n").map(x=>x.replace(/[<>]/g,"")).join("<br>");
+  if(h1&&h.h1!=null){
+    const ls=String(h.h1).split("\n").map(x=>x.replace(/[<>]/g,""));
+    h1.innerHTML=ls.map((x,i)=>i===ls.length-1?'<span class="grad">'+x+'</span>':x).join("<br>");
+  }
   setTxt("cfgLead",h.lead); setTxt("cfgHeroBtn1",h.btn1); setTxt("cfgHeroBtn2",h.btn2); setTxt("cfgHeroNote",h.note);
   const H=CFG.heads||{};
   setTxt("cfgMarketsH",H.markets); setTxt("cfgMarketsP",H.marketsP);
