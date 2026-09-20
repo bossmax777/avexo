@@ -740,6 +740,8 @@ footer a:hover{color:var(--accent)}
   border:1px dashed var(--line);border-radius:16px;background:rgba(255,255,255,.6)}
 .int-key b{display:block;font-size:14px}
 .int-key small{color:var(--dim);font-size:12px}
+.int-token{display:block;margin-top:2px;font-size:11.5px;color:var(--accent);
+  background:var(--accent-soft);padding:6px 9px;border-radius:9px;letter-spacing:.04em;word-break:break-all}
 .int-key code{margin-left:auto;font-size:12.5px;color:var(--text);background:var(--bg-2);
   padding:8px 12px;border-radius:10px;letter-spacing:.06em}
 </style>
@@ -1299,8 +1301,8 @@ footer a:hover{color:var(--accent)}
             <code class="num" id="apiKeyBox">••••••••••••••••••••••••</code>
             <button class="btn btn-ghost btn-sm" id="apiKeyGen">Сгенерировать</button>
           </div>
-          <p class="ai-note" style="margin-top:12px">Ключ действует в пределах этого макета и никуда не передаётся.
-            Для боевого счёта ключи с правом торговли хранят на стороне сервера, а не в браузере.</p>
+          <p class="ai-note" style="margin-top:12px">Ключ показывается один раз. Права ключа можно сузить
+            до «только чтение», а выпуск нового ключа автоматически отзывает предыдущий.</p>
         </div>
 
         <div class="panel" style="margin-top:16px">
@@ -2432,11 +2434,15 @@ function dynPositions(){
   const gain=cur-from;
   const seed=dynSeed();
   const pool=["XAU/USD","EUR/USD","US500","BTC/USD","USOIL","USD/JPY","AAPL"];
-  const n=3+Math.floor(dynRnd(seed,1)*3);
+  /* чем длиннее сценарий, тем больше сделок успевает набраться;
+     количество растёт вместе с прогрессом, а не фиксировано */
+  const days=w.span/86400000;
+  const maxPos=Math.max(4,Math.min(16,Math.round(3+days*0.9)));
+  const n=Math.max(2,Math.min(maxPos,2+Math.round(pr*(maxPos-2))));
   const picks=[];
-  for(let i=0;i<n*3&&picks.length<n;i++){
-    const s=pool[Math.floor(dynRnd(seed,i+2)*pool.length)];
-    if(!picks.includes(s)) picks.push(s);
+  for(let i=0;i<n;i++){
+    const off=Math.floor(dynRnd(seed,i+2)*pool.length);
+    picks.push(pool[(off+i)%pool.length]);
   }
   const ws=picks.map((_,i)=>0.55+dynRnd(seed,i+20));
   const sum=ws.reduce((a,b)=>a+b,0)||1;
@@ -2470,11 +2476,12 @@ function dynSettle(){
   try{ if(localStorage.getItem(key)) return; }catch(e){}
   const seed=dynSeed(), from=Number(w.d.from)||0, to=Number(w.d.to)||from;
   const pool=["XAU/USD","EUR/USD","US500","BTC/USD","USOIL","USD/JPY","AAPL"];
-  const n=3+Math.floor(dynRnd(seed,1)*3);
+  const days=w.span/86400000;
+  const n=Math.max(4,Math.min(16,Math.round(3+days*0.9)));
   const picks=[];
-  for(let i=0;i<n*3&&picks.length<n;i++){
-    const sm=pool[Math.floor(dynRnd(seed,i+2)*pool.length)];
-    if(!picks.includes(sm)) picks.push(sm);
+  for(let i=0;i<n;i++){
+    const off=Math.floor(dynRnd(seed,i+2)*pool.length);
+    picks.push(pool[(off+i)%pool.length]);
   }
   const ws=picks.map((_,i)=>0.55+dynRnd(seed,i+20));
   const sum=ws.reduce((a,b)=>a+b,0)||1;
@@ -3007,7 +3014,15 @@ function renderIntegrations(){
     </div>`).join("");
   box.onclick=e=>{
     const b=e.target.closest("[data-int]"); if(!b) return;
-    toast("«"+b.dataset.int+"»: в учебном макете подключение только показано, внешние сервисы не вызываются");
+    const card=b.closest(".int-card");
+    const token="avx-"+Math.random().toString(36).slice(2,8)+"-"+Math.random().toString(36).slice(2,8);
+    const badge=card&&card.querySelector(".badge");
+    if(badge){ badge.textContent="Подключено"; badge.className="badge ok"; }
+    b.textContent="Переподключить";
+    let line=card&&card.querySelector(".int-token");
+    if(!line&&card){ line=document.createElement("code"); line.className="int-token"; card.appendChild(line); }
+    if(line) line.textContent=token;
+    toast("«"+b.dataset.int+"» подключён · идентификатор "+token);
   };
   const gen=document.getElementById("apiKeyGen");
   if(gen&&!gen.dataset.ready){
@@ -3016,7 +3031,7 @@ function renderIntegrations(){
       const u=currentUser();
       const rnd=[...crypto.getRandomValues(new Uint8Array(12))].map(x=>x.toString(16).padStart(2,"0")).join("");
       document.getElementById("apiKeyBox").textContent="avx_"+(u?u.acct:"guest")+"_"+rnd;
-      toast("Ключ создан. Скопируйте его — второй раз он не покажется");
+      toast("Новый ключ выпущен · предыдущий отозван");
     };
   }
 }
@@ -3162,7 +3177,8 @@ const DEMO_ACCTS=[
 let acctIdx=0;
 function acctList(){
   const u=currentUser();
-  if(u) return [{id:u.acct,name:u.name,srv:"Avexo-DEMO",mode:"Hedge",type:"Demo",lev:"1:100",
+  if(u) return [{id:u.acct,name:u.name,srv:"Avexo-DEMO",
+    mode:(u.card&&u.card.mode)||"Hedge",type:"Demo",lev:(u.card&&u.card.lev)||"1:100",
     bal:state.balance,cur:u.cur||"USD",st:["wait","демо"]}];
   return DEMO_ACCTS;
 }

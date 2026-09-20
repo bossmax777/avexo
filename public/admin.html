@@ -650,7 +650,18 @@ function toast(msg){
   const t=document.createElement("div"); t.className="toast"; t.textContent=msg;
   document.body.appendChild(t); setTimeout(()=>t.remove(),2600);
 }
-document.getElementById("btnSave").onclick=()=>publishCfg();
+document.getElementById("btnSave").onclick=()=>{
+  /* если открыт блок в HTML-редакторе — сначала забираем его текст */
+  const code=document.getElementById("pgCode");
+  if(pgKey&&code){
+    CFG.html=CFG.html||{};
+    const v=code.value;
+    if(!v.trim()||v.trim()===pgOriginal(pgKey).trim()) delete CFG.html[pgKey];
+    else CFG.html[pgKey]=v;
+    pgRenderTree();
+  }
+  publishCfg();
+};
 document.getElementById("btnReset").onclick=()=>{
   if(!confirm("Сбросить все настройки к значениям по умолчанию?"))return;
   try{localStorage.removeItem(CFG_KEY);}catch(e){}
@@ -730,6 +741,7 @@ function renderUsers(){
         <button class="btn btn-ghost btn-sm" data-credit="${i}">Начислить</button>
         <button class="btn btn-ghost btn-sm" data-debit="${i}">Списать</button>
         <button class="btn btn-ghost btn-sm" data-dyn="${i}">Сценарий${u.dyn&&u.dyn.on?" ●":""}</button>
+        <button class="btn btn-ghost btn-sm" data-card="${i}">Карточка</button>
       </div></td>
       <td><button class="btn btn-danger btn-sm" data-udel="${i}">Удалить</button></td>
     </tr>`).join("")+'</tbody></table></div>'+
@@ -788,7 +800,26 @@ async function saveAcct(i){
   }
   u.acct=num; us[i]=u; uSave(us); renderUsers(); toast("Номер счёта обновлён: "+num);
 }
+async function editCard(i){
+  const us=uLoad(), u=us[i]; if(!u) return;
+  const cur=u.card||{};
+  const mode=(prompt("Режим счёта на карточке (Hedge или Netting):",cur.mode||"Hedge")||"").trim();
+  if(!mode) return;
+  if(!/^(hedge|netting)$/i.test(mode)) return toast("Допустимо только Hedge или Netting");
+  const lev=(prompt("Кредитное плечо на карточке (например 1:100):",cur.lev||"1:100")||"").trim();
+  if(!/^1:\d{1,4}$/.test(lev)) return toast("Плечо в формате 1:100");
+  const card={mode:mode[0].toUpperCase()+mode.slice(1).toLowerCase(),lev};
+  if(API.on){
+    try{
+      await api("/api/admin/users/"+u.id,{method:"PATCH",body:JSON.stringify({card})});
+      await uFetch(); renderUsers(); toast("Карточка счёта обновлена — у пользователя применится сразу");
+    }catch(err){ toast(err.message); }
+    return;
+  }
+  u.card=card; us[i]=u; uSave(us); renderUsers(); toast("Карточка счёта обновлена");
+}
 document.addEventListener("click",e=>{
+  const cd=e.target.closest("[data-card]"); if(cd) return editCard(+cd.dataset.card);
   const a=e.target.closest("[data-acctsave]"); if(a) return saveAcct(+a.dataset.acctsave);
   const c=e.target.closest("[data-credit]"); if(c) return adjust(+c.dataset.credit,1);
   const d=e.target.closest("[data-debit]");  if(d) return adjust(+d.dataset.debit,-1);
@@ -938,6 +969,12 @@ async function pgOpen(k){
 document.getElementById("pgTree").addEventListener("click",e=>{
   const b=e.target.closest("[data-pg]"); if(b) pgOpen(b.dataset.pg);
 });
+let _pgTimer=null;
+function pgAutoApply(){
+  clearTimeout(_pgTimer);
+  _pgTimer=setTimeout(()=>{ if(pgKey) document.getElementById("pgApply").click(); },900);
+}
+document.getElementById("pgCode").addEventListener("input",pgAutoApply);
 document.getElementById("pgApply").onclick=()=>{
   if(!pgKey) return toast("Сначала выберите блок слева");
   const v=document.getElementById("pgCode").value;
