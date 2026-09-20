@@ -6,7 +6,7 @@ if (!url) console.warn('[db] DATABASE_URL не задан — сервер по�
 
 const pool = new Pool({
   connectionString: url,
-  ssl: /sslmode=require/.test(url) || process.env.PGSSL === '1'
+  ssl: /sslmode=(require|prefer|verify-ca|verify-full)/.test(url) || process.env.PGSSL === '1'
     ? { rejectUnauthorized: false }
     : false,
   max: 5,
