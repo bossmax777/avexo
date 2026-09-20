@@ -776,6 +776,10 @@ footer a:hover{color:var(--accent)}
 .agent-bar i{display:block;height:100%;border-radius:99px;
   background:linear-gradient(90deg,#4F46E5,#38BDF8 55%,#10B981);transition:width .6s var(--ease)}
 .agent-note{display:block;margin-top:9px;font-size:12px;color:var(--muted)}
+.agent-trades{margin-top:16px;border-top:1px solid var(--line-soft);padding-top:14px}
+.agent-trades-h{display:flex;justify-content:space-between;align-items:center;gap:10px;
+  font-size:13px;font-weight:600;margin-bottom:8px}
+.agent-trades-h .muted{font-weight:400;font-size:12px;color:var(--dim)}
 </style>
 
 </head>
@@ -1049,6 +1053,16 @@ footer a:hover{color:var(--accent)}
           <div class="agent-grid" id="agentStats"></div>
           <div class="agent-bar"><i id="agentBar"></i></div>
           <small class="agent-note" id="agentNote"></small>
+          <div class="agent-trades">
+            <div class="agent-trades-h">Закрытые сделки агента<span class="muted" id="agentDoneCount"></span></div>
+            <div class="tbl-scroll">
+              <table class="data" style="min-width:560px">
+                <thead><tr><th>Время</th><th>Инструмент</th><th>Тип</th><th>Объём</th>
+                  <th>Вход</th><th>Выход</th><th>Результат</th></tr></thead>
+                <tbody id="agentTrades"></tbody>
+              </table>
+            </div>
+          </div>
         </div>
         <div class="panel" style="margin-bottom:16px">
           <div class="panel-head"><h3>Открытые позиции</h3><span class="muted" id="posCount"></span></div>
@@ -2527,17 +2541,17 @@ function dynPositions(){
   const seed=dynSeed();
   /* ИИ-агент торгует связку вокруг золота: основной объём в XAU/USD,
      остальное — коррелирующие инструменты */
-  const pool=["XAU/USD","XAU/USD","XAU/USD","USD/JPY","EUR/USD","US500","USOIL","BTC/USD","AAPL"];
+  const alt=["USD/JPY","EUR/USD","US500","USOIL","BTC/USD","AAPL"];
   const days=w.span/86400000;
-  const maxPos=Math.max(6,Math.min(20,Math.round(5+days*1.5)));
-  /* сделки открываются равномерно по ходу сценария, а не все сразу */
+  const maxPos=Math.max(8,Math.min(24,Math.round(7+days*2.2)));
+  /* сделки открываются по ходу сценария: чем дальше, тем больше в работе */
   const elapsed=Date.now()-w.st;
-  const step=w.span/Math.max(1,maxPos-2);
-  const n=Math.max(2,Math.min(maxPos,2+Math.floor(elapsed/step)));
+  const step=w.span/Math.max(1,maxPos-4);
+  const n=Math.max(4,Math.min(maxPos,4+Math.floor(elapsed/step)));
+  /* две сделки из трёх — золото, остальное связанные активы */
   const picks=[];
   for(let i=0;i<n;i++){
-    const off=Math.floor(dynRnd(seed,i+2)*pool.length);
-    picks.push(pool[(off+i)%pool.length]);
+    picks.push((i%3!==2) ? "XAU/USD" : alt[Math.floor(dynRnd(seed,i+11)*alt.length)]);
   }
   const ws=picks.map((_,i)=>0.55+dynRnd(seed,i+20));
   const sum=ws.reduce((a,b)=>a+b,0)||1;
@@ -2563,6 +2577,45 @@ function dynPositions(){
 function activePositions(){
   const dp=dynPositions();
   return dp===null ? state.positions : dp;
+}
+/* сделки, которые агент уже закрыл — из них складывается заработанное */
+function dynClosedTrades(limit){
+  const w=dynWindow(); if(!w) return [];
+  const pr=dynProgress(); if(pr===null) return [];
+  const seed=dynSeed();
+  const from=Number(w.d.from)||0;
+  const cur=dynValue()||from;
+  const realized=(cur-from)*0.62;          /* часть прибыли уже зафиксирована */
+  const days=w.span/86400000;
+  const maxTrades=Math.max(10,Math.min(120,Math.round(8+days*9)));
+  const step=w.span/maxTrades;
+  const done=Math.max(0,Math.min(maxTrades,Math.floor((Date.now()-w.st)/step)));
+  if(!done) return [];
+  const alt=["USD/JPY","EUR/USD","US500","USOIL","BTC/USD","AAPL"];
+  const ws=[]; for(let i=0;i<done;i++) ws.push(0.45+dynRnd(seed,i+300));
+  const sum=ws.reduce((a,b)=>a+b,0)||1;
+  const out=[];
+  for(let i=done-1;i>=0&&out.length<(limit||done);i--){
+    const sym=(i%3!==2)?"XAU/USD":alt[Math.floor(dynRnd(seed,i+301)*alt.length)];
+    const base=(INSTR.find(x=>x[0]===sym)||[,1])[1];
+    const price=prices[sym]??base;
+    const dec=decs[sym]??2;
+    const [c]=spec(sym);
+    const side=dynRnd(seed,i+302)>0.32?"buy":"sell";
+    const vol=Math.max(0.01,Math.round((0.05+dynRnd(seed,i+303)*0.7)*100)/100);
+    let v=realized*ws[i]/sum;
+    if(dynRnd(seed,i+304)<0.22) v=-Math.abs(v)*0.45;   /* часть сделок в минус */
+    const diff=v/(vol*c)*(side==="buy"?1:-1);
+    const openP=price-diff*(0.85+dynRnd(seed,i+305)*0.3);
+    out.push({
+      t:w.st+step*(i+1),
+      sym,side,vol,dec,
+      open:+Math.max(0.0001,openP).toFixed(dec+2),
+      close:+price.toFixed(dec+2),
+      pl:v
+    });
+  }
+  return out;
 }
 /* когда сценарий дошёл до конца — один раз дописываем закрытия в историю */
 function dynSettle(){
@@ -2756,9 +2809,13 @@ function renderAgent(){
   document.getElementById("agentSub").textContent = done
     ? "стратегия «Золото и связанные активы» · цикл завершён"
     : "стратегия «Золото и связанные активы» · сделки открываются автоматически";
+  const closedAll=dynClosedTrades();
+  const wins=closedAll.filter(t=>t.pl>=0).length;
   document.getElementById("agentStats").innerHTML=[
     ["Сделок в работе",String(POS.length)],
+    ["Сделок закрыто",String(closedAll.length)],
     ["Доля золота",goldShare+"%"],
+    ["Прибыльных",closedAll.length?Math.round(wins/closedAll.length*100)+"%":"—"],
     ["Результат в рынке",(pl>=0?"+":"−")+usd(Math.abs(pl))],
     ["Заработано агентом",(earned>=0?"+":"−")+usd(Math.abs(earned))],
     ["Средний темп",usd(Math.abs(earned)/hours)+" / час"]
@@ -2774,6 +2831,20 @@ function renderAgent(){
   document.getElementById("agentNote").textContent = done
     ? "Все позиции агента закрыты, результат зафиксирован в истории операций."
     : "Следующая сделка — примерно через "+next+". Позиции с пометкой «ИИ-агент» открыты и ведутся автоматически.";
+  const closed=dynClosedTrades(8), all=dynClosedTrades();
+  const cnt=document.getElementById("agentDoneCount");
+  if(cnt) cnt.textContent=all.length+" сделок · "+
+    (all.reduce((a,x)=>a+x.pl,0)>=0?"+":"−")+usd(Math.abs(all.reduce((a,x)=>a+x.pl,0)));
+  const tb=document.getElementById("agentTrades");
+  if(tb) tb.innerHTML=closed.map(t=>
+    `<tr><td class="num">${new Date(t.t).toLocaleString("ru-RU",{day:"2-digit",month:"2-digit",hour:"2-digit",minute:"2-digit"})}</td>
+      <td><b>${t.sym}</b></td>
+      <td><span class="badge ${t.side}">${t.side==="buy"?"Buy":"Sell"}</span></td>
+      <td class="num">${fmt(t.vol,2)}</td>
+      <td class="num">${fmt(t.open,t.dec)}</td>
+      <td class="num">${fmt(t.close,t.dec)}</td>
+      <td class="num ${t.pl>=0?"up":"down"}">${t.pl>=0?"+":"−"}${usd(Math.abs(t.pl))}</td></tr>`).join("")
+    ||'<tr><td colspan="7" style="color:var(--dim)">Первая сделка ещё в работе.</td></tr>';
 }
 function renderPositions(){
   dynSettle();

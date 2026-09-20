@@ -763,12 +763,13 @@ function renderUsers(){
       </div></td>
       <td><button class="btn btn-danger btn-sm" data-udel="${i}">Удалить</button></td>
     </tr>`).join("")+'</tbody></table></div>'+
-    '<div id="dynBox"></div>'+
+    '<div id="dynBox"></div><div id="cardBox"></div>'+
     '<p style="color:var(--dim);font-size:12.5px;margin:14px 0 0">Операция записывается в историю кошелька '+
     'и сразу видна пользователю в кабинете. Кнопка «Сценарий» задаёт движение баланса во времени '+
     'отдельно для каждого кошелька. Номер счёта можно изменить прямо в таблице — '+
-    'он сразу подставится в карточку кошелька в кабинете. Сервер остаётся Avexo-DEMO.</p>';
+    'он сразу подставится в карточку кошелька в кабинете. Кнопка «Карточка» задаёт сервер, тип, статус, режим и плечо.</p>';
   if(typeof dynIdx!=="undefined" && dynIdx!=null) renderDyn();
+  if(typeof cardIdx!=="undefined" && cardIdx!=null) renderCard();
 }
 function escapeHtml(s){return String(s??"").replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;").replace(/"/g,"&quot;");}
 async function adjust(i,sign){
@@ -821,35 +822,61 @@ async function saveAcct(i){
   }
   u.acct=num; us[i]=u; uSave(us); renderUsers(); toast("Номер счёта обновлён: "+num);
 }
-async function editCard(i){
-  const us=uLoad(), u=us[i]; if(!u) return;
-  const cur=u.card||{};
-  const mode=(prompt("Режим счёта на карточке (Hedge или Netting):",cur.mode||"Hedge")||"").trim();
-  if(!mode) return;
-  if(!/^(hedge|netting)$/i.test(mode)) return toast("Допустимо только Hedge или Netting");
-  const lev=(prompt("Кредитное плечо на карточке (например 1:100):",cur.lev||"1:100")||"").trim();
-  if(!/^1:\d{1,4}$/.test(lev)) return toast("Плечо в формате 1:100");
-  const srvRaw=(prompt("Имя сервера на карточке (пометка -DEMO добавится автоматически):",
-    String(cur.srv||"Avexo").replace(/-DEMO$/i,""))||"").trim();
-  if(!srvRaw) return toast("Имя сервера не может быть пустым");
+var cardIdx=null;
+function editCard(i){ cardIdx=(cardIdx===i?null:i); renderUsers(); }
+function renderCard(){
+  const box=document.getElementById("cardBox");
+  if(!box) return;
+  if(cardIdx==null){ box.innerHTML=""; return; }
+  const us=uLoad(), u=us[cardIdx];
+  if(!u){ box.innerHTML=""; return; }
+  const c=u.card||{};
   const TYPES=["Standard","Raw+","Elite","Pro API"];
-  const type=(prompt("Тип счёта на карточке ("+TYPES.join(" / ")+"):",cur.type||"Standard")||"").trim();
-  const typeOk=TYPES.find(t=>t.toLowerCase()===type.toLowerCase());
-  if(!typeOk) return toast("Тип счёта: "+TYPES.join(", "));
-  const STS={"активен":"active","приостановлен":"hold","архив":"arch"};
-  const stIn=(prompt("Статус счёта (активен / приостановлен / архив):",
-    Object.keys(STS).find(k=>STS[k]===(cur.status||"active"))||"активен")||"").trim().toLowerCase();
-  if(!STS[stIn]) return toast("Статус: активен, приостановлен или архив");
-  const card={mode:mode[0].toUpperCase()+mode.slice(1).toLowerCase(),lev,srv:srvRaw,
-    type:typeOk,status:STS[stIn]};
+  const MODES=["Hedge","Netting"];
+  const LEVS=["1:50","1:100","1:200","1:500"];
+  const STS=[["active","активен"],["hold","приостановлен"],["arch","архив"]];
+  box.innerHTML=`
+    <div class="item" style="margin-top:16px;background:#fff">
+      <div class="item-head"><b>Карточка счёта · ${escapeHtml(u.name||u.email)}</b>
+        <button class="btn btn-ghost btn-sm" data-card-close>Свернуть</button></div>
+      <p class="sub">Эти значения видны пользователю на карточке счёта и в таблице «Торговые счета».
+        К имени сервера всегда добавляется пометка -DEMO.</p>
+      <div class="grid g3">
+        <div class="field"><label for="cd_srv">Имя сервера</label>
+          <input id="cd_srv" value="${escapeHtml(String(c.srv||"Avexo").replace(/-DEMO$/i,""))}"></div>
+        <div class="field"><label for="cd_type">Тип счёта</label>
+          <select id="cd_type">${TYPES.map(t=>`<option${t===(c.type||"Standard")?" selected":""}>${t}</option>`).join("")}</select></div>
+        <div class="field"><label for="cd_status">Статус счёта</label>
+          <select id="cd_status">${STS.map(([k,t])=>`<option value="${k}"${k===(c.status||"active")?" selected":""}>${t}</option>`).join("")}</select></div>
+        <div class="field"><label for="cd_mode">Режим</label>
+          <select id="cd_mode">${MODES.map(t=>`<option${t===(c.mode||"Hedge")?" selected":""}>${t}</option>`).join("")}</select></div>
+        <div class="field"><label for="cd_lev">Плечо</label>
+          <select id="cd_lev">${LEVS.map(t=>`<option${t===(c.lev||"1:100")?" selected":""}>${t}</option>`).join("")}</select></div>
+        <div class="field"><label>&nbsp;</label>
+          <button class="btn btn-primary" id="cd_save">Применить к счёту</button></div>
+      </div>
+    </div>`;
+  document.getElementById("cd_save").onclick=()=>saveCard(cardIdx);
+  box.querySelector("[data-card-close]").onclick=()=>{ cardIdx=null; renderUsers(); };
+}
+async function saveCard(i){
+  const us=uLoad(), u=us[i]; if(!u) return;
+  const srv=(document.getElementById("cd_srv").value||"Avexo").trim();
+  const card={
+    srv, type:document.getElementById("cd_type").value,
+    status:document.getElementById("cd_status").value,
+    mode:document.getElementById("cd_mode").value,
+    lev:document.getElementById("cd_lev").value
+  };
   if(API.on){
     try{
       await api("/api/admin/users/"+u.id,{method:"PATCH",body:JSON.stringify({card})});
-      await uFetch(); renderUsers(); toast("Карточка счёта обновлена: сервер "+srvRaw.replace(/[-_ ]?(demo|live|real)$/i,"")+"-DEMO");
-    }catch(err){ toast(err.message); }
+      await uFetch(); renderUsers();
+      toast("Карточка обновлена: "+card.type+" · сервер "+srv.replace(/[-_ ]?(demo|live|real)$/i,"")+"-DEMO");
+    }catch(e){ toast(e.message); }
     return;
   }
-  u.card=card; us[i]=u; uSave(us); renderUsers(); toast("Карточка счёта обновлена");
+  u.card=card; us[i]=u; uSave(us); renderUsers(); toast("Карточка обновлена");
 }
 document.addEventListener("click",e=>{
   const cd=e.target.closest("[data-card]"); if(cd) return editCard(+cd.dataset.card);
