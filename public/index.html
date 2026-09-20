@@ -434,6 +434,7 @@ body.ed-on .ed-sel{outline:2px solid #4F46E5!important;outline-offset:2px}
 
 /* profile */
 .prof-grid{display:grid;grid-template-columns:1fr 1fr;gap:16px}
+.pos-auto{margin-left:10px;font-size:11px;color:var(--dim);border:1px solid var(--line-soft);padding:2px 7px;border-radius:999px;white-space:nowrap}
 @media(max-width:900px){.prof-grid{grid-template-columns:1fr}}
 .kv{display:flex;justify-content:space-between;gap:14px;padding:11px 0;border-bottom:1px solid var(--line-soft);font-size:13.5px}
 .kv:last-child{border-bottom:0}
@@ -642,6 +643,79 @@ footer a:hover{color:var(--accent)}
   box-shadow:var(--shadow-sm)}
 .eq-wrap,.panel canvas{border-radius:14px}
 .modal-box,.sheet{border-radius:var(--radius-lg)!important}
+
+/* ---------- Avexo Copilot ---------- */
+.ai-shell{display:grid;grid-template-columns:1fr 300px;gap:16px;align-items:start}
+@media(max-width:1000px){.ai-shell{grid-template-columns:1fr}}
+.ai-panel{display:flex;flex-direction:column;gap:13px}
+.ai-top{display:flex;align-items:center;gap:12px;padding-bottom:13px;border-bottom:1px solid var(--line-soft)}
+.ai-ava{width:42px;height:42px;border-radius:14px;flex:0 0 auto;position:relative;
+  background:linear-gradient(135deg,#6366F1,#4F46E5 45%,#38BDF8);
+  box-shadow:0 10px 24px -10px rgba(79,70,229,.8);display:grid;place-items:center}
+.ai-ava span{width:16px;height:16px;border-radius:5px;background:#fff;opacity:.92;
+  animation:aiPulse 2.6s ease-in-out infinite}
+@keyframes aiPulse{0%,100%{transform:scale(1);border-radius:5px}50%{transform:scale(.72);border-radius:50%}}
+.ai-id{display:flex;flex-direction:column;line-height:1.3}
+.ai-id b{font-size:15px}
+.ai-id small{color:var(--dim);font-size:12px}
+.ai-live{margin-left:auto;display:inline-flex;align-items:center;gap:6px;font-size:11.5px;color:#0E9F6E;
+  background:rgba(16,185,129,.12);border:1px solid rgba(16,185,129,.28);padding:4px 10px;border-radius:999px}
+.ai-live i{width:6px;height:6px;border-radius:50%;background:#10B981;animation:aiBlink 1.8s infinite}
+@keyframes aiBlink{0%,100%{opacity:1}50%{opacity:.25}}
+.ai-log{min-height:340px;max-height:50vh;overflow-y:auto;display:flex;flex-direction:column;gap:14px;padding-right:4px}
+.ai-row{display:flex;gap:10px;align-items:flex-end;max-width:86%}
+.ai-row.me{align-self:flex-end;flex-direction:row-reverse}
+.ai-dot{width:26px;height:26px;border-radius:9px;flex:0 0 auto;
+  background:linear-gradient(135deg,#6366F1,#38BDF8)}
+.ai-row.me .ai-dot{background:linear-gradient(135deg,#CBD5F5,#E2E8F0)}
+.ai-msg{padding:12px 15px;border-radius:16px;font-size:14px;line-height:1.58;white-space:pre-wrap}
+.ai-msg.me{background:linear-gradient(135deg,#6366F1,#4F46E5);color:#fff;border-bottom-right-radius:6px}
+.ai-msg.bot{background:rgba(255,255,255,.9);border:1px solid var(--line-soft);border-bottom-left-radius:6px;
+  box-shadow:var(--shadow-sm)}
+.ai-time{display:block;margin-top:6px;font-size:10.5px;opacity:.6}
+.ai-typing{display:flex;gap:5px;align-items:center;padding-left:38px}
+.ai-typing i{width:7px;height:7px;border-radius:50%;background:var(--accent);opacity:.45;
+  animation:aiType 1.1s infinite}
+.ai-typing i:nth-child(2){animation-delay:.16s}.ai-typing i:nth-child(3){animation-delay:.32s}
+@keyframes aiType{0%,100%{transform:translateY(0);opacity:.35}50%{transform:translateY(-5px);opacity:1}}
+.ai-chips{display:flex;gap:7px;flex-wrap:wrap}
+.ai-chips button{font-size:12.5px;padding:7px 13px;border-radius:999px;border:1px solid var(--line-soft);
+  background:rgba(255,255,255,.72);color:var(--muted);transition:.18s var(--ease)}
+.ai-chips button:hover{border-color:var(--accent);color:var(--accent);transform:translateY(-1px)}
+.ai-input{display:flex;gap:8px}
+.ai-input input{flex:1;background:#fff;border:1px solid var(--line);border-radius:13px;padding:12px 14px;color:var(--text)}
+.ai-input input:focus{outline:none;border-color:var(--accent);box-shadow:0 0 0 3px rgba(79,70,229,.12)}
+.ai-note{margin:0;font-size:12px;color:var(--dim)}
+.ai-side{display:flex;flex-direction:column;gap:14px}
+.ai-stat div{display:flex;justify-content:space-between;gap:10px;padding:8px 0;border-bottom:1px solid var(--line-soft);font-size:13.5px}
+.ai-stat div:last-child{border-bottom:0}
+.ai-stat span{color:var(--muted)}
+.ai-stat b{font-family:"IBM Plex Mono",monospace;font-variant-numeric:tabular-nums}
+.ai-mkt a{display:flex;justify-content:space-between;gap:10px;padding:8px 0;border-bottom:1px solid var(--line-soft);
+  font-size:13.5px;cursor:pointer}
+.ai-mkt a:last-child{border-bottom:0}
+.ai-mkt b{font-family:"IBM Plex Mono",monospace}
+@media(max-width:620px){.ai-row{max-width:96%}}
+
+/* ---------- инструменты трейдера ---------- */
+.tools-grid{display:grid;grid-template-columns:360px 1fr;gap:16px;align-items:start}
+@media(max-width:980px){.tools-grid{grid-template-columns:1fr}}
+.two{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+.sel{width:100%;background:#fff;border:1px solid var(--line);border-radius:11px;padding:10px 12px;color:var(--text)}
+.sel:focus{outline:none;border-color:var(--accent)}
+.imp{display:inline-flex;gap:3px}
+.imp i{width:6px;height:11px;border-radius:2px;background:var(--line);display:block}
+.imp i.on{background:#F59E0B}
+.imp.high i.on{background:#EF4444}
+.cal-now td{background:rgba(79,70,229,.05)}
+.ord-tabs{display:flex;gap:6px;margin-bottom:10px}
+.ord-tabs button{flex:1;padding:8px;border-radius:10px;font-size:12.5px;font-weight:600;
+  border:1px solid var(--line);color:var(--muted);background:rgba(255,255,255,.6)}
+.ord-tabs button.on{background:var(--accent-soft);border-color:rgba(79,70,229,.35);color:var(--accent)}
+.pend-row{display:flex;justify-content:space-between;gap:10px;align-items:center;padding:9px 0;
+  border-bottom:1px solid var(--line-soft);font-size:13px}
+.pend-row:last-child{border-bottom:0}
+.pend-row button{color:var(--dim);font-size:12px}
 </style>
 
 </head>
@@ -676,7 +750,7 @@ footer a:hover{color:var(--accent)}
       <p class="lead" id="cfgLead">2 100+ инструментов, исполнение от 12 мс и спред от 0 пунктов. Один счёт — валюты, металлы, индексы, фьючерсы, акции и ETF.</p>
       <div class="hero-actions">
         <button class="btn btn-primary btn-lg" id="cfgHeroBtn1" data-open="signup">Открыть торговый счёт</button>
-        <button class="btn btn-ghost btn-lg" id="cfgHeroBtn2" data-demo>Войти в демо-кабинет</button>
+        <button class="btn btn-ghost btn-lg" id="cfgHeroBtn2" data-demo>Войти в кабинет</button>
       </div>
       <p class="hero-note" id="cfgHeroNote">Торговля с кредитным плечом сопряжена с высоким риском убытков. Все данные на этой странице вымышлены.</p>
     </div>
@@ -809,10 +883,10 @@ footer a:hover{color:var(--accent)}
 <section class="cta" data-sec="cta">
   <div class="wrap">
     <h2 id="cfgCtaH">Торгуйте как профессионал</h2>
-    <p id="cfgCtaP">Откройте счёт за пять минут или попробуйте демо-кабинет без регистрации.</p>
+    <p id="cfgCtaP">Откройте счёт за пять минут или попробуйте кабинет без регистрации.</p>
     <div class="hero-actions" style="justify-content:center">
       <button class="btn btn-primary btn-lg" id="cfgCtaBtn" data-open="signup">Зарегистрироваться в Avexo</button>
-      <button class="btn btn-ghost btn-lg" data-demo>Открыть демо-кабинет</button>
+      <button class="btn btn-ghost btn-lg" data-demo>Открыть кабинет</button>
     </div>
   </div>
 </section>
@@ -853,7 +927,7 @@ footer a:hover{color:var(--accent)}
   <header class="app-head">
     <div class="app-head-in">
       <div class="logo"><span class="logo-mark cfgMark">A</span> <span class="cfgBrand">Avexo</span></div>
-      <span class="pill" style="margin-left:4px" id="acctLabel">Демо-счёт (гость)</span>
+      <span class="pill" style="margin-left:4px" id="acctLabel">Демо-счёт · гость</span>
       <div class="acct-badge">
         <span style="color:var(--muted)">Баланс:</span>
         <span class="bal num" id="hdrBal">$12 480.30</span>
@@ -870,6 +944,8 @@ footer a:hover{color:var(--accent)}
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M3 17l5-6 4 4 7-9"/><path d="M3 21h18"/></svg>Терминал</button>
       <button data-pane="pay">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><rect x="2" y="5" width="20" height="14" rx="2"/><path d="M2 10h20"/></svg>Платежи</button>
+      <button data-pane="tools">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M3 6h18M3 12h12M3 18h7"/><circle cx="18" cy="15" r="3"/></svg>Инструменты</button>
       <button data-pane="ai">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M21 12a8 8 0 01-8 8H7l-4 3V12a8 8 0 018-8h2a8 8 0 018 8z"/></svg>Помощник</button>
       <button data-pane="prof">
@@ -883,7 +959,7 @@ footer a:hover{color:var(--accent)}
       <!-- Обзор -->
       <div data-view="dash">
         <h2>Обзор счёта</h2>
-        <p class="pane-sub" id="dashSub">Гостевой демо-счёт</p>
+        <p class="pane-sub" id="dashSub">Гостевой счёт</p>
         <div class="bal-grid" id="balGrid"></div>
         <div class="grid-2" style="gap:16px;margin-bottom:16px">
           <div class="panel" style="grid-column:span 2">
@@ -947,6 +1023,13 @@ footer a:hover{color:var(--accent)}
               <button class="b on" data-side="buy">Buy</button>
               <button class="s" data-side="sell">Sell</button>
             </div>
+            <div class="ord-tabs" id="ordTabs">
+              <button class="on" data-ord="market">Рыночный</button>
+              <button data-ord="limit">Limit</button>
+              <button data-ord="stop">Stop</button>
+            </div>
+            <div class="field" id="ordPriceBox" hidden><label for="ordPrice">Цена срабатывания</label>
+              <input id="ordPrice" class="num" type="text" placeholder="цена"></div>
             <div class="field"><label for="vol">Объём, лот</label><input id="vol" class="num" type="number" min="0.01" step="0.01" value="0.10"></div>
             <div class="field"><label for="sl">Stop Loss</label><input id="sl" class="num" type="text" placeholder="не задан"></div>
             <div class="field"><label for="tp">Take Profit</label><input id="tp" class="num" type="text" placeholder="не задан"></div>
@@ -954,6 +1037,11 @@ footer a:hover{color:var(--accent)}
             <div class="row"><span>Стоимость пункта</span><b class="num" id="tPip">$1.00</b></div>
             <div class="row"><span>Спред</span><b class="num" id="tSpread">0.1 пт</b></div>
             <button class="btn btn-primary btn-block" style="margin-top:14px" id="placeOrder">Открыть сделку</button>
+            <div id="pendBox" style="margin-top:16px" hidden>
+              <div class="panel-head" style="margin-bottom:6px"><h3>Отложенные ордера</h3>
+                <span class="muted" id="pendCount"></span></div>
+              <div id="pendList"></div>
+            </div>
           </div>
         </div>
       </div>
@@ -997,26 +1085,100 @@ footer a:hover{color:var(--accent)}
       </div>
 
 
+      <!-- Инструменты трейдера -->
+      <div data-view="tools" hidden>
+        <h2>Инструменты трейдера</h2>
+        <p class="pane-sub">Калькулятор сделки, спецификации контрактов и календарь макростатистики.</p>
+        <div class="tools-grid">
+          <div class="panel">
+            <div class="panel-head"><h3>Калькулятор сделки</h3><span class="muted">маржа · пункт · риск</span></div>
+            <div class="field"><label for="cSym">Инструмент</label>
+              <select id="cSym" class="sel"></select></div>
+            <div class="two">
+              <div class="field"><label for="cVol">Объём, лот</label>
+                <input id="cVol" class="num" type="number" min="0.01" step="0.01" value="0.10"></div>
+              <div class="field"><label for="cLev">Плечо</label>
+                <select id="cLev" class="sel">
+                  <option>1:50</option><option>1:100</option><option selected>1:200</option>
+                  <option>1:500</option></select></div>
+            </div>
+            <div class="two">
+              <div class="field"><label for="cStop">Стоп-лосс, пунктов</label>
+                <input id="cStop" class="num" type="number" min="1" step="1" value="30"></div>
+              <div class="field"><label for="cRisk">Риск, % от баланса</label>
+                <input id="cRisk" class="num" type="number" min="0.1" step="0.1" value="1"></div>
+            </div>
+            <div class="ticket" style="border:0;padding:0;margin-top:6px">
+              <div class="row"><span>Объём контракта</span><b class="num" id="cContract">—</b></div>
+              <div class="row"><span>Стоимость пункта</span><b class="num" id="cPip">—</b></div>
+              <div class="row"><span>Требуемая маржа</span><b class="num" id="cMargin">—</b></div>
+              <div class="row"><span>Риск по стопу</span><b class="num" id="cRiskSum">—</b></div>
+              <div class="row"><span>Объём под заданный риск</span><b class="num" id="cSuggest">—</b></div>
+              <div class="row"><span>Своп за ночь</span><b class="num" id="cSwap">—</b></div>
+            </div>
+          </div>
+          <div class="panel">
+            <div class="panel-head"><h3>Спецификации контрактов</h3><span class="muted">торговые условия</span></div>
+            <div class="tbl-scroll">
+              <table class="data" style="min-width:560px">
+                <thead><tr><th>Инструмент</th><th>Контракт</th><th>Мин. лот</th><th>Спред</th>
+                  <th>Своп long</th><th>Своп short</th><th>Сессия</th></tr></thead>
+                <tbody id="specBody"></tbody>
+              </table>
+            </div>
+          </div>
+        </div>
+        <div class="panel" style="margin-top:16px">
+          <div class="panel-head"><h3>Экономический календарь</h3>
+            <span class="muted">условные данные учебного макета</span></div>
+          <div class="tbl-scroll">
+            <table class="data" style="min-width:620px">
+              <thead><tr><th>Время</th><th>Валюта</th><th>Событие</th><th>Важность</th>
+                <th>Прогноз</th><th>Пред.</th></tr></thead>
+              <tbody id="calBody"></tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+
       <!-- Помощник -->
       <div data-view="ai" hidden>
-        <h2>Торговый помощник</h2>
-        <p class="pane-sub">Объясняет механику рынка и разбирает состояние вашего кошелька.
-          Сигналов «покупать / продавать» не даёт — решение всегда за вами.</p>
-        <div class="panel ai-panel">
-          <div id="aiLog" class="ai-log"></div>
-          <div class="ai-chips" id="aiChips"></div>
-          <div class="ai-input">
-            <input id="aiText" placeholder="Спросите про спред, плечо, маржу, риск или ваш счёт" autocomplete="off">
-            <button class="btn btn-primary" id="aiSend">Спросить</button>
+        <h2>Avexo Copilot</h2>
+        <p class="pane-sub">ИИ-ассистент трейдера: разбирает счёт и позиции, считает объём под ваш риск,
+          объясняет механику рынка. Сигналов «покупать / продавать» не даёт — решение всегда за вами.</p>
+        <div class="ai-shell">
+          <div class="panel ai-panel">
+            <div class="ai-top">
+              <div class="ai-ava" aria-hidden="true"><span></span></div>
+              <div class="ai-id"><b>Avexo Copilot</b><small id="aiStatus">на связи · следит за котировками</small></div>
+              <span class="ai-live"><i></i>онлайн</span>
+            </div>
+            <div id="aiLog" class="ai-log"></div>
+            <div class="ai-typing" id="aiTyping" hidden><i></i><i></i><i></i></div>
+            <div class="ai-chips" id="aiChips"></div>
+            <div class="ai-input">
+              <input id="aiText" placeholder="Спросите про счёт, риск, объём, спред, плечо или инструмент" autocomplete="off">
+              <button class="btn btn-primary" id="aiSend">Спросить</button>
+            </div>
+            <p class="ai-note" id="aiNote"></p>
           </div>
-          <p class="ai-note" id="aiNote"></p>
+          <aside class="ai-side">
+            <div class="panel">
+              <div class="panel-head"><h3>Счёт сейчас</h3></div>
+              <div id="aiStat" class="ai-stat"></div>
+            </div>
+            <div class="panel">
+              <div class="panel-head"><h3>Рынок</h3><span class="muted">изм. за день</span></div>
+              <div id="aiMkt" class="ai-mkt"></div>
+            </div>
+          </aside>
         </div>
       </div>
 
       <!-- Профиль -->
       <div data-view="prof" hidden>
-        <h2>Профиль и верификация</h2>
-        <p class="pane-sub" id="profSub">Данные демо-кошелька.</p>
+        <h2>Профиль</h2>
+        <p class="pane-sub" id="profSub">Данные вашего кошелька.</p>
         <div class="mt-acct" id="mtAcct">
           <div class="mt-stage">
             <div class="mt-name" id="mtName"></div>
@@ -1040,10 +1202,13 @@ footer a:hover{color:var(--accent)}
             <div class="kv"><span>Двухфакторная защита</span><span class="badge ok">включена</span></div>
           </div>
           <div class="panel">
-            <div class="panel-head"><h3>Статус верификации</h3><span class="badge wait" id="verBadge">2 из 3</span></div>
-            <div class="bar"><i id="verBar" style="width:66%"></i></div>
-            <small style="color:var(--dim)">Полный доступ к выводу средств откроется после третьего шага.</small>
-            <div class="steps" id="verSteps"></div>
+            <div class="panel-head"><h3>Условия счёта</h3><span class="muted" id="pfPlan">Raw+</span></div>
+            <div class="kv"><span>Кредитное плечо</span><b class="num">1:500</b></div>
+            <div class="kv"><span>Минимальный объём</span><b class="num">0.01 лота</b></div>
+            <div class="kv"><span>Стоп-аут</span><b class="num">50%</b></div>
+            <div class="kv"><span>Комиссия за лот</span><b class="num">$3.50</b></div>
+            <div class="kv"><span>Валюта счёта</span><b id="pfCur">USD</b></div>
+            <div class="kv"><span>Хеджирование</span><span class="badge ok">разрешено</span></div>
           </div>
         </div>
         <div class="panel" style="margin-top:16px">
@@ -1155,7 +1320,7 @@ const DEFAULTS={
   hero:{eyebrow:"Учебный демонстрационный проект",
     h1:"Брокер, который работает\nна скорости рынка",
     lead:"2 100+ инструментов, исполнение от 12 мс и спред от 0 пунктов. Один счёт — валюты, металлы, индексы, фьючерсы, акции и ETF.",
-    btn1:"Открыть торговый счёт",btn2:"Войти в демо-кабинет",
+    btn1:"Открыть торговый счёт",btn2:"Войти в кабинет",
     note:"Торговля с кредитным плечом сопряжена с высоким риском убытков. Все данные на этой странице вымышлены."},
   heads:{markets:"Торгуйте тем, что движет рынком",
     marketsP:"Котировки обновляются в реальном времени. Выберите категорию, чтобы увидеть инструменты.",
@@ -1164,7 +1329,7 @@ const DEFAULTS={
     accounts:"Четыре типа счетов",accountsP:"От первого депозита до институционального объёма. Тип счёта можно сменить в личном кабинете.",
     platforms:"Торговые платформы",platformsP:"Один счёт — пять способов торговать. Десктоп, браузер и мобильные приложения синхронизированы.",
     classes:"Классы активов",mobile:"Терминал в кармане",achv:"Компания в цифрах"},
-  cta:{h:"Торгуйте как профессионал",p:"Откройте счёт за пять минут или попробуйте демо-кабинет без регистрации.",btn:"Зарегистрироваться в Avexo"},
+  cta:{h:"Торгуйте как профессионал",p:"Откройте счёт за пять минут или попробуйте кабинет без регистрации.",btn:"Зарегистрироваться в Avexo"},
   foot:{about:"Вымышленный брокер, созданный как учебный макет интерфейса. Компании Avexo Trade не существует.",
     note:"Демо-макет · не финансовая услуга",
     disclaimer:"Предупреждение о рисках: торговля производными финансовыми инструментами с кредитным плечом связана с высоким риском и подходит не всем инвесторам. Вы можете потерять весь вложенный капитал. Страница является учебным прототипом интерфейса: бренд, лицензии, котировки, отзывы и статистика вымышлены, счета и платежи не существуют, персональные данные не собираются и никуда не передаются."},
@@ -1196,7 +1361,7 @@ const SECTIONS=[["hero","Первый экран"],["markets","Котировк�
   ["stats","Условия торговли"],["accounts","Типы счетов"],["platforms","Платформы"],
   ["classes","Классы активов"],["mobile","Мобильное приложение"],["achv","Компания в цифрах"],
   ["cta","Призыв к действию"],["footer","Футер"]];
-const PANES=[["dash","Обзор"],["term","Терминал"],["pay","Платежи"],["ai","Помощник"],["prof","Профиль"]];
+const PANES=[["dash","Обзор"],["term","Терминал"],["pay","Платежи"],["tools","Инструменты"],["ai","Помощник"],["prof","Профиль"]];
 function elPath(el){
   if(!el||el===document.body) return "body";
   const parts=[];
@@ -1272,19 +1437,133 @@ const usd=n=>"$"+fmt(n,2);
 
 
 /* ---------------- торговый помощник ---------------- */
-const AI_CHIPS=["Что у меня со счётом?","Что такое спред?","Как работает кредитное плечо?",
-  "Что такое маржа и стоп-аут?","Объясни стоп-лосс и тейк-профит","Сколько рисковать на сделку?",
-  "Чем фьючерс отличается от акции?","Что такое своп?"];
+const AI_CHIPS=["Что у меня со счётом?","Разбери мои позиции","Обзор рынка",
+  "Рассчитай объём при риске 1% и стопе 30 пунктов","Проверь уровень маржи",
+  "Что такое спред?","Как работает кредитное плечо?","Что такое маржа и стоп-аут?",
+  "Объясни стоп-лосс и тейк-профит","Что такое своп?"];
+function aiTime(){ return new Date().toLocaleTimeString("ru-RU",{hour:"2-digit",minute:"2-digit"}); }
 function aiSay(text,who){
   const log=document.getElementById("aiLog"); if(!log)return;
+  const row=document.createElement("div"); row.className="ai-row "+(who==="me"?"me":"bot");
+  const dot=document.createElement("div"); dot.className="ai-dot";
   const d=document.createElement("div"); d.className="ai-msg "+(who||"bot");
-  d.textContent=text; log.appendChild(d); log.scrollTop=log.scrollHeight;
+  d.textContent=text;
+  const t=document.createElement("span"); t.className="ai-time"; t.textContent=aiTime();
+  d.appendChild(t);
+  row.appendChild(dot); row.appendChild(d);
+  log.appendChild(row); log.scrollTop=log.scrollHeight;
+  d.setText=v=>{ d.textContent=v; d.appendChild(t); log.scrollTop=log.scrollHeight; };
   return d;
 }
-function aiAccountSummary(){
-  const pl=state.positions.reduce((a,p)=>a+pnl(p),0);
+function aiTyping(on){
+  const el=document.getElementById("aiTyping"); if(el) el.hidden=!on;
+  const st=document.getElementById("aiStatus");
+  if(st) st.textContent=on?"формулирует ответ…":"на связи · следит за котировками";
+}
+/* --- живая правая колонка --- */
+function aiPanels(){
+  const stEl=document.getElementById("aiStat"); if(!stEl) return;
+  const POS=activePositions();
+  const pl=POS.reduce((a,p)=>a+pnl(p),0);
   const eq=state.balance+pl;
-  const margin=state.positions.reduce((a,p)=>{const [c]=spec(p.sym);
+  const margin=POS.reduce((a,p)=>{const [c]=spec(p.sym);
+    return a+p.vol*c*(prices[p.sym]??p.open)/200;},0);
+  const lvl=margin?eq/margin*100:null;
+  const rows=[
+    ["Баланс",usd(state.balance),""],
+    ["Средства",usd(eq),""],
+    ["Открытая прибыль",(pl>=0?"+":"−")+usd(Math.abs(pl)),pl>=0?"up":"down"],
+    ["Маржа",usd(margin),""],
+    ["Уровень маржи",lvl===null?"—":fmt(lvl,0)+"%",lvl!==null&&lvl<200?"down":""],
+    ["Позиций",String(POS.length),""]
+  ];
+  stEl.innerHTML=rows.map(([k,v,t])=>
+    `<div><span>${k}</span><b class="${t}">${v}</b></div>`).join("");
+  const mk=document.getElementById("aiMkt");
+  if(mk){
+    mk.innerHTML=INSTR.map(([sym,base,dec])=>{
+      const cur=prices[sym]??base, ch=(cur-base)/base*100;
+      return `<a data-ai-sym="${sym}"><span>${sym}</span>
+        <b class="${ch>=0?"up":"down"}">${fmt(cur,dec)} · ${ch>=0?"+":"−"}${fmt(Math.abs(ch),2)}%</b></a>`;
+    }).join("");
+    mk.onclick=e=>{const a=e.target.closest("[data-ai-sym]"); if(a) aiAsk("Разбери "+a.dataset.aiSym);};
+  }
+}
+/* --- расчёт объёма под риск --- */
+function aiRiskCalc(q){
+  const mPct=q.match(/(\d+(?:[.,]\d+)?)\s*%/);
+  const mPips=q.match(/стоп\w*\s*(?:в\s*)?(\d+(?:[.,]\d+)?)|(\d+(?:[.,]\d+)?)\s*(?:пункт|пт|пипс)/i);
+  const risk=mPct?parseFloat(mPct[1].replace(",",".")):1;
+  const pips=mPips?parseFloat((mPips[1]||mPips[2]).replace(",",".")):30;
+  let sym=state.curSym;
+  INSTR.forEach(([s2])=>{ if(q.toUpperCase().includes(s2)) sym=s2; });
+  const [contract,pip]=spec(sym);
+  const pipVal=contract*pip;
+  const money=state.balance*risk/100;
+  const vol=pipVal&&pips?money/(pips*pipVal):0;
+  const volR=Math.max(0.01,Math.round(vol*100)/100);
+  const realRisk=volR*pips*pipVal;
+  const marginNeed=volR*contract*(prices[sym]??0)/200;
+  return [
+    "Расчёт объёма под риск",
+    "",
+    "Инструмент: "+sym,
+    "Риск на сделку: "+fmt(risk,2)+"% от баланса = "+usd(money),
+    "Стоп-лосс: "+fmt(pips,0)+" пунктов",
+    "Стоимость пункта на 1 лот: "+usd(pipVal),
+    "",
+    "Объём: "+fmt(volR,2)+" лота",
+    "Фактический риск при таком объёме: "+usd(realRisk),
+    "Потребуется маржи: "+usd(marginNeed)+" при плече 1:200",
+    "",
+    "Если стоп окажется дальше — уменьшайте объём, а не увеличивайте риск. "+
+    "Чтобы пересчитать, напишите, например: «риск 2% стоп 45 пунктов XAU/USD»."
+  ].join("\n");
+}
+/* --- обзор рынка --- */
+function aiMarketReview(){
+  const rows=INSTR.map(([sym,base,dec])=>{
+    const cur=prices[sym]??base;
+    return {sym,cur,dec,ch:(cur-base)/base*100};
+  }).sort((a,b)=>Math.abs(b.ch)-Math.abs(a.ch));
+  const lines=["Обзор рынка по вашему списку инструментов",""];
+  rows.forEach(r=>lines.push("• "+r.sym+": "+fmt(r.cur,r.dec)+"  ("+(r.ch>=0?"+":"−")+fmt(Math.abs(r.ch),2)+"%)"));
+  const top=rows[0];
+  lines.push("");
+  lines.push("Сильнее всего сегодня двигается "+top.sym+" — "+(top.ch>=0?"рост":"снижение")+
+    " на "+fmt(Math.abs(top.ch),2)+"%. Чем шире дневной диапазон, тем дальше приходится ставить стоп, "+
+    "а значит тем меньше должен быть объём при том же риске.");
+  lines.push("");
+  lines.push("Это описание текущих цен, а не рекомендация входить в сделку.");
+  return lines.join("\n");
+}
+/* --- разбор позиций --- */
+function aiPositionReview(){
+  const POS=activePositions();
+  if(!POS.length) return "Открытых позиций сейчас нет. Когда они появятся, я разберу каждую: вход, текущий результат, вклад в общий риск и влияние на уровень маржи.";
+  const pl=POS.reduce((a,p)=>a+pnl(p),0);
+  const lines=["Разбор открытых позиций",""];
+  POS.forEach(p=>{
+    const v=pnl(p), cur=prices[p.sym]??p.open;
+    const [c,pip]=spec(p.sym);
+    const move=Math.abs(cur-p.open)/(pip||1);
+    lines.push("• "+p.sym+" "+(p.side==="buy"?"Buy":"Sell")+" "+fmt(p.vol,2)+" лота");
+    lines.push("   вход "+fmt(p.open,p.dec)+" → сейчас "+fmt(cur,p.dec)+
+      " ("+fmt(move,0)+" пунктов "+(v>=0?"в плюс":"в минус")+")");
+    lines.push("   результат "+(v>=0?"+":"−")+usd(Math.abs(v))+
+      ", маржа "+usd(p.vol*c*cur/200));
+  });
+  lines.push("");
+  lines.push("Суммарно по позициям: "+(pl>=0?"+":"−")+usd(Math.abs(pl))+".");
+  const worst=POS.slice().sort((a,b)=>pnl(a)-pnl(b))[0];
+  if(pnl(worst)<0) lines.push("Самая слабая — "+worst.sym+". Именно её брокер закроет первой при стоп-ауте.");
+  return lines.join("\n");
+}
+function aiAccountSummary(){
+  const POS=(typeof activePositions==="function")?activePositions():state.positions;
+  const pl=POS.reduce((a,p)=>a+pnl(p),0);
+  const eq=state.balance+pl;
+  const margin=POS.reduce((a,p)=>{const [c]=spec(p.sym);
     return a+p.vol*c*(prices[p.sym]??p.open)/200;},0);
   const lvl=margin?eq/margin*100:null;
   const lines=[
@@ -1294,10 +1573,10 @@ function aiAccountSummary(){
     "Задействованная маржа: "+usd(margin),
     lvl!==null?("Уровень маржи: "+fmt(lvl,1)+"% (стоп-аут при 50%)"):"Позиций нет — маржа не задействована"
   ];
-  if(state.positions.length){
+  if(POS.length){
     lines.push("");
     lines.push("Позиции:");
-    state.positions.forEach(p=>{
+    POS.forEach(p=>{
       const v=pnl(p);
       lines.push("• "+p.sym+" "+(p.side==="buy"?"Buy":"Sell")+" "+fmt(p.vol,2)+" лот, вход "+
         fmt(p.open,p.dec)+", сейчас "+fmt(prices[p.sym]??p.open,p.dec)+", результат "+
@@ -1332,7 +1611,22 @@ const AI_KB=[
   [/спасиб|благодар/i,"Пожалуйста. Если нужно разобрать конкретную позицию — напишите её инструмент."]
 ];
 function aiLocalAnswer(q){
-  if(/счёт|счет|баланс|позиц|портфел|сколько у меня|мой счет|мой счёт/i.test(q)) return aiAccountSummary();
+  if(/разбер|разбор|позиц/i.test(q)&&!/что такое/i.test(q)) return aiPositionReview();
+  if(/обзор рынка|что на рынке|сводка|движения|волатильн.*сегодня/i.test(q)) return aiMarketReview();
+  if(/рассчита|посчита|какой объ|объём под|объем под|размер позиц|лот.*риск|риск.*стоп/i.test(q)) return aiRiskCalc(q);
+  if(/уровень маржи|маржинальн.*уровень|проверь маржу|стоп-?аут.*у меня/i.test(q)){
+    const POS=activePositions();
+    const pl=POS.reduce((a,p)=>a+pnl(p),0), eq=state.balance+pl;
+    const margin=POS.reduce((a,p)=>{const [c]=spec(p.sym);return a+p.vol*c*(prices[p.sym]??p.open)/200;},0);
+    if(!margin) return "Открытых позиций нет, маржа не задействована — стоп-аут вам сейчас не грозит.";
+    const lvl=eq/margin*100;
+    const dropTo=(margin*0.5-state.balance);
+    return "Уровень маржи: "+fmt(lvl,1)+"%\n\nСредства "+usd(eq)+" ÷ маржа "+usd(margin)+" × 100%.\n"+
+      "Стоп-аут наступает при 50%: это произойдёт, если суммарный результат позиций опустится примерно до "+
+      usd(dropTo)+".\n\n"+(lvl<200?"Уровень низкий — запас до принудительного закрытия небольшой."
+      :"Запас комфортный, но он тает при росте объёма позиций.");
+  }
+  if(/счёт|счет|баланс|портфел|сколько у меня|мой счет|мой счёт/i.test(q)) return aiAccountSummary();
   if(/куп(и|л|ить)|продать|продавать|стоит ли|сигнал|прогноз|вырастет|упадёт|упадет|зайти в|входить в|шорт|лонг/i.test(q))
     return "Сигналов на покупку или продажу я не даю — это ваше решение и ваш риск.\n\nЧто могу вместо этого: объяснить, как устроен инструмент, посчитать допустимый объём под ваш риск, разобрать текущие позиции и показать, где уровень маржи становится опасным. Спросите, например: «сколько рисковать на сделку» или «что у меня со счётом».";
   for(const [re,ans] of AI_KB) if(re.test(q)) return ans;
@@ -1357,25 +1651,46 @@ async function aiRemoteAnswer(q,hist){
   }catch(e){}
   return null;
 }
-let aiHist=[];
+let aiHist=[], aiBusy=false;
 async function aiAsk(q){
-  q=(q||"").trim(); if(!q)return;
+  q=(q||"").trim(); if(!q||aiBusy)return;
+  aiBusy=true;
   aiSay(q,"me"); aiHist.push({role:"user",content:q});
-  const wait=aiSay("…","bot");
+  aiTyping(true);
+  const t0=Date.now();
   let ans=await aiRemoteAnswer(q,aiHist.slice(0,-1));
   if(!ans) ans=aiLocalAnswer(q);
-  wait.textContent=ans;
+  const wait=Math.max(0,520-(Date.now()-t0));
+  await new Promise(r=>setTimeout(r,wait));
+  aiTyping(false);
+  const bubble=aiSay("","bot");
+  /* мягкая «печать» ответа */
+  const step=Math.max(6,Math.ceil(ans.length/90));
+  let i=0;
+  await new Promise(done=>{
+    const tm=setInterval(()=>{
+      i=Math.min(ans.length,i+step);
+      bubble.setText(ans.slice(0,i));
+      if(i>=ans.length){clearInterval(tm);done();}
+    },16);
+  });
   aiHist.push({role:"assistant",content:ans});
-  document.getElementById("aiLog").scrollTop=1e6;
+  aiPanels();
+  aiBusy=false;
 }
 function initAI(){
+  aiPanels();
   const log=document.getElementById("aiLog"); if(!log||log.dataset.ready)return;
   log.dataset.ready="1";
   const key=((CFG.ai||{}).key||"").trim();
   document.getElementById("aiNote").textContent = key
-    ? "Отвечает языковая модель через ваш ключ. Помощник объясняет механику и не даёт торговых рекомендаций."
-    : "Работает встроенная база знаний. В админке можно подключить языковую модель по ключу. Торговых рекомендаций помощник не даёт.";
-  aiSay("Здравствуйте. Я помогаю разобраться с терминалом: объясню спред, плечо, маржу и риск, разберу ваши открытые позиции и состояние счёта.\n\nСигналов на сделки не даю — только механику и расчёты.","bot");
+    ? "Отвечает языковая модель через ваш ключ. Copilot объясняет механику и считает риск, но торговых рекомендаций не даёт."
+    : "Работает встроенная база знаний и расчётный модуль. В админке можно подключить языковую модель по ключу. Торговых рекомендаций Copilot не даёт.";
+  const POS=activePositions();
+  aiSay("Здравствуйте. Я Avexo Copilot — слежу за вашим счётом и котировками.\n\n"+
+    "Сейчас у вас "+POS.length+" открытых позиций, баланс "+usd(state.balance)+
+    ". Могу разобрать позиции, посчитать объём под нужный риск, проверить уровень маржи и объяснить любой термин.\n\n"+
+    "Сигналов на сделки не даю — только расчёты и механика.","bot");
   document.getElementById("aiChips").innerHTML=AI_CHIPS.map(c=>`<button data-chip="${c}">${c}</button>`).join("");
   document.getElementById("aiChips").onclick=e=>{
     const b=e.target.closest("[data-chip]"); if(b) aiAsk(b.dataset.chip);
@@ -1468,7 +1783,7 @@ function renderProfile(){
   const sub=document.getElementById("profSub");
   if(sub) sub.textContent = d.guest
     ? "Гостевой просмотр — зарегистрируйтесь, чтобы завести свой кошелёк."
-    : "Данные вашего демо-кошелька. Кнопка «Изменить» правит их прямо здесь.";
+    : "Данные вашего кошелька. Кнопка «Изменить» правит их прямо здесь.";
   const set=(id,v)=>{const e=document.getElementById(id); if(e) e.textContent=v;};
   set("pfName",d.name); set("pfEmail",d.email); set("pfPhone",d.phone);
   set("pfCountry",d.country); set("pfSince",d.since);
@@ -1597,7 +1912,10 @@ async function refreshLive(){
   await Promise.all([pullForex(),pullCrypto(),pullMetals(),pullTwelveData()]);
   LIVE.at=new Date();
   renderQuotes(); renderLiveNote();
-  if(document.getElementById("app").style.display==="block"){ renderWatch(); renderPositions(); }
+  if(document.getElementById("app").style.display==="block"){
+    renderWatch(); checkOrders(); renderPositions(); renderPending();
+    if(typeof aiPanels==="function"&&document.querySelector('[data-view="ai"]:not([hidden])')) aiPanels();
+  }
 }
 function renderLiveNote(){
   const el=document.getElementById("liveNote"); if(!el)return;
@@ -1607,7 +1925,7 @@ function renderLiveNote(){
   el.innerHTML = n
     ? "Реальные данные по "+n+" инструментам"+(LIVE.at?", обновлено в "+LIVE.at.toLocaleTimeString("ru-RU"):"")+
       ": валюты — open.er-api.com, криптовалюта — Binance, металлы — gold-api.com"+(key?", акции, индексы и металлы — Twelve Data":"")+
-      ". Остальные инструменты помечены как «демо» и имитируются."+
+      ". Остальные инструменты помечены как «модель» и рассчитываются локально."+
       (key?"":" Чтобы подтянуть акции, индексы и металлы, добавьте бесплатный ключ Twelve Data в админке.")
     : "Не удалось получить реальные котировки — показаны имитированные цены.";
 }
@@ -1628,7 +1946,7 @@ function renderQuotes(){
     const sp=+(price*(dec>2?0.00008:0.0004)).toFixed(dec);
     const tr=document.createElement("tr");
     tr.innerHTML=`<td><div class="sym"><span class="sym-ic">${sym.slice(0,2)}</span>
-        <span><b>${sym} <em class="src ${LIVE.src[sym]?"on":""}">${LIVE.src[sym]?"live":"демо"}</em></b><small>${name}</small></span></div></td>
+        <span><b>${sym} <em class="src ${LIVE.src[sym]?"on":""}">${LIVE.src[sym]?"live":"модель"}</em></b><small>${name}</small></span></div></td>
       <td class="num" data-bid="${key}">${fmt(live[key],dec)}</td>
       <td class="num" data-ask="${key}">${fmt(live[key]+sp,dec)}</td>
       <td class="num ${chg>=0?"up":"down"}">${chg>=0?"+":""}${chg.toFixed(2)}%</td>
@@ -1772,14 +2090,14 @@ function modal(kind){
   const el=document.createElement("div"); el.className="overlay";
   el.innerHTML=`<div class="modal" role="dialog" aria-modal="true">
     <button class="modal-x" aria-label="Закрыть">×</button>
-    <h3>${signup?"Регистрация демо-кошелька":"Вход в кошелёк"}</h3>
+    <h3>${signup?"Регистрация кошелька":"Вход в кошелёк"}</h3>
     <p class="sub">${signup?"Учебный кошелёк без реальных денег: баланс начисляет администратор в админке.":"Введите email и пароль, указанные при регистрации."}</p>
     ${signup?'<div class="field"><label for="m-name">Имя и фамилия</label><input id="m-name" placeholder="Как показывать в кабинете"></div>':''}
     <div class="field"><label for="m-mail">Email</label><input id="m-mail" type="email" placeholder="you@example.com"></div>
     <div class="field"><label for="m-pass">Пароль</label><input id="m-pass" type="password" placeholder="минимум 6 символов"></div>
     ${signup?'<div class="field"><label for="m-cur">Валюта кошелька</label><select id="m-cur"><option>USD</option><option>EUR</option></select></div>':''}
     <p id="m-err" class="sub" style="color:var(--sell);margin:0 0 12px" hidden></p>
-    <button class="btn btn-primary btn-block" id="m-go">${signup?"Создать демо-кошелёк":"Войти"}</button>
+    <button class="btn btn-primary btn-block" id="m-go">${signup?"Создать кошелёк":"Войти"}</button>
     <p class="modal-foot">${signup?"Уже есть кошелёк? <a href=\"#\" id=\"m-swap\" style=\"color:var(--accent)\">Войти</a>":"Нет кошелька? <a href=\"#\" id=\"m-swap\" style=\"color:var(--accent)\">Зарегистрироваться</a>"}<br>
       Данные хранятся только в этом браузере. Реальных платежей и счетов нет.</p>
   </div>`;
@@ -1912,6 +2230,75 @@ async function loginUser(email,pass){
 }
 
 /* ---------------- личный кабинет ---------------- */
+/* Позиции, которые «ведут» счёт к цели сценария.
+   Генерируются детерминированно из даты старта, живут пока сценарий идёт. */
+function dynRnd(seed,i){ const x=Math.sin(seed*13.17+i*97.31)*43758.5453; return x-Math.floor(x); }
+function dynPositions(){
+  const w=dynWindow(); if(!w) return null;
+  const pr=dynProgress(); if(pr===null) return null;
+  if(pr>=1) return [];
+  const from=Number(w.d.from)||0;
+  const cur=dynValue()||from;
+  const gain=cur-from;
+  const seed=dynSeed();
+  const pool=["XAU/USD","EUR/USD","US500","BTC/USD","USOIL","USD/JPY","AAPL"];
+  const n=3+Math.floor(dynRnd(seed,1)*3);
+  const picks=[];
+  for(let i=0;i<n*3&&picks.length<n;i++){
+    const s=pool[Math.floor(dynRnd(seed,i+2)*pool.length)];
+    if(!picks.includes(s)) picks.push(s);
+  }
+  const ws=picks.map((_,i)=>0.55+dynRnd(seed,i+20));
+  const sum=ws.reduce((a,b)=>a+b,0)||1;
+  /* доля прибыли, которая сейчас «в рынке» — плавает во времени */
+  const t=Date.now()/3600000;
+  const share=0.30+0.16*Math.sin(t*0.9+seed)+0.06*Math.sin(t*2.7+seed*1.7);
+  const openTotal=gain*Math.max(0.10,Math.min(0.55,share));
+  return picks.map((sym,i)=>{
+    const base=(INSTR.find(x=>x[0]===sym)||[,1])[1];
+    const price=prices[sym]??base;
+    const [c]=spec(sym), dec=decs[sym]??2;
+    const side=dynRnd(seed,i+40)>0.3?"buy":"sell";
+    const vol=Math.max(0.01,Math.round((0.05+dynRnd(seed,i+60)*0.6)*100)/100);
+    const part=openTotal*ws[i]/sum;
+    const diff=part/(vol*c)*(side==="buy"?1:-1);
+    let open=price-diff;
+    if(!isFinite(open)||open<=0) open=price;
+    return {sym,side,vol,open:+open.toFixed(dec+2),dec,auto:true};
+  });
+}
+/* позиции, которые показывает кабинет */
+function activePositions(){
+  const dp=dynPositions();
+  return dp===null ? state.positions : dp;
+}
+/* когда сценарий дошёл до конца — один раз дописываем закрытия в историю */
+function dynSettle(){
+  const w=dynWindow(); if(!w) return;
+  if(dynProgress()<1) return;
+  const key="avexo_settled_"+Math.round(w.st)+"_"+Math.round(w.en);
+  try{ if(localStorage.getItem(key)) return; }catch(e){}
+  const seed=dynSeed(), from=Number(w.d.from)||0, to=Number(w.d.to)||from;
+  const pool=["XAU/USD","EUR/USD","US500","BTC/USD","USOIL","USD/JPY","AAPL"];
+  const n=3+Math.floor(dynRnd(seed,1)*3);
+  const picks=[];
+  for(let i=0;i<n*3&&picks.length<n;i++){
+    const sm=pool[Math.floor(dynRnd(seed,i+2)*pool.length)];
+    if(!picks.includes(sm)) picks.push(sm);
+  }
+  const ws=picks.map((_,i)=>0.55+dynRnd(seed,i+20));
+  const sum=ws.reduce((a,b)=>a+b,0)||1;
+  const total=(to-from)*0.34;
+  const date=new Date(w.en).toLocaleDateString("ru-RU");
+  picks.forEach((sym,i)=>{
+    const v=total*ws[i]/sum;
+    state.hist.unshift([date,"Закрытие сделки",sym,(v>=0?"+":"−")+usd(Math.abs(v)),"ok"]);
+  });
+  state.hist=state.hist.slice(0,60);
+  try{ localStorage.setItem(key,"1"); }catch(e){}
+  saveSession();
+}
+
 const INSTR=[["EUR/USD",1.08412,5],["XAU/USD",2361.40,2],["US500",5284.6,1],
   ["BTC/USD",67420,0],["AAPL",214.32,2],["USOIL",78.64,2],["USD/JPY",157.281,3]];
 let state={
@@ -1969,7 +2356,7 @@ function syncHeader(){
   const sub=document.getElementById("dashSub");
   if(sub) sub.innerHTML= u
     ? 'Кошелёк <span class="num">#'+u.acct+'</span> · Demo · '+u.cur+' · сервер Avexo-DEMO'
-    : 'Гостевой демо-счёт · зарегистрируйтесь, чтобы завести свой кошелёк';
+    : 'Гостевой счёт · зарегистрируйтесь, чтобы завести свой кошелёк';
 }
 function openApp(pane,sym){
   document.getElementById("site").style.display="none";
@@ -1987,6 +2374,7 @@ function showPane(id){
   if(id==="dash"){drawEquity();renderPositions();}
   if(id==="term"){renderWatch();drawCandles();updateTicket();}
   if(id==="prof"){renderProfile();renderAcct();fitAcct();}
+  if(id==="tools"){renderTools();}
   if(id==="ai"){initAI();}
 }
 document.getElementById("side").addEventListener("click",e=>{
@@ -1995,9 +2383,10 @@ document.getElementById("side").addEventListener("click",e=>{
 
 /* баланс */
 function renderBalance(){
-  const pl=state.positions.reduce((s,p)=>s+pnl(p),0);
+  const POS=activePositions();
+  const pl=POS.reduce((s,p)=>s+pnl(p),0);
   const equity=state.balance+pl;
-  const margin=state.positions.reduce((s,p)=>{
+  const margin=POS.reduce((s,p)=>{
     const [c]=spec(p.sym); return s+p.vol*c*(prices[p.sym]??p.open)/200;},0);
   const dpr=dynProgress();
   let cards;
@@ -2025,7 +2414,7 @@ function renderBalance(){
     cards=[
       ["Баланс",usd(state.balance),"свободно "+usd(state.balance-margin)],
       ["Средства",usd(equity),(pl>=0?"+":"−")+usd(Math.abs(pl))+" открытая прибыль"],
-      ["Задействованная маржа",usd(margin),state.positions.length+" открытых позиций"],
+      ["Задействованная маржа",usd(margin),POS.length+" открытых позиций"],
       ["Уровень маржи",margin?fmt(equity/margin*100,1)+"%":"—","стоп-аут при 50%"]
     ];
   }
@@ -2041,19 +2430,22 @@ function pnl(p){
   return diff*p.vol*c;
 }
 function renderPositions(){
+  dynSettle();
   renderBalance();
+  const POS=activePositions();
   const b=document.getElementById("posBody");
-  document.getElementById("posEmpty").hidden=state.positions.length>0;
-  document.getElementById("posCount").textContent=state.positions.length+" шт.";
-  b.innerHTML=state.positions.map((p,i)=>{
+  document.getElementById("posEmpty").hidden=POS.length>0;
+  document.getElementById("posCount").textContent=POS.length+" шт.";
+  b.innerHTML=POS.map((p,i)=>{
     const v=pnl(p);
     return `<tr><td><b>${p.sym}</b></td>
       <td><span class="badge ${p.side}">${p.side==="buy"?"Buy":"Sell"}</span></td>
       <td class="num">${fmt(p.vol,2)}</td>
-      <td class="num">${fmt(p.open,p.dec)}</td>
+      <td class="num">${fmt(p.open,p.dec)}${(p.sl||p.tp)?`<small style="display:block;color:var(--dim);font-size:11px">${p.sl?"SL "+fmt(p.sl,p.dec):""}${p.sl&&p.tp?" · ":""}${p.tp?"TP "+fmt(p.tp,p.dec):""}</small>`:""}</td>
       <td class="num">${fmt(prices[p.sym]??p.open,p.dec)}</td>
       <td class="num ${v>=0?"up":"down"}">${v>=0?"+":"−"}${usd(Math.abs(v))}
-        <button data-close="${i}" style="margin-left:10px;color:var(--dim);font-size:12px">закрыть</button></td></tr>`;
+        ${p.auto?'<span class="pos-auto">по стратегии</span>'
+                :`<button data-close="${i}" style="margin-left:10px;color:var(--dim);font-size:12px">закрыть</button>`}</td></tr>`;
   }).join("");
   b.querySelectorAll("[data-close]").forEach(btn=>btn.onclick=()=>{
     const i=+btn.dataset.close,p=state.positions[i],v=pnl(p);
@@ -2243,12 +2635,162 @@ function updateTicket(){
   go.style.color="#fff";
 }
 document.getElementById("vol").addEventListener("input",updateTicket);
+state.ordType="market";
+state.pending=state.pending||[];
+document.getElementById("ordTabs").onclick=e=>{
+  const b=e.target.closest("[data-ord]"); if(!b)return;
+  state.ordType=b.dataset.ord;
+  document.querySelectorAll("#ordTabs [data-ord]").forEach(x=>x.classList.toggle("on",x===b));
+  const box=document.getElementById("ordPriceBox");
+  box.hidden=state.ordType==="market";
+  if(!box.hidden&&!document.getElementById("ordPrice").value)
+    document.getElementById("ordPrice").value=fmt(prices[state.curSym],decs[state.curSym]);
+  updateTicket();
+};
+function renderPending(){
+  const box=document.getElementById("pendBox"), list=document.getElementById("pendList");
+  if(!box||!list)return;
+  box.hidden=!state.pending.length;
+  document.getElementById("pendCount").textContent=state.pending.length+" шт.";
+  list.innerHTML=state.pending.map((o,i)=>
+    `<div class="pend-row"><span><b>${o.sym}</b> ${o.side==="buy"?"Buy":"Sell"} ${o.type==="limit"?"Limit":"Stop"}
+      ${fmt(o.vol,2)} лот</span>
+     <span class="num">${fmt(o.price,o.dec)}</span>
+     <button data-pend="${i}">снять</button></div>`).join("");
+  list.querySelectorAll("[data-pend]").forEach(b=>b.onclick=()=>{
+    state.pending.splice(+b.dataset.pend,1); saveSession(); renderPending(); toast("Отложенный ордер снят");
+  });
+}
+/* срабатывание отложенных ордеров и уровней SL/TP */
+function checkOrders(){
+  let changed=false;
+  state.pending=state.pending.filter(o=>{
+    const cur=prices[o.sym]; if(cur==null) return true;
+    const hit = o.type==="limit"
+      ? (o.side==="buy" ? cur<=o.price : cur>=o.price)
+      : (o.side==="buy" ? cur>=o.price : cur<=o.price);
+    if(!hit) return true;
+    state.positions.unshift({sym:o.sym,side:o.side,vol:o.vol,open:cur,dec:o.dec,sl:o.sl,tp:o.tp});
+    state.hist.unshift([new Date().toLocaleDateString("ru-RU"),"Исполнен отложенный ордер",o.sym,
+      (o.side==="buy"?"Buy ":"Sell ")+fmt(o.vol,2),"ok"]);
+    toast("Сработал отложенный ордер: "+o.sym+" по "+fmt(cur,o.dec));
+    changed=true; return false;
+  });
+  for(let i=state.positions.length-1;i>=0;i--){
+    const p=state.positions[i], cur=prices[p.sym];
+    if(cur==null||(!p.sl&&!p.tp)) continue;
+    const hitSL=p.sl&&(p.side==="buy"?cur<=p.sl:cur>=p.sl);
+    const hitTP=p.tp&&(p.side==="buy"?cur>=p.tp:cur<=p.tp);
+    if(!hitSL&&!hitTP) continue;
+    const v=pnl(p);
+    state.balance+=v;
+    state.hist.unshift([new Date().toLocaleDateString("ru-RU"),
+      hitSL?"Сработал стоп-лосс":"Сработал тейк-профит",p.sym,
+      (v>=0?"+":"−")+usd(Math.abs(v)),"ok"]);
+    state.positions.splice(i,1);
+    toast((hitSL?"Стоп-лосс":"Тейк-профит")+" по "+p.sym+": "+(v>=0?"+":"−")+usd(Math.abs(v)));
+    changed=true;
+  }
+  if(changed){ saveSession(); renderPositions(); renderHist(); renderPending(); }
+}
 document.getElementById("placeOrder").onclick=()=>{
   const vol=parseFloat(document.getElementById("vol").value)||0.1;
-  state.positions.unshift({sym:state.curSym,side:state.side,vol,open:prices[state.curSym],dec:decs[state.curSym]});
+  const dec=decs[state.curSym];
+  const num=v=>{const x=parseFloat(String(v).replace(",",".")); return isFinite(x)&&x>0?x:null;};
+  const sl=num(document.getElementById("sl").value);
+  const tp=num(document.getElementById("tp").value);
+  const cur=prices[state.curSym];
+  if(state.ordType!=="market"){
+    const price=num(document.getElementById("ordPrice").value);
+    if(!price) return toast("Укажите цену срабатывания");
+    state.pending.unshift({sym:state.curSym,side:state.side,vol,price,dec,
+      type:state.ordType,sl,tp});
+    toast("Отложенный ордер поставлен: "+(state.side==="buy"?"Buy":"Sell")+" "+
+      (state.ordType==="limit"?"Limit":"Stop")+" "+fmt(price,dec));
+    saveSession(); renderPending(); return;
+  }
+  if(sl&&(state.side==="buy"?sl>=cur:sl<=cur)) return toast("Стоп-лосс должен быть по другую сторону от цены");
+  if(tp&&(state.side==="buy"?tp<=cur:tp>=cur)) return toast("Тейк-профит должен быть по другую сторону от цены");
+  state.positions.unshift({sym:state.curSym,side:state.side,vol,open:cur,dec,sl,tp});
   toast("Ордер принят: "+(state.side==="buy"?"Buy":"Sell")+" "+fmt(vol,2)+" "+state.curSym);
   saveSession(); renderPositions();
 };
+
+/* ---------------- инструменты трейдера ---------------- */
+const SPEC_META={
+  "EUR/USD":["100 000 EUR","0.01","0.1 пт","−0.84","+0.21","круглосуточно, пн–пт"],
+  "USD/JPY":["100 000 USD","0.01","0.2 пт","−0.52","+0.38","круглосуточно, пн–пт"],
+  "XAU/USD":["100 унций","0.01","0.15 $","−4.20","+1.10","01:00–23:59"],
+  "US500":["10 контрактов","0.10","0.4 п.","−2.80","−1.40","01:00–23:15"],
+  "BTC/USD":["1 BTC","0.01","12 $","−18.00","−18.00","круглосуточно, 7 дней"],
+  "AAPL":["100 акций","0.10","0.03 $","−1.90","−0.80","16:30–23:00"],
+  "USOIL":["100 баррелей","0.10","0.03 $","−3.10","+0.40","03:00–23:00"]
+};
+const CAL=[
+  ["08:30","JPY","Индекс деловой активности Tankan",1,"12.4","11.8"],
+  ["10:00","EUR","Промышленное производство, м/м",2,"+0.3%","−0.1%"],
+  ["11:30","GBP","Розничные продажи, г/г",2,"+2.1%","+1.7%"],
+  ["15:30","USD","Индекс потребительских цен, м/м",3,"+0.2%","+0.3%"],
+  ["15:30","USD","Первичные заявки на пособие",2,"218K","223K"],
+  ["17:00","USD","Запасы сырой нефти EIA",2,"−1.4M","+2.6M"],
+  ["19:00","USD","Протокол заседания ФРС",3,"—","—"],
+  ["21:00","CAD","Решение Банка Канады по ставке",3,"4.25%","4.50%"]
+];
+function calcTools(){
+  const symEl=document.getElementById("cSym"); if(!symEl) return;
+  const sym=symEl.value||state.curSym;
+  const vol=parseFloat(document.getElementById("cVol").value)||0.01;
+  const lev=parseInt((document.getElementById("cLev").value||"1:200").split(":")[1],10)||200;
+  const stop=parseFloat(document.getElementById("cStop").value)||1;
+  const riskPct=parseFloat(document.getElementById("cRisk").value)||1;
+  const [contract,pip]=spec(sym);
+  const price=prices[sym]??(INSTR.find(x=>x[0]===sym)||[,1])[1];
+  const pipVal=contract*pip;
+  const margin=vol*contract*price/lev;
+  const riskSum=vol*stop*pipVal;
+  const money=state.balance*riskPct/100;
+  const suggest=pipVal&&stop?money/(stop*pipVal):0;
+  const meta=SPEC_META[sym]||["—","0.01","—","0","0","—"];
+  const swap=parseFloat(meta[3])*vol;
+  const set=(id,v)=>{const e=document.getElementById(id); if(e) e.textContent=v;};
+  set("cContract",meta[0]);
+  set("cPip",usd(pipVal*vol)+" при "+fmt(vol,2)+" лота");
+  set("cMargin",usd(margin));
+  set("cRiskSum",usd(riskSum)+" ("+fmt(state.balance?riskSum/state.balance*100:0,2)+"% счёта)");
+  set("cSuggest",fmt(Math.max(0.01,Math.round(suggest*100)/100),2)+" лота");
+  set("cSwap",(swap>=0?"+":"−")+usd(Math.abs(swap)));
+}
+function renderTools(){
+  const sel=document.getElementById("cSym");
+  if(sel&&!sel.dataset.ready){
+    sel.dataset.ready="1";
+    sel.innerHTML=INSTR.map(([sm])=>`<option${sm===state.curSym?" selected":""}>${sm}</option>`).join("");
+    ["cSym","cVol","cLev","cStop","cRisk"].forEach(id=>{
+      const e=document.getElementById(id); if(e) e.addEventListener("input",calcTools);
+      if(e) e.addEventListener("change",calcTools);
+    });
+  }
+  const sb=document.getElementById("specBody");
+  if(sb) sb.innerHTML=INSTR.map(([sm])=>{
+    const m=SPEC_META[sm]||["—","—","—","—","—","—"];
+    return `<tr><td><b>${sm}</b></td><td>${m[0]}</td><td class="num">${m[1]}</td>
+      <td class="num">${m[2]}</td><td class="num down">${m[3]}</td>
+      <td class="num ${String(m[4]).startsWith("+")?"up":"down"}">${m[4]}</td><td>${m[5]}</td></tr>`;
+  }).join("");
+  const cb=document.getElementById("calBody");
+  if(cb){
+    const now=new Date().getHours()*60+new Date().getMinutes();
+    cb.innerHTML=CAL.map(([t,cur,ev,imp,f,prev])=>{
+      const [hh,mm]=t.split(":").map(Number);
+      const soon=Math.abs(hh*60+mm-now)<=45;
+      const dots=[1,2,3].map(n=>`<i class="${n<=imp?"on":""}"></i>`).join("");
+      return `<tr class="${soon?"cal-now":""}"><td class="num">${t}</td><td><b>${cur}</b></td>
+        <td>${ev}</td><td><span class="imp ${imp===3?"high":""}">${dots}</span></td>
+        <td class="num">${f}</td><td class="num">${prev}</td></tr>`;
+    }).join("");
+  }
+  calcTools();
+}
 
 /* платежи */
 const METHODS=[
@@ -2345,14 +2887,6 @@ function fitAcct(){
 window.addEventListener("resize",fitAcct);
 renderAcct(); fitAcct();
 
-/* верификация */
-const VER=[["Email подтверждён","Ссылка открыта 14 марта 2024",true],
-  ["Документ, удостоверяющий личность","Проверен автоматически за 4 минуты",true],
-  ["Подтверждение адреса","Загрузите счёт за коммунальные услуги не старше 3 месяцев",false]];
-document.getElementById("verSteps").innerHTML=VER.map(([t,d,done],i)=>
-  `<div class="step${done?" done":""}"><span class="n">${done?"✓":i+1}</span>
-   <span><b>${t}</b><small>${d}</small></span>
-   <span class="st"><span class="badge ${done?"ok":"wait"}">${done?"готово":"ожидает"}</span></span></div>`).join("");
 
 /* тосты */
 let toastT;
