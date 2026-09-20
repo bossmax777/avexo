@@ -1316,6 +1316,7 @@ const ICONS = {
 /* ---------------- конфиг сайта (редактируется в admin.html) ---------------- */
 const CFG_KEY="avexo_site_config_v1";
 const DEFAULTS={
+  html:{},
   brand:{name:"Avexo",suffix:"Trade",mark:"A",accent:"#4F46E5",red:"#EF4444"},
   hero:{eyebrow:"Учебный демонстрационный проект",
     h1:"Брокер, который работает\nна скорости рынка",
@@ -1375,6 +1376,24 @@ function elPath(el){
   }
   return parts.join(">");
 }
+/* ---- HTML-блоки, заданные в админке (видны всем) ---- */
+function blockEl(key){
+  if(key==="head")    return document.querySelector("header.site-head .head-in");
+  if(key==="apphead") return document.querySelector("header.app-head .app-head-in");
+  if(key==="side")    return document.getElementById("side");
+  if(key.indexOf("sec:")===0)  return document.querySelector('[data-sec="'+key.slice(4)+'"]');
+  if(key.indexOf("view:")===0) return document.querySelector('[data-view="'+key.slice(5)+'"]');
+  return null;
+}
+function applyHtmlBlocks(){
+  const h=CFG.html||{};
+  Object.keys(h).forEach(k=>{
+    const v=h[k];
+    if(typeof v!=="string"||!v.trim()) return;
+    try{ const el=blockEl(k); if(el) el.innerHTML=v; }catch(e){}
+  });
+}
+function safe(fn){ try{ fn(); }catch(e){ console.warn("[avexo]",e&&e.message); } }
 function applyOverrides(){
   const o=CFG.sections||{};
   SECTIONS.forEach(([k])=>{
@@ -1402,6 +1421,7 @@ function applyOverrides(){
   st.textContent=CFG.css||"";
 }
 function applyConfig(){
+  safe(applyHtmlBlocks);
   const b=CFG.brand||{};
   document.documentElement.style.setProperty("--accent",b.accent||"#4F46E5");
   document.documentElement.style.setProperty("--brand",b.accent||"#4F46E5");
@@ -2032,13 +2052,22 @@ function renderClass(c){
 renderClass("Индексы");
 renderLiveNote();
 apiBoot().then(()=>{
-  applyConfig();
-  renderQuotes(); renderClass(document.querySelector("#clsTabs .tab.on")?.textContent||"Индексы");
-  document.getElementById("benefits").innerHTML=CFG.benefits.map(({ic,t,d})=>
-    `<div class="card"><div class="ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7">${ICONS[ic]||ICONS.chart}</svg></div>
-     <h3>${t}</h3><p>${d}</p></div>`).join("");
-  if(ME){ loadSession(); }
-  refreshLive();
+  safe(applyConfig);
+  safe(renderQuotes);
+  safe(()=>renderClass(document.querySelector("#clsTabs .tab.on")?.textContent||"Индексы"));
+  safe(()=>{
+    const el=document.getElementById("benefits"); if(!el)return;
+    el.innerHTML=CFG.benefits.map(({ic,t,d})=>
+      `<div class="card"><div class="ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7">${ICONS[ic]||ICONS.chart}</svg></div>
+       <h3>${t}</h3><p>${d}</p></div>`).join("");
+  });
+  if(ME){ safe(loadSession); }
+  safe(refreshLive);
+  /* возвращаем пользователя в кабинет после перезагрузки страницы */
+  safe(()=>{
+    let last=""; try{ last=localStorage.getItem(APP_KEY)||""; }catch(e){}
+    if(last) openApp(last);
+  });
 });
 setInterval(refreshLive,60000);
 
@@ -2150,16 +2179,10 @@ document.addEventListener("click",e=>{
   const o=e.target.closest("[data-open]"); if(o){modal(o.dataset.open);return;}
   if(e.target.closest("[data-demo]")){openApp("dash");return;}
   if(e.target.closest("[data-logout]")){
-    setSession(""); loadSession();
-    document.getElementById("app").style.display="none";
-    document.getElementById("site").style.display="";
-    window.scrollTo(0,0); toast("Вы вышли из кошелька"); return;
+    setSession(""); loadSession(); leaveApp();
+    toast("Вы вышли из кошелька"); return;
   }
-  if(e.target.closest("[data-back]")){
-    document.getElementById("app").style.display="none";
-    document.getElementById("site").style.display="";
-    window.scrollTo(0,0); return;
-  }
+  if(e.target.closest("[data-back]")){ leaveApp(); return; }
 });
 
 
@@ -2374,6 +2397,9 @@ function syncHeader(){
     ? 'Кошелёк <span class="num">#'+u.acct+'</span> · Demo · '+u.cur+' · сервер Avexo-DEMO'
     : 'Гостевой счёт · зарегистрируйтесь, чтобы завести свой кошелёк';
 }
+const APP_KEY="avexo_app_open_v1";
+function rememberApp(pane){ try{ localStorage.setItem(APP_KEY,pane||"dash"); }catch(e){} }
+function forgetApp(){ try{ localStorage.removeItem(APP_KEY); }catch(e){} }
 function openApp(pane,sym){
   document.getElementById("site").style.display="none";
   document.getElementById("app").style.display="block";
@@ -2383,8 +2409,15 @@ function openApp(pane,sym){
   renderHist(); renderTx(); renderPositions();
   showPane(pane||"dash");
 }
+function leaveApp(){
+  forgetApp();
+  document.getElementById("app").style.display="none";
+  document.getElementById("site").style.display="";
+  window.scrollTo(0,0);
+}
 function showPane(id){
   if((CFG.panes||{})[id]===false){const first=PANES.find(([k])=>(CFG.panes||{})[k]!==false); id=first?first[0]:id;}
+  rememberApp(id);
   document.querySelectorAll("[data-view]").forEach(v=>v.hidden=v.dataset.view!==id);
   document.querySelectorAll("#side [data-pane]").forEach(b=>b.classList.toggle("on",b.dataset.pane===id));
   if(id==="dash"){drawEquity();renderPositions();}
