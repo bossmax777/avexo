@@ -3177,12 +3177,19 @@ const DEMO_ACCTS=[
 let acctIdx=0;
 function acctList(){
   const u=currentUser();
-  if(u) return [{id:u.acct,name:u.name,srv:"Avexo-DEMO",
+  if(u) return [{id:u.acct,name:u.name,srv:srvName(u.card&&u.card.srv),
     mode:(u.card&&u.card.mode)||"Hedge",type:"Demo",lev:(u.card&&u.card.lev)||"1:100",
     bal:state.balance,cur:u.cur||"USD",st:["wait","демо"]}];
   return DEMO_ACCTS;
 }
 const money=(n,c)=>n.toLocaleString("ru-RU",{minimumFractionDigits:2,maximumFractionDigits:2}).replace(/,/,".")+" "+c;
+/* имя сервера задаётся в админке, пометка -DEMO добавляется всегда */
+function srvName(v){
+  let n=String(v||"Avexo").trim().replace(/[<>"']/g,"").slice(0,24);
+  n=n.replace(/[-_ ]?(demo|live|real)$/i,"").replace(/[-_ ]+$/,"");
+  if(!n) n="Avexo";
+  return n+"-DEMO";
+}
 function renderAcct(){
   const list=acctList();
   if(acctIdx>=list.length) acctIdx=0;

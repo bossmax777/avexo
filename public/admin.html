@@ -808,11 +808,14 @@ async function editCard(i){
   if(!/^(hedge|netting)$/i.test(mode)) return toast("Допустимо только Hedge или Netting");
   const lev=(prompt("Кредитное плечо на карточке (например 1:100):",cur.lev||"1:100")||"").trim();
   if(!/^1:\d{1,4}$/.test(lev)) return toast("Плечо в формате 1:100");
-  const card={mode:mode[0].toUpperCase()+mode.slice(1).toLowerCase(),lev};
+  const srvRaw=(prompt("Имя сервера на карточке (пометка -DEMO добавится автоматически):",
+    String(cur.srv||"Avexo").replace(/-DEMO$/i,""))||"").trim();
+  if(!srvRaw) return toast("Имя сервера не может быть пустым");
+  const card={mode:mode[0].toUpperCase()+mode.slice(1).toLowerCase(),lev,srv:srvRaw};
   if(API.on){
     try{
       await api("/api/admin/users/"+u.id,{method:"PATCH",body:JSON.stringify({card})});
-      await uFetch(); renderUsers(); toast("Карточка счёта обновлена — у пользователя применится сразу");
+      await uFetch(); renderUsers(); toast("Карточка счёта обновлена: сервер "+srvRaw.replace(/[-_ ]?(demo|live|real)$/i,"")+"-DEMO");
     }catch(err){ toast(err.message); }
     return;
   }
