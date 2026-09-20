@@ -1,0 +1,16 @@
+{
+  "name": "avexo",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Avexo Trade — учебный макет сайта брокера: статика + API + PostgreSQL",
+  "main": "server.js",
+  "engines": { "node": ">=18" },
+  "scripts": {
+    "start": "node server.js"
+  },
+  "dependencies": {
+    "express": "^4.19.2",
+    "cookie-parser": "^1.4.6",
+    "pg": "^8.12.0"
+  }
+}
