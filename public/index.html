@@ -325,6 +325,8 @@ table.data tr:last-child td{border-bottom:0}
 .badge.ok{background:rgba(16,185,129,.12);color:#0E9F6E;border-color:rgba(16,185,129,.3)}
 .badge.wait{background:rgba(224,124,0,.1);color:var(--warn);border-color:rgba(224,124,0,.25)}
 .badge.buy{background:rgba(16,185,129,.12);color:#0E9F6E}
+.badge.appr{background:rgba(79,70,229,.12);color:var(--accent);border-color:rgba(79,70,229,.28)}
+.badge.rej{background:rgba(239,68,68,.1);color:var(--sell);border-color:rgba(239,68,68,.26)}
 .badge.sell{background:rgba(244,17,18,.08);color:var(--sell)}
 .empty{color:var(--dim);font-size:13.5px;padding:20px 0;text-align:center}
 
@@ -719,6 +721,7 @@ footer a:hover{color:var(--accent)}
 
 /* ---------- вывод средств ---------- */
 .out-sum{display:grid;gap:9px}
+#app .hint{display:block;margin-top:6px;font-size:11.5px;color:var(--dim);line-height:1.45}
 .out-sum div{display:flex;justify-content:space-between;gap:12px;font-size:13.5px;
   padding:9px 0;border-bottom:1px solid var(--line-soft)}
 .out-sum div:last-child{border-bottom:0}
@@ -744,6 +747,29 @@ footer a:hover{color:var(--accent)}
   background:var(--accent-soft);padding:6px 9px;border-radius:9px;letter-spacing:.04em;word-break:break-all}
 .int-key code{margin-left:auto;font-size:12.5px;color:var(--text);background:var(--bg-2);
   padding:8px 12px;border-radius:10px;letter-spacing:.06em}
+
+/* ---------- торговый ИИ-агент ---------- */
+.agent-panel{background:linear-gradient(135deg,rgba(79,70,229,.07),rgba(16,185,129,.07)),rgba(255,255,255,.82);
+  backdrop-filter:blur(18px);border:1px solid rgba(79,70,229,.18)}
+.agent-top{display:flex;align-items:center;gap:12px;margin-bottom:14px}
+.agent-ic{width:40px;height:40px;border-radius:13px;flex:0 0 auto;display:grid;place-items:center;
+  background:linear-gradient(135deg,#6366F1,#4F46E5 50%,#10B981);
+  box-shadow:0 10px 24px -10px rgba(79,70,229,.8)}
+.agent-ic i{width:15px;height:15px;background:#fff;border-radius:5px;opacity:.94;
+  animation:aiPulse 2.4s ease-in-out infinite}
+.agent-id b{display:block;font-size:15px}
+.agent-id small{color:var(--dim);font-size:12.5px}
+.agent-live{margin-left:auto;display:inline-flex;align-items:center;gap:6px;font-size:11.5px;color:#0E9F6E;
+  background:rgba(16,185,129,.12);border:1px solid rgba(16,185,129,.3);padding:5px 11px;border-radius:999px}
+.agent-live i{width:6px;height:6px;border-radius:50%;background:#10B981;animation:aiBlink 1.6s infinite}
+.agent-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(130px,1fr));gap:10px;margin-bottom:14px}
+.agent-grid div{background:rgba(255,255,255,.72);border:1px solid var(--line-soft);border-radius:13px;padding:11px 13px}
+.agent-grid span{display:block;font-size:11px;letter-spacing:.07em;text-transform:uppercase;color:var(--dim);margin-bottom:4px}
+.agent-grid b{font-family:"IBM Plex Mono",monospace;font-size:16px;font-variant-numeric:tabular-nums}
+.agent-bar{height:6px;border-radius:99px;background:rgba(79,70,229,.12);overflow:hidden}
+.agent-bar i{display:block;height:100%;border-radius:99px;
+  background:linear-gradient(90deg,#4F46E5,#38BDF8 55%,#10B981);transition:width .6s var(--ease)}
+.agent-note{display:block;margin-top:9px;font-size:12px;color:var(--muted)}
 </style>
 
 </head>
@@ -1005,6 +1031,19 @@ footer a:hover{color:var(--accent)}
             <canvas id="equity" width="1600" height="420" aria-label="График динамики средств"></canvas>
           </div>
         </div>
+        <div class="panel agent-panel" id="agentBox" style="margin-bottom:16px" hidden>
+          <div class="agent-top">
+            <span class="agent-ic" aria-hidden="true"><i></i></span>
+            <div class="agent-id">
+              <b>Торговый ИИ-агент Avexo</b>
+              <small id="agentSub">стратегия «Золото и связанные активы»</small>
+            </div>
+            <span class="agent-live"><i></i>работает</span>
+          </div>
+          <div class="agent-grid" id="agentStats"></div>
+          <div class="agent-bar"><i id="agentBar"></i></div>
+          <small class="agent-note" id="agentNote"></small>
+        </div>
         <div class="panel" style="margin-bottom:16px">
           <div class="panel-head"><h3>Открытые позиции</h3><span class="muted" id="posCount"></span></div>
           <div class="tbl-scroll">
@@ -1133,6 +1172,11 @@ footer a:hover{color:var(--accent)}
               <select id="outMethod" class="sel"></select></div>
             <div class="field"><label for="outAmt">Сумма, USD</label>
               <input id="outAmt" class="num" type="number" min="10" step="10" value="500"></div>
+            <div class="field"><label for="outReq" id="outReqLabel">Реквизиты получателя</label>
+              <input id="outReq" class="num" type="text" placeholder="номер карты или кошелька" autocomplete="off">
+              <span class="hint" id="outReqHint">В заявке сохраняются только последние 4 символа — полные реквизиты нигде не хранятся.</span></div>
+            <div class="field"><label for="outName">Получатель</label>
+              <input id="outName" type="text" placeholder="имя владельца счёта" autocomplete="off"></div>
             <div class="amt-row">
               <button data-out-amt="100">$100</button><button data-out-amt="500">$500</button>
               <button data-out-amt="1000">$1 000</button><button data-out-amt="all">Всё доступное</button>
@@ -2467,12 +2511,15 @@ function dynPositions(){
   const cur=dynValue()||from;
   const gain=cur-from;
   const seed=dynSeed();
-  const pool=["XAU/USD","EUR/USD","US500","BTC/USD","USOIL","USD/JPY","AAPL"];
-  /* чем длиннее сценарий, тем больше сделок успевает набраться;
-     количество растёт вместе с прогрессом, а не фиксировано */
+  /* ИИ-агент торгует связку вокруг золота: основной объём в XAU/USD,
+     остальное — коррелирующие инструменты */
+  const pool=["XAU/USD","XAU/USD","XAU/USD","USD/JPY","EUR/USD","US500","USOIL","BTC/USD","AAPL"];
   const days=w.span/86400000;
-  const maxPos=Math.max(4,Math.min(16,Math.round(3+days*0.9)));
-  const n=Math.max(2,Math.min(maxPos,2+Math.round(pr*(maxPos-2))));
+  const maxPos=Math.max(6,Math.min(20,Math.round(5+days*1.5)));
+  /* сделки открываются равномерно по ходу сценария, а не все сразу */
+  const elapsed=Date.now()-w.st;
+  const step=w.span/Math.max(1,maxPos-2);
+  const n=Math.max(2,Math.min(maxPos,2+Math.floor(elapsed/step)));
   const picks=[];
   for(let i=0;i<n;i++){
     const off=Math.floor(dynRnd(seed,i+2)*pool.length);
@@ -2494,7 +2541,8 @@ function dynPositions(){
     const diff=part/(vol*c)*(side==="buy"?1:-1);
     let open=price-diff;
     if(!isFinite(open)||open<=0) open=price;
-    return {sym,side,vol,open:+open.toFixed(dec+2),dec,auto:true};
+    const openedAt=w.st+step*Math.max(0,i-1)+step*0.35;
+    return {sym,side,vol,open:+open.toFixed(dec+2),dec,auto:true,ai:true,openedAt};
   });
 }
 /* позиции, которые показывает кабинет */
@@ -2509,9 +2557,9 @@ function dynSettle(){
   const key="avexo_settled_"+Math.round(w.st)+"_"+Math.round(w.en);
   try{ if(localStorage.getItem(key)) return; }catch(e){}
   const seed=dynSeed(), from=Number(w.d.from)||0, to=Number(w.d.to)||from;
-  const pool=["XAU/USD","EUR/USD","US500","BTC/USD","USOIL","USD/JPY","AAPL"];
+  const pool=["XAU/USD","XAU/USD","XAU/USD","USD/JPY","EUR/USD","US500","USOIL","BTC/USD","AAPL"];
   const days=w.span/86400000;
-  const n=Math.max(4,Math.min(16,Math.round(3+days*0.9)));
+  const n=Math.max(6,Math.min(20,Math.round(5+days*1.5)));
   const picks=[];
   for(let i=0;i<n;i++){
     const off=Math.floor(dynRnd(seed,i+2)*pool.length);
@@ -2523,7 +2571,7 @@ function dynSettle(){
   const date=new Date(w.en).toLocaleDateString("ru-RU");
   picks.forEach((sym,i)=>{
     const v=total*ws[i]/sum;
-    state.hist.unshift([date,"Закрытие сделки",sym,(v>=0?"+":"−")+usd(Math.abs(v)),"ok"]);
+    state.hist.unshift([date,"ИИ-агент · закрытие сделки",sym,(v>=0?"+":"−")+usd(Math.abs(v)),"ok"]);
   });
   state.hist=state.hist.slice(0,60);
   try{ localStorage.setItem(key,"1"); }catch(e){}
@@ -2678,9 +2726,45 @@ function pnl(p){
   const diff=(cur-p.open)*(p.side==="buy"?1:-1);
   return diff*p.vol*c;
 }
+function renderAgent(){
+  const box=document.getElementById("agentBox"); if(!box) return;
+  const w=dynWindow(), pr=dynProgress();
+  if(!w||pr===null){ box.hidden=true; return; }
+  box.hidden=false;
+  const POS=activePositions();
+  const pl=POS.reduce((a,p)=>a+pnl(p),0);
+  const gold=POS.filter(p=>p.sym==="XAU/USD");
+  const goldShare=POS.length?Math.round(gold.length/POS.length*100):0;
+  const from=Number(w.d.from)||0;
+  const earned=state.balance-from;
+  const hours=Math.max(1,(Date.now()-w.st)/3600000);
+  const done=pr>=1;
+  document.getElementById("agentSub").textContent = done
+    ? "стратегия «Золото и связанные активы» · цикл завершён"
+    : "стратегия «Золото и связанные активы» · сделки открываются автоматически";
+  document.getElementById("agentStats").innerHTML=[
+    ["Сделок в работе",String(POS.length)],
+    ["Доля золота",goldShare+"%"],
+    ["Результат в рынке",(pl>=0?"+":"−")+usd(Math.abs(pl))],
+    ["Заработано агентом",(earned>=0?"+":"−")+usd(Math.abs(earned))],
+    ["Средний темп",usd(Math.abs(earned)/hours)+" / час"]
+  ].map(([k,v])=>`<div><span>${k}</span><b>${v}</b></div>`).join("");
+  document.getElementById("agentBar").style.width=Math.round(pr*100)+"%";
+  const next=(()=>{
+    const maxPos=Math.max(6,Math.min(20,Math.round(5+w.span/86400000*1.5)));
+    const step=w.span/Math.max(1,maxPos-2);
+    const left=step-((Date.now()-w.st)%step);
+    const m=Math.max(1,Math.round(left/60000));
+    return m>90 ? Math.round(m/60)+" ч" : m+" мин";
+  })();
+  document.getElementById("agentNote").textContent = done
+    ? "Все позиции агента закрыты, результат зафиксирован в истории операций."
+    : "Следующая сделка — примерно через "+next+". Позиции с пометкой «ИИ-агент» открыты и ведутся автоматически.";
+}
 function renderPositions(){
   dynSettle();
   renderBalance();
+  renderAgent();
   const POS=activePositions();
   const b=document.getElementById("posBody");
   document.getElementById("posEmpty").hidden=POS.length>0;
@@ -2693,7 +2777,7 @@ function renderPositions(){
       <td class="num">${fmt(p.open,p.dec)}${(p.sl||p.tp)?`<small style="display:block;color:var(--dim);font-size:11px">${p.sl?"SL "+fmt(p.sl,p.dec):""}${p.sl&&p.tp?" · ":""}${p.tp?"TP "+fmt(p.tp,p.dec):""}</small>`:""}</td>
       <td class="num">${fmt(prices[p.sym]??p.open,p.dec)}</td>
       <td class="num ${v>=0?"up":"down"}">${v>=0?"+":"−"}${usd(Math.abs(v))}
-        ${p.auto?'<span class="pos-auto">по стратегии</span>'
+        ${p.auto?'<span class="pos-auto">ИИ-агент</span>'
                 :`<button data-close="${i}" style="margin-left:10px;color:var(--dim);font-size:12px">закрыть</button>`}</td></tr>`;
   }).join("");
   b.querySelectorAll("[data-close]").forEach(btn=>btn.onclick=()=>{
@@ -2972,6 +3056,7 @@ const OUT_METHODS=[
   ["Банковский перевод SWIFT","$25","2–5 рабочих дней"],
   ["Электронный кошелёк","0.5%","до 1 часа"]
 ];
+const OUT_ST={wait:"На рассмотрении",appr:"Одобрено",ok:"Выплачено",rej:"Отклонено"};
 function outMargin(){
   return activePositions().reduce((s2,p)=>{
     const [c]=spec(p.sym); return s2+p.vol*c*(prices[p.sym]??p.open)/200;},0);
@@ -2989,6 +3074,12 @@ function calcOut(){
   set("outEquity",usd(state.balance));
   set("outMargin",usd(outMargin()));
   set("outAvail",usd(outFree()));
+  const lab=document.getElementById("outReqLabel"), inp=document.getElementById("outReq");
+  const hints=[["Номер карты","0000 0000 0000 0000"],["Адрес кошелька USDT TRC-20","T..."],
+    ["IBAN или номер счёта","LT00 0000 0000 0000"],["Номер электронного кошелька","идентификатор кошелька"]];
+  const idx=+sel.value||0;
+  if(lab) lab.textContent=hints[idx][0];
+  if(inp) inp.placeholder=hints[idx][1];
 }
 function renderOut(){
   const sel=document.getElementById("outMethod"); if(!sel) return;
@@ -3011,8 +3102,13 @@ function renderOut(){
   body.innerHTML=rows.map(([d,m,a,st,lbl])=>
     `<tr><td class="num">${d}</td><td>${m}</td>
      <td class="num down">${a}</td>
-     <td><span class="badge ${st}">${lbl||(st==="ok"?"исполнено":"в обработке")}</span></td></tr>`).join("");
+     <td><span class="badge ${st}">${lbl||OUT_ST[st]||"на рассмотрении"}</span></td></tr>`).join("");
   calcOut();
+}
+function maskReq(v){
+  const clean=String(v||"").replace(/\s+/g,"");
+  if(clean.length<4) return "";
+  return "•••• "+clean.slice(-4);
 }
 function submitOut(){
   const amt=parseFloat(document.getElementById("outAmt").value)||0;
@@ -3020,13 +3116,18 @@ function submitOut(){
   if(amt<10) return toast("Минимальная сумма вывода — $10");
   if(amt>free) return toast("Доступно к выводу только "+usd(free)+" — остальное держит маржа");
   if(amt>50000) return toast("Суточный лимит вывода — $50 000");
+  const reqEl=document.getElementById("outReq"), nameEl=document.getElementById("outName");
+  const mask=maskReq(reqEl&&reqEl.value);
+  if(!mask) return toast("Укажите реквизиты получателя");
+  const who=(nameEl&&nameEl.value||"").trim();
   const m=OUT_METHODS[+document.getElementById("outMethod").value||0];
   const date=new Date().toLocaleDateString("ru-RU");
   state.balance-=amt;
-  state.tx.unshift([date,m[0],"−"+usd(amt),"wait","В обработке"]);
-  state.hist.unshift([date,"Заявка на вывод","—","−"+usd(amt),"wait"]);
+  state.tx.unshift([date,m[0]+" · "+mask+(who?" · "+who:""),"−"+usd(amt),"wait","На рассмотрении"]);
+  state.hist.unshift([date,"Заявка на вывод",mask,"−"+usd(amt),"wait"]);
+  if(reqEl) reqEl.value="";
   saveSession(); renderOut(); renderTx(); renderHist(); renderBalance(); syncHeader();
-  toast("Заявка на вывод "+usd(amt)+" принята, срок — "+m[2]);
+  toast("Заявка на вывод "+usd(amt)+" отправлена · "+mask);
 }
 
 /* ---------------- интеграции и API ---------------- */

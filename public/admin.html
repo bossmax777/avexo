@@ -97,6 +97,7 @@ table.u tr:last-child td{border-bottom:0}
 .u-name small{color:var(--dim);font-size:12px}
 .u-bal{font-family:"IBM Plex Mono",monospace;font-weight:600;font-variant-numeric:tabular-nums}
 .u-ops{display:flex;gap:6px;justify-content:flex-end;flex-wrap:wrap}
+.u-ops input[type=date]{width:140px;font-size:12.5px}
 .u-ops input{width:110px;text-align:right;padding:7px 9px;font-family:"IBM Plex Mono",monospace}
 .u-acct{display:flex;gap:6px;justify-content:flex-end;align-items:center}
 .u-acct input{width:112px;text-align:right;padding:7px 9px;font-family:"IBM Plex Mono",monospace;font-variant-numeric:tabular-nums}
@@ -125,6 +126,9 @@ body{background:radial-gradient(900px 520px at 88% -8%,rgba(79,70,229,.10),trans
 .pg-head b{display:block;font-size:15px}
 .pg-head small{color:var(--dim);font-size:12px;font-family:"IBM Plex Mono",monospace}
 .pg-act{display:flex;gap:8px;flex-wrap:wrap}
+.badge.appr{background:rgba(79,70,229,.12);color:var(--accent)}
+.badge.rej{background:rgba(239,68,68,.1);color:var(--red)}
+.po-sel{background:#fff;border:1px solid var(--line);border-radius:9px;padding:7px 10px;font-size:12.5px;color:var(--text)}
 </style>
 <link rel="icon" type="image/png" href="img/favicon.png">
 </head>
@@ -223,6 +227,18 @@ body{background:radial-gradient(900px 520px at 88% -8%,rgba(79,70,229,.10),trans
         Акции, индексы и ETF — Twelve Data, нужен ключ<br>
         Фьючерсы и энергоносители — имитация, помечены как «демо»
       </div>
+    </div>
+  </div>
+
+  <div data-pane="payouts" hidden>
+    <div class="card">
+      <h2>Заявки на вывод</h2>
+      <p class="sub">Все списания по кошелькам. Статус меняется здесь и сразу виден пользователю
+        в разделе «Вывод средств». Отклонение возвращает сумму на баланс.</p>
+      <div style="display:flex;gap:8px;margin-bottom:14px;flex-wrap:wrap">
+        <button class="btn btn-ghost btn-sm" id="poReload">Обновить</button>
+      </div>
+      <div id="poBox"></div>
     </div>
   </div>
 
@@ -526,7 +542,7 @@ try{
 }catch(e){}
 
 /* ---------- вкладки ---------- */
-const TABS=[["users","Пользователи"],["pages","Страницы и HTML"],["blocks","Блоки"],["brand","Бренд"],["hero","Первый экран"],["heads","Заголовки"],["benefits","Преимущества"],
+const TABS=[["users","Пользователи"],["payouts","Заявки на вывод"],["pages","Страницы и HTML"],["blocks","Блоки"],["brand","Бренд"],["hero","Первый экран"],["heads","Заголовки"],["benefits","Преимущества"],
   ["stats","Цифры"],["accounts","Счета"],["platforms","Платформы"],["foot","CTA и футер"],["assist","Помощник"],["quotes","Котировки"],["code","Код и правки"]];
 const tabsEl=document.getElementById("tabs");
 tabsEl.innerHTML=TABS.map(([k,t],i)=>`<button class="tab${i?"":" on"}" data-tab="${k}">${t}</button>`).join("");
@@ -534,6 +550,7 @@ tabsEl.addEventListener("click",e=>{
   const b=e.target.closest("[data-tab]"); if(!b)return;
   tabsEl.querySelectorAll(".tab").forEach(x=>x.classList.remove("on")); b.classList.add("on");
   document.querySelectorAll("[data-pane]").forEach(p=>p.hidden=p.dataset.pane!==b.dataset.tab);
+  if(b.dataset.tab==="payouts"&&typeof renderPayouts==="function") renderPayouts();
 });
 
 /* ---------- простые поля ---------- */
@@ -738,6 +755,7 @@ function renderUsers(){
       <td class="u-bal">${fmtMoney(u.balance,u.cur)}</td>
       <td><div class="u-ops">
         <input type="number" step="0.01" min="0" placeholder="сумма" data-amt="${i}">
+        <input type="date" data-date="${i}" title="Дата зачисления (по умолчанию сегодня)">
         <button class="btn btn-ghost btn-sm" data-credit="${i}">Начислить</button>
         <button class="btn btn-ghost btn-sm" data-debit="${i}">Списать</button>
         <button class="btn btn-ghost btn-sm" data-dyn="${i}">Сценарий${u.dyn&&u.dyn.on?" ●":""}</button>
@@ -762,7 +780,10 @@ async function adjust(i,sign){
     const amt=parseFloat(inp&&inp.value);
     if(!(amt>0)) return toast("Введите сумму больше нуля");
     try{
-      await api("/api/admin/users/"+u.id,{method:"PATCH",body:JSON.stringify({delta:sign*amt})});
+      const dEl=document.querySelector(`[data-date="${i}"]`);
+      const when=(dEl&&dEl.value)||"";
+      await api("/api/admin/users/"+u.id,{method:"PATCH",
+        body:JSON.stringify(when?{delta:sign*amt,date:when}:{delta:sign*amt})});
       if(inp) inp.value="";
       await uFetch(); renderUsers();
       toast((sign>0?"Начислено ":"Списано ")+fmtMoney(amt,u.cur)+" — "+(u.name||u.email));
@@ -900,6 +921,67 @@ const cssBox=document.getElementById("cssBox");
 cssBox.value=CFG.css||"";
 cssBox.addEventListener("input",()=>{CFG.css=cssBox.value; markDirty();});
 renderBlocks(); renderOverrides();
+
+/* ---------- заявки на вывод ---------- */
+const PO_ST={wait:["На рассмотрении","wait"],appr:["Одобрено","appr"],ok:["Выплачено","ok"],rej:["Отклонено","rej"]};
+function renderPayouts(){
+  const box=document.getElementById("poBox"); if(!box) return;
+  const us=uLoad();
+  const rows=[];
+  us.forEach((u,ui)=>(u.tx||[]).forEach((t,ti)=>{
+    if(String(t[2]).startsWith("−")) rows.push({u,ui,ti,t});
+  }));
+  if(!rows.length){
+    box.innerHTML='<p style="color:var(--dim);font-size:13.5px">Заявок на вывод пока нет.</p>';
+    return;
+  }
+  box.innerHTML='<div class="u-scroll"><table class="u"><thead><tr>'+
+    '<th>Пользователь</th><th>Дата</th><th>Метод и реквизиты</th><th>Сумма</th><th>Статус</th><th>Действие</th>'+
+    '</tr></thead><tbody>'+rows.map((r,i)=>{
+      const st=r.t[3]||"wait";
+      const lbl=(PO_ST[st]||PO_ST.wait)[0];
+      return `<tr>
+        <td class="u-name"><b>${escapeHtml(r.u.name||"—")}</b><small>${escapeHtml(r.u.email)}</small></td>
+        <td class="num">${escapeHtml(r.t[0])}</td>
+        <td style="text-align:left">${escapeHtml(r.t[1])}</td>
+        <td class="num">${escapeHtml(r.t[2])}</td>
+        <td><span class="badge ${st}">${lbl}</span></td>
+        <td><div class="u-ops">
+          <select data-po="${i}" class="po-sel">
+            ${Object.keys(PO_ST).map(k=>`<option value="${k}"${k===st?" selected":""}>${PO_ST[k][0]}</option>`).join("")}
+          </select>
+        </div></td></tr>`;
+    }).join("")+'</tbody></table></div>';
+  box.querySelectorAll("[data-po]").forEach(sel=>sel.onchange=()=>setPayout(rows[+sel.dataset.po],sel.value));
+}
+async function setPayout(row,st){
+  const u=row.u, tx=JSON.parse(JSON.stringify(u.tx||[])), hist=JSON.parse(JSON.stringify(u.hist||[]));
+  const prev=tx[row.ti][3]||"wait";
+  if(prev===st) return;
+  const amt=Math.abs(parseFloat(String(tx[row.ti][2]).replace(/[^\d.,]/g,"").replace(",","."))||0);
+  tx[row.ti][3]=st; tx[row.ti][4]=(PO_ST[st]||PO_ST.wait)[0];
+  hist.unshift([new Date().toLocaleDateString("ru-RU"),"Заявка на вывод: "+(PO_ST[st]||PO_ST.wait)[0],
+    "—",tx[row.ti][2],st]);
+  const body={tx,hist};
+  /* отклонение возвращает деньги на баланс */
+  const refund = st==="rej" && prev!=="rej" ? amt : (prev==="rej" && st!=="rej" ? -amt : 0);
+  if(API.on){
+    try{
+      await api("/api/admin/users/"+u.id,{method:"PATCH",body:JSON.stringify(body)});
+      if(refund) await api("/api/admin/users/"+u.id,{method:"PATCH",
+        body:JSON.stringify({delta:refund,note:refund>0?"Возврат по отклонённой заявке":"Повторное списание по заявке"})});
+      await uFetch(); renderPayouts(); renderUsers();
+      toast("Статус заявки: "+(PO_ST[st]||PO_ST.wait)[0]+(refund>0?" · сумма возвращена на баланс":""));
+    }catch(e){ toast(e.message); }
+    return;
+  }
+  u.tx=tx; u.hist=hist;
+  if(refund) u.balance=Number(u.balance||0)+refund;
+  const us=uLoad(); us[row.ui]=u; uSave(us); renderPayouts(); renderUsers();
+  toast("Статус заявки: "+(PO_ST[st]||PO_ST.wait)[0]);
+}
+document.getElementById("poReload").onclick=async ()=>{ await uFetch(); renderPayouts(); toast("Список обновлён"); };
+renderPayouts();
 
 /* ---------- HTML-редактор страниц ---------- */
 const PAGES=[
