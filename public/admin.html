@@ -232,9 +232,9 @@ body{background:radial-gradient(900px 520px at 88% -8%,rgba(79,70,229,.10),trans
 
   <div data-pane="payouts" hidden>
     <div class="card">
-      <h2>Заявки на вывод</h2>
-      <p class="sub">Все списания по кошелькам. Статус меняется здесь и сразу виден пользователю
-        в разделе «Вывод средств». Отклонение возвращает сумму на баланс.</p>
+      <h2>Заявки на пополнение и вывод</h2>
+      <p class="sub">Все заявки по кошелькам. Статус меняется здесь и сразу виден пользователю.
+        «Выплачено» по пополнению зачисляет сумму на баланс, отклонение вывода — возвращает её обратно.</p>
       <div style="display:flex;gap:8px;margin-bottom:14px;flex-wrap:wrap">
         <button class="btn btn-ghost btn-sm" id="poReload">Обновить</button>
       </div>
@@ -542,7 +542,7 @@ try{
 }catch(e){}
 
 /* ---------- вкладки ---------- */
-const TABS=[["users","Пользователи"],["payouts","Заявки на вывод"],["pages","Страницы и HTML"],["blocks","Блоки"],["brand","Бренд"],["hero","Первый экран"],["heads","Заголовки"],["benefits","Преимущества"],
+const TABS=[["users","Пользователи"],["payouts","Заявки"],["pages","Страницы и HTML"],["blocks","Блоки"],["brand","Бренд"],["hero","Первый экран"],["heads","Заголовки"],["benefits","Преимущества"],
   ["stats","Цифры"],["accounts","Счета"],["platforms","Платформы"],["foot","CTA и футер"],["assist","Помощник"],["quotes","Котировки"],["code","Код и правки"]];
 const tabsEl=document.getElementById("tabs");
 tabsEl.innerHTML=TABS.map(([k,t],i)=>`<button class="tab${i?"":" on"}" data-tab="${k}">${t}</button>`).join("");
@@ -832,7 +832,16 @@ async function editCard(i){
   const srvRaw=(prompt("Имя сервера на карточке (пометка -DEMO добавится автоматически):",
     String(cur.srv||"Avexo").replace(/-DEMO$/i,""))||"").trim();
   if(!srvRaw) return toast("Имя сервера не может быть пустым");
-  const card={mode:mode[0].toUpperCase()+mode.slice(1).toLowerCase(),lev,srv:srvRaw};
+  const TYPES=["Standard","Raw+","Elite","Pro API"];
+  const type=(prompt("Тип счёта на карточке ("+TYPES.join(" / ")+"):",cur.type||"Standard")||"").trim();
+  const typeOk=TYPES.find(t=>t.toLowerCase()===type.toLowerCase());
+  if(!typeOk) return toast("Тип счёта: "+TYPES.join(", "));
+  const STS={"активен":"active","приостановлен":"hold","архив":"arch"};
+  const stIn=(prompt("Статус счёта (активен / приостановлен / архив):",
+    Object.keys(STS).find(k=>STS[k]===(cur.status||"active"))||"активен")||"").trim().toLowerCase();
+  if(!STS[stIn]) return toast("Статус: активен, приостановлен или архив");
+  const card={mode:mode[0].toUpperCase()+mode.slice(1).toLowerCase(),lev,srv:srvRaw,
+    type:typeOk,status:STS[stIn]};
   if(API.on){
     try{
       await api("/api/admin/users/"+u.id,{method:"PATCH",body:JSON.stringify({card})});
@@ -929,19 +938,22 @@ function renderPayouts(){
   const us=uLoad();
   const rows=[];
   us.forEach((u,ui)=>(u.tx||[]).forEach((t,ti)=>{
-    if(String(t[2]).startsWith("−")) rows.push({u,ui,ti,t});
+    const out=String(t[2]).startsWith("−");
+    const pending=["wait","appr","rej"].includes(t[3]);
+    if(out||pending) rows.push({u,ui,ti,t,out});
   }));
   if(!rows.length){
     box.innerHTML='<p style="color:var(--dim);font-size:13.5px">Заявок на вывод пока нет.</p>';
     return;
   }
   box.innerHTML='<div class="u-scroll"><table class="u"><thead><tr>'+
-    '<th>Пользователь</th><th>Дата</th><th>Метод и реквизиты</th><th>Сумма</th><th>Статус</th><th>Действие</th>'+
+    '<th>Пользователь</th><th>Тип</th><th>Дата</th><th>Метод и реквизиты</th><th>Сумма</th><th>Статус</th><th>Действие</th>'+
     '</tr></thead><tbody>'+rows.map((r,i)=>{
       const st=r.t[3]||"wait";
       const lbl=(PO_ST[st]||PO_ST.wait)[0];
       return `<tr>
         <td class="u-name"><b>${escapeHtml(r.u.name||"—")}</b><small>${escapeHtml(r.u.email)}</small></td>
+        <td>${r.out?"вывод":"пополнение"}</td>
         <td class="num">${escapeHtml(r.t[0])}</td>
         <td style="text-align:left">${escapeHtml(r.t[1])}</td>
         <td class="num">${escapeHtml(r.t[2])}</td>
@@ -964,14 +976,24 @@ async function setPayout(row,st){
     "—",tx[row.ti][2],st]);
   const body={tx,hist};
   /* отклонение возвращает деньги на баланс */
-  const refund = st==="rej" && prev!=="rej" ? amt : (prev==="rej" && st!=="rej" ? -amt : 0);
+  let refund=0;
+  if(row.out){
+    /* вывод: отклонили — вернули деньги, сняли отклонение — списали снова */
+    refund = st==="rej" && prev!=="rej" ? amt : (prev==="rej" && st!=="rej" ? -amt : 0);
+  }else{
+    /* пополнение: «Выплачено» зачисляет сумму, откат статуса — снимает */
+    refund = st==="ok" && prev!=="ok" ? amt : (prev==="ok" && st!=="ok" ? -amt : 0);
+  }
   if(API.on){
     try{
       await api("/api/admin/users/"+u.id,{method:"PATCH",body:JSON.stringify(body)});
       if(refund) await api("/api/admin/users/"+u.id,{method:"PATCH",
-        body:JSON.stringify({delta:refund,note:refund>0?"Возврат по отклонённой заявке":"Повторное списание по заявке"})});
+        body:JSON.stringify({delta:refund,
+          note:refund>0?(row.out?"Возврат по отклонённой заявке":"Зачисление по заявке на пополнение")
+                       :"Корректировка по заявке"})});
       await uFetch(); renderPayouts(); renderUsers();
-      toast("Статус заявки: "+(PO_ST[st]||PO_ST.wait)[0]+(refund>0?" · сумма возвращена на баланс":""));
+      toast("Статус заявки: "+(PO_ST[st]||PO_ST.wait)[0]+
+        (refund>0?(row.out?" · сумма возвращена на баланс":" · сумма зачислена на баланс"):""));
     }catch(e){ toast(e.message); }
     return;
   }
