@@ -1323,6 +1323,18 @@ function renderDyn(){
         <span class="hint">Поставьте будущую дату, чтобы счёт рос и дальше</span></div>
     </div>
     <div class="grid g2" style="margin-top:14px">
+      <div class="field"><label>Инструмент сделок ИИ-агента</label>
+        <select id="dy_pair">${["XAU/USD","XAG/USD","EUR/USD","GBP/USD","USD/JPY","BTC/USD","US500","USOIL"]
+          .map(x=>`<option value="${x}"${(d.pair||"XAU/USD")===x?" selected":""}>${x}</option>`).join("")}</select>
+        <span class="hint">Все сделки сценария создаются по этой паре</span></div>
+      <div class="field"><label>Источник сценария</label>
+        <div style="font-size:13.5px;color:var(--muted);line-height:1.6">${
+          d.bot&&d.bot.startedAt
+            ? "Запущен из кабинета бота · режим "+escapeHtml(String(d.bot.risk||""))+
+              " · старт "+new Date(d.bot.startedAt).toLocaleString("ru-RU")
+            : "Настроен вручную в админке"}</div></div>
+    </div>
+    <div class="grid g2" style="margin-top:14px">
       <div class="field"><label>Волатильность — глубина просадок</label>
         <input type="range" min="0" max="1" step="0.05" id="dy_noise" value="${d.noise}" style="padding:0">
         <span class="hint" id="dy_noise_v"></span></div>
@@ -1363,7 +1375,8 @@ function renderDyn(){
       to:Number(document.getElementById("dy_to").value)||0,
       startedAt:sIso, endsAt:eIso,
       hours:Math.max(0.1,(new Date(eIso)-new Date(sIso))/3600000),
-      noise:parseFloat(document.getElementById("dy_noise").value)||0
+      noise:parseFloat(document.getElementById("dy_noise").value)||0,
+      pair:(document.getElementById("dy_pair")||{}).value||"XAU/USD"
     };
   };
   const write=async extra=>{
@@ -1386,7 +1399,7 @@ function renderDyn(){
   document.getElementById("dy_clear").onclick=async ()=>{
     if(!confirm("Очистить сценарий этого кошелька? Параметры и даты будут стёрты, баланс останется как есть."))return;
     const arr=uLoad(), user=arr[dynIdx];
-    const empty={on:false,from:1000,to:5000,hours:24,noise:0.35,startedAt:"",endsAt:""};
+    const empty={on:false,from:1000,to:5000,hours:24,noise:0.35,startedAt:"",endsAt:"",pair:"XAU/USD"};
     if(API.on){
       try{
         await api("/api/admin/users/"+user.id,{method:"PATCH",body:JSON.stringify({dyn:empty})});

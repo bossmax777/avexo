@@ -1,0 +1,648 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Avexo Bot — торговый помощник</title>
+<link rel="icon" href="/img/favicon.png">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Sora:wght@500;600;700&family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet">
+<style>
+:root{
+  --bg:#F6F7FC; --surface:#FFFFFF; --surface-2:#F2F4FA; --line:#E2E5EF; --line-soft:#EDEFF7;
+  --text:#14161F; --muted:#636B7E; --dim:#9AA1B4; --accent:#4F46E5; --accent-dim:#4338CA;
+  --accent-soft:rgba(79,70,229,.08); --mint:#10B981; --violet:#A78BFA; --sky:#38BDF8;
+  --buy:#10B981; --sell:#EF4444; --warn:#E07C00;
+  --shadow:0 18px 50px -18px rgba(28,32,64,.22); --shadow-sm:0 6px 20px -8px rgba(28,32,64,.18);
+  --radius:18px; --radius-lg:26px; color-scheme:light;
+}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--text);
+  font-family:"IBM Plex Sans",-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;
+  font-size:15px;line-height:1.55;-webkit-font-smoothing:antialiased}
+h1,h2,h3,h4{font-family:"Sora",sans-serif;margin:0;line-height:1.18}
+a{color:inherit}
+.num{font-family:"IBM Plex Mono",ui-monospace,monospace;font-variant-numeric:tabular-nums}
+.muted{color:var(--muted)}
+.wrap{max-width:1320px;margin:0 auto;padding:0 20px}
+
+/* шапка */
+.top{position:sticky;top:0;z-index:20;background:rgba(255,255,255,.86);backdrop-filter:blur(14px);
+  border-bottom:1px solid var(--line)}
+.top-in{display:flex;align-items:center;gap:14px;height:66px}
+.logo{display:flex;align-items:center;gap:10px;font-family:"Sora",sans-serif;font-weight:700;
+  font-size:17px;letter-spacing:-.02em;text-decoration:none}
+.logo img{height:30px;width:auto}
+.logo span small{display:block;font-family:"IBM Plex Sans";font-weight:500;font-size:11px;color:var(--muted);letter-spacing:.02em}
+.pill{display:inline-flex;align-items:center;gap:6px;padding:5px 12px;border-radius:999px;
+  border:1px solid var(--line);background:var(--surface-2);font-size:12px;font-weight:600;color:var(--muted)}
+.pill.live{border-color:rgba(16,185,129,.35);background:rgba(16,185,129,.09);color:#0B7A5A}
+.pill.demo{border-color:rgba(224,124,0,.3);background:rgba(224,124,0,.09);color:#8A5000}
+.dot{width:7px;height:7px;border-radius:50%;background:currentColor;animation:pulse 1.8s infinite}
+@keyframes pulse{0%,100%{opacity:1}50%{opacity:.25}}
+.spacer{flex:1}
+.who{display:flex;flex-direction:column;align-items:flex-end;line-height:1.25}
+.who b{font-size:13px}
+.who small{font-size:11px;color:var(--muted)}
+
+/* кнопки */
+.btn{display:inline-flex;align-items:center;justify-content:center;gap:8px;border:1px solid transparent;
+  border-radius:12px;padding:11px 18px;font:600 14px/1 "IBM Plex Sans";cursor:pointer;
+  transition:transform .15s,box-shadow .2s,background .2s;text-decoration:none}
+.btn:active{transform:translateY(1px)}
+.btn[disabled]{opacity:.55;cursor:not-allowed}
+.btn-primary{background:linear-gradient(135deg,var(--accent),#6D5BF8);color:#fff;box-shadow:var(--shadow-sm)}
+.btn-primary:hover{background:linear-gradient(135deg,var(--accent-dim),#5B4AE6)}
+.btn-ghost{background:var(--surface);border-color:var(--line);color:var(--text)}
+.btn-ghost:hover{background:var(--surface-2)}
+.btn-danger{background:rgba(239,68,68,.1);color:#B42318;border-color:rgba(239,68,68,.25)}
+.btn-danger:hover{background:rgba(239,68,68,.16)}
+.btn-sm{padding:8px 13px;font-size:13px;border-radius:10px}
+.btn-full{width:100%}
+
+/* панели */
+.panel{background:var(--surface);border:1px solid var(--line);border-radius:var(--radius);
+  padding:20px;box-shadow:var(--shadow-sm)}
+.panel+.panel{margin-top:16px}
+.panel-head{display:flex;align-items:center;justify-content:space-between;gap:12px;margin-bottom:16px}
+.panel-head h3{font-size:16px}
+.panel-head .muted{font-size:12px}
+
+/* вход */
+.auth{min-height:calc(100vh - 66px);display:flex;align-items:center;justify-content:center;padding:40px 20px}
+.auth-card{width:100%;max-width:460px;background:var(--surface);border:1px solid var(--line);
+  border-radius:var(--radius-lg);padding:32px;box-shadow:var(--shadow)}
+.auth-card h1{font-size:24px;letter-spacing:-.02em}
+.auth-card p.sub{color:var(--muted);font-size:14px;margin:8px 0 22px}
+.field{margin-bottom:14px}
+.field label{display:block;font-size:12px;font-weight:600;color:var(--muted);margin-bottom:6px}
+.field input,.field select{width:100%;padding:12px 14px;border:1px solid var(--line);border-radius:12px;
+  background:var(--surface-2);font:500 14px/1.3 "IBM Plex Sans";color:var(--text);outline:none}
+.field input.num{font-family:"IBM Plex Mono",monospace}
+.field input:focus,.field select:focus{border-color:var(--accent);background:#fff;box-shadow:0 0 0 4px var(--accent-soft)}
+.err{background:rgba(239,68,68,.08);border:1px solid rgba(239,68,68,.22);color:#B42318;
+  border-radius:12px;padding:10px 13px;font-size:13px;margin-bottom:14px;display:none}
+.err.on{display:block}
+.steps{display:flex;gap:8px;margin-bottom:20px}
+.step{flex:1;height:4px;border-radius:999px;background:var(--line)}
+.step.on{background:linear-gradient(90deg,var(--accent),var(--violet))}
+.hint{font-size:12px;color:var(--muted);margin-top:12px;line-height:1.5}
+
+/* рабочий стол */
+.grid{display:grid;grid-template-columns:400px 1fr;gap:18px;padding:22px 0 40px;align-items:start}
+@media(max-width:1060px){.grid{grid-template-columns:1fr}}
+.seg{display:grid;grid-template-columns:repeat(3,1fr);gap:8px}
+.seg button{padding:10px 8px;border:1px solid var(--line);background:var(--surface-2);border-radius:12px;
+  font:600 13px "IBM Plex Sans";color:var(--muted);cursor:pointer;transition:.15s}
+.seg button.on{background:var(--accent-soft);border-color:rgba(79,70,229,.4);color:var(--accent-dim)}
+.chips{display:flex;flex-wrap:wrap;gap:8px}
+.chips button{padding:8px 12px;border:1px solid var(--line);background:var(--surface-2);border-radius:999px;
+  font:600 12.5px "IBM Plex Mono";color:var(--muted);cursor:pointer}
+.chips button.on{background:var(--accent-soft);border-color:rgba(79,70,229,.4);color:var(--accent-dim)}
+input[type=range]{width:100%;accent-color:var(--accent)}
+.risk-note{font-size:12px;color:var(--muted);margin-top:8px}
+
+.fc{background:linear-gradient(140deg,rgba(79,70,229,.07),rgba(56,189,248,.06));
+  border:1px solid rgba(79,70,229,.18);border-radius:16px;padding:16px;margin-top:4px}
+.fc-main{display:flex;align-items:baseline;gap:10px;flex-wrap:wrap}
+.fc-main b{font-family:"Sora";font-size:26px;letter-spacing:-.02em;color:#0B7A5A}
+.fc-row{display:flex;justify-content:space-between;font-size:13px;padding:5px 0;border-top:1px dashed var(--line);margin-top:8px}
+.fc-row:first-of-type{border-top:0;margin-top:10px}
+
+.kpis{display:grid;grid-template-columns:repeat(4,1fr);gap:12px}
+@media(max-width:760px){.kpis{grid-template-columns:repeat(2,1fr)}}
+.kpi{background:var(--surface-2);border:1px solid var(--line-soft);border-radius:14px;padding:13px 14px}
+.kpi small{display:block;font-size:11.5px;color:var(--muted);margin-bottom:5px}
+.kpi b{font-family:"IBM Plex Mono";font-size:18px;letter-spacing:-.01em}
+.up{color:var(--buy)} .down{color:var(--sell)}
+
+.bar{height:8px;border-radius:999px;background:var(--surface-2);overflow:hidden;border:1px solid var(--line-soft)}
+.bar i{display:block;height:100%;background:linear-gradient(90deg,var(--accent),var(--mint));transition:width .6s}
+
+table.data{width:100%;border-collapse:collapse;font-size:13.5px}
+table.data th{text-align:left;font-size:11.5px;text-transform:uppercase;letter-spacing:.05em;color:var(--dim);
+  padding:8px 10px;border-bottom:1px solid var(--line)}
+table.data td{padding:9px 10px;border-bottom:1px solid var(--line-soft)}
+table.data tr:last-child td{border-bottom:0}
+.tag{display:inline-block;padding:3px 9px;border-radius:999px;font-size:11.5px;font-weight:600}
+.tag.buy{background:rgba(16,185,129,.12);color:#0B7A5A}
+.tag.sell{background:rgba(239,68,68,.1);color:#B42318}
+.tbl-scroll{overflow-x:auto}
+
+.log{max-height:340px;overflow:auto;padding-right:4px}
+.log-it{display:flex;gap:11px;padding:9px 0;border-bottom:1px dashed var(--line-soft)}
+.log-it:last-child{border-bottom:0}
+.log-ic{width:26px;height:26px;flex:none;border-radius:9px;display:grid;place-items:center;font-size:12px;
+  background:var(--accent-soft);color:var(--accent-dim)}
+.log-ic.g{background:rgba(16,185,129,.12);color:#0B7A5A}
+.log-ic.r{background:rgba(239,68,68,.1);color:#B42318}
+.log-tx{flex:1;font-size:13px}
+.log-tx small{display:block;color:var(--dim);font-size:11px;font-family:"IBM Plex Mono"}
+
+.foot{border-top:1px solid var(--line);padding:22px 0 40px;color:var(--muted);font-size:12.5px}
+.toast{position:fixed;left:50%;bottom:26px;transform:translate(-50%,20px);background:#14161F;color:#fff;
+  padding:12px 18px;border-radius:12px;font-size:13.5px;opacity:0;pointer-events:none;transition:.25s;z-index:60}
+.toast.on{opacity:1;transform:translate(-50%,0)}
+.hidden{display:none!important}
+.aiwrap{display:flex;gap:12px;align-items:flex-start}
+.ai-av{width:42px;height:42px;flex:none;border-radius:13px;background:linear-gradient(135deg,var(--accent),var(--sky));
+  display:grid;place-items:center;color:#fff;font-family:"Sora";font-weight:700;font-size:15px}
+.ai-say{background:var(--surface-2);border:1px solid var(--line-soft);border-radius:14px;padding:12px 14px;font-size:13.5px}
+</style>
+</head>
+<body>
+
+<header class="top">
+  <div class="wrap top-in">
+    <a class="logo" href="/"><img src="/img/logo.png" alt="Avexo">
+      <span>Avexo Bot<small>торговый помощник · демо</small></span></a>
+    <span class="pill demo">Демо-режим</span>
+    <span class="pill live hidden" id="pillLive"><i class="dot"></i>сессия активна</span>
+    <div class="spacer"></div>
+    <div class="who hidden" id="who"><b id="whoName">—</b><small id="whoAcct">—</small></div>
+    <button class="btn btn-ghost btn-sm hidden" id="btnOut">Выйти</button>
+  </div>
+</header>
+
+<!-- ВХОД -->
+<section class="auth" id="auth">
+  <div class="auth-card">
+    <div class="steps"><i class="step on" id="st1"></i><i class="step" id="st2"></i></div>
+
+    <div id="stepLogin">
+      <h1>Вход в кабинет бота</h1>
+      <p class="sub">Используйте логин и пароль от кошелька Avexo. Бот подключается к кошельку
+        по ключу REST API, который выпускается в личном кабинете.</p>
+      <div class="err" id="e1"></div>
+      <div class="field"><label>Email</label><input id="inEmail" type="email" autocomplete="username" placeholder="you@mail.com"></div>
+      <div class="field"><label>Пароль</label><input id="inPass" type="password" autocomplete="current-password" placeholder="••••••••"></div>
+      <button class="btn btn-primary btn-full" id="btnLogin">Войти</button>
+      <p class="hint">Нет кошелька? <a href="/" style="color:var(--accent);font-weight:600">Зарегистрируйтесь на сайте Avexo</a>,
+        затем вернитесь сюда.</p>
+    </div>
+
+    <div id="stepKey" class="hidden">
+      <h1>Подключение по API</h1>
+      <p class="sub">Вставьте ключ REST API из личного кабинета: <b>Профиль → Подключение сторонних
+        торговых помощников → Сгенерировать</b>. Ключ даёт боту право читать счёт и вести сделки,
+        права на вывод средств у него нет.</p>
+      <div class="err" id="e2"></div>
+      <div class="field"><label>Ключ API</label><input id="inKey" class="num" placeholder="avx_4034457_…"></div>
+      <button class="btn btn-primary btn-full" id="btnKey">Подключить бота</button>
+      <p class="hint">Ключ хранится только в этом браузере и передаётся на сервер Avexo при запуске сессии.
+        <a href="/#profile" target="_blank" style="color:var(--accent);font-weight:600">Открыть кабинет</a></p>
+    </div>
+  </div>
+</section>
+
+<!-- РАБОЧИЙ СТОЛ -->
+<main class="wrap hidden" id="desk">
+  <div class="grid">
+
+    <!-- параметры -->
+    <div>
+      <div class="panel">
+        <div class="panel-head"><h3>Параметры сессии</h3><span class="muted">шаг 1</span></div>
+
+        <div class="field"><label>Торговая пара</label>
+          <select id="fPair"></select></div>
+
+        <div class="field"><label>Временной промежуток</label>
+          <div class="chips" id="fHours"></div>
+          <div style="margin-top:10px;display:flex;gap:8px;align-items:center">
+            <input id="fHoursCustom" class="num" type="number" min="1" max="2160" placeholder="часы" style="max-width:120px">
+            <span class="muted" style="font-size:12px">или задайте своё число часов</span>
+          </div>
+        </div>
+
+        <div class="field"><label>Профиль риска</label>
+          <div class="seg" id="fRisk"></div>
+          <div class="risk-note" id="riskNote"></div>
+        </div>
+
+        <div class="field"><label>Доля депозита в работе — <b class="num" id="shareVal">60%</b></label>
+          <input id="fShare" type="range" min="10" max="100" step="5" value="60">
+        </div>
+
+        <div class="fc" id="fcBox">
+          <span class="muted" style="font-size:12px">Расчётный доход за период</span>
+          <div class="fc-main"><b id="fcGain">—</b><span class="muted num" id="fcPct"></span></div>
+          <div class="fc-row"><span class="muted">Вероятный диапазон</span><b class="num" id="fcRange">—</b></div>
+          <div class="fc-row"><span class="muted">Целевой баланс</span><b class="num" id="fcTarget">—</b></div>
+          <div class="fc-row"><span class="muted">В работе</span><b class="num" id="fcWork">—</b></div>
+          <div class="fc-row"><span class="muted">Ожидаемая просадка</span><b class="num" id="fcDd">—</b></div>
+          <div class="fc-row"><span class="muted">Плановая частота сделок</span><b class="num" id="fcFreq">—</b></div>
+        </div>
+
+        <div style="margin-top:16px;display:flex;gap:10px">
+          <button class="btn btn-primary btn-full" id="btnStart">Запустить бота</button>
+          <button class="btn btn-danger hidden" id="btnStop">Остановить</button>
+        </div>
+        <p class="hint">Запуск включает автоматическую торговую сессию: бот открывает и закрывает сделки
+          по выбранной паре и ведёт кошелёк к расчётному результату. Прогресс виден и в личном кабинете Avexo.</p>
+      </div>
+
+      <div class="panel">
+        <div class="aiwrap">
+          <div class="ai-av">AI</div>
+          <div>
+            <b style="font-size:14px">Avexo AI Assistant</b>
+            <div class="ai-say" id="aiSay" style="margin-top:8px">Готов к работе. Выберите пару и горизонт —
+              я рассчитаю ожидаемый результат и возьму сделки на себя.</div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- мониторинг -->
+    <div>
+      <div class="panel">
+        <div class="panel-head">
+          <h3 id="sessTitle">Сессия не запущена</h3>
+          <span class="muted" id="sessMeta">параметры задаются слева</span>
+        </div>
+        <div class="kpis">
+          <div class="kpi"><small>Баланс кошелька</small><b class="num" id="kBal">—</b></div>
+          <div class="kpi"><small>Прибыль сессии</small><b class="num up" id="kPl">—</b></div>
+          <div class="kpi"><small>Осталось времени</small><b class="num" id="kLeft">—</b></div>
+          <div class="kpi"><small>Выполнено плана</small><b class="num" id="kProg">—</b></div>
+        </div>
+        <div style="margin-top:14px" class="bar"><i id="barFill" style="width:0"></i></div>
+        <svg id="chart" viewBox="0 0 800 220" preserveAspectRatio="none"
+             style="width:100%;height:220px;margin-top:16px"></svg>
+      </div>
+
+      <div class="panel">
+        <div class="panel-head"><h3>Открытые позиции бота</h3><span class="muted" id="posMeta">—</span></div>
+        <div class="tbl-scroll">
+          <table class="data" style="min-width:620px">
+            <thead><tr><th>Инструмент</th><th>Направление</th><th>Объём</th><th>Цена входа</th><th>Текущая</th><th>P/L</th></tr></thead>
+            <tbody id="posBody"><tr><td colspan="6" class="muted">Бот ещё не открывал сделок.</td></tr></tbody>
+          </table>
+        </div>
+      </div>
+
+      <div class="panel">
+        <div class="panel-head"><h3>Журнал ИИ-агента</h3><span class="muted">решения и действия в реальном времени</span></div>
+        <div class="log" id="logBox"><p class="muted" style="font-size:13px">Журнал появится после запуска сессии.</p></div>
+      </div>
+    </div>
+  </div>
+</main>
+
+<footer class="foot">
+  <div class="wrap">
+    Avexo Bot — учебный демонстрационный проект. Торговля симулируется на демо-кошельке:
+    ордера не отправляются на биржу, доходность рассчитывается моделью и не является инвестиционной
+    рекомендацией или прогнозом реального рынка.
+  </div>
+</footer>
+
+<div class="toast" id="toast"></div>
+
+<script>
+/* ============ утилиты ============ */
+const $=id=>document.getElementById(id);
+const S={user:null,dyn:{},key:"",pairs:{},risks:{},pair:"XAU/USD",hours:24,risk:"balance",share:0.6,fc:null};
+const KEY_LS="avexo_bot_key";
+function usd(v){return "$"+Math.abs(Number(v)||0).toLocaleString("ru-RU",{minimumFractionDigits:2,maximumFractionDigits:2});}
+function sig(v){return (v>=0?"+":"−")+usd(v);}
+function toast(t){const b=$("toast");b.textContent=t;b.classList.add("on");clearTimeout(b._t);b._t=setTimeout(()=>b.classList.remove("on"),2600);}
+async function api(url,opt){
+  const r=await fetch(url,Object.assign({headers:{"Content-Type":"application/json"}},opt||{}));
+  let j={}; try{j=await r.json();}catch(e){}
+  if(!r.ok) throw new Error(j.error||("Ошибка "+r.status));
+  return j;
+}
+function err(id,msg){const b=$(id);if(!msg){b.classList.remove("on");return;}b.textContent=msg;b.classList.add("on");}
+
+/* ============ модель сценария (та же, что в кабинете) ============ */
+function win(){
+  const d=S.dyn||{};
+  if(!d.on||!d.startedAt) return null;
+  const st=new Date(d.startedAt).getTime(), en=new Date(d.endsAt).getTime();
+  if(!isFinite(st)||!isFinite(en)||en<=st) return null;
+  return {d,st,en,span:en-st};
+}
+function seedOf(){const w=win();return w?(w.st/60000)%9973:1;}
+function rnd(seed,i){const x=Math.sin(seed*13.17+i*97.31)*43758.5453;return x-Math.floor(x);}
+function phase(i,seed){const a=Math.sin(i*374.761+seed*911.13)*43758.5453;return (a-Math.floor(a))*Math.PI*2;}
+const FREQ=[1,2,3,5,8,13,21,34,55,89];
+function wave(p,seed){
+  let v=0,amp=0;
+  for(let i=0;i<FREQ.length;i++){const a=1/Math.pow(FREQ[i],.82);amp+=a;v+=a*Math.sin(p*Math.PI*2*FREQ[i]+phase(i,seed));}
+  return v/(amp||1);
+}
+function progress(t){const w=win();if(!w)return null;return Math.max(0,Math.min(1,((t||Date.now())-w.st)/w.span));}
+function value(t){
+  const w=win(); if(!w) return S.user?S.user.balance:0;
+  const pr=Math.max(0,Math.min(1,((t||Date.now())-w.st)/w.span));
+  const from=Number(w.d.from)||0,to=Number(w.d.to)||0;
+  const base=from+(to-from)*pr;
+  const amp=Math.max(Math.abs(to-from),from*0.25)*(Number(w.d.noise)||0)*0.55;
+  return Math.max(0,base+amp*wave(pr,seedOf())*(1-pr*0.45));
+}
+const SPEC={"XAU/USD":[100,2],"XAG/USD":[5000,3],"EUR/USD":[100000,5],"GBP/USD":[100000,5],
+  "USD/JPY":[100000,3],"BTC/USD":[1,0],"US500":[10,1],"USOIL":[100,2]};
+const PRICE={"XAU/USD":2361.40,"XAG/USD":30.84,"EUR/USD":1.08412,"GBP/USD":1.27310,
+  "USD/JPY":157.281,"BTC/USD":67420,"US500":5284.6,"USOIL":78.64};
+function livePrice(sym){
+  const base=PRICE[sym]||1;
+  const t=Date.now()/1000;
+  const k=1+Math.sin(t/37+base)*0.0016+Math.sin(t/7.3+base*2)*0.0006;
+  return base*k;
+}
+function intensity(){
+  const w=win(); if(!w) return 1;
+  const from=Math.max(1,Number(w.d.from)||1),to=Number(w.d.to)||from;
+  return Math.max(1,Math.min(3.2,1+Math.log10(1+Math.max(0,(to-from)/from))*1.5));
+}
+/* открытые позиции бота — накапливаются по ходу сессии */
+function positions(){
+  const w=win(); if(!w) return [];
+  const sym=w.d.pair||"XAU/USD";
+  const seed=seedOf();
+  const from=Number(w.d.from)||0, cur=value(), gain=cur-from;
+  const days=w.span/86400000;
+  const maxPos=Math.max(6,Math.min(26,Math.round((6+days*2.1)*intensity())));
+  const step=w.span/Math.max(1,maxPos-3);
+  const n=Math.max(3,Math.min(maxPos,3+Math.floor((Date.now()-w.st)/step)));
+  const ws=[];for(let i=0;i<n;i++)ws.push(0.55+rnd(seed,i+20));
+  const sum=ws.reduce((a,b)=>a+b,0)||1;
+  const t=Date.now()/3600000;
+  const share=0.30+0.16*Math.sin(t*0.9+seed)+0.06*Math.sin(t*2.7+seed*1.7);
+  const openTotal=gain*Math.max(0.10,Math.min(0.55,share));
+  const [c,dec]=SPEC[sym]||[100,2];
+  const price=livePrice(sym);
+  const out=[];
+  for(let i=0;i<n;i++){
+    const side=rnd(seed,i+40)>0.3?"buy":"sell";
+    const vol=Math.max(0.01,Math.round((0.05+rnd(seed,i+60)*0.6)*100)/100);
+    const part=openTotal*ws[i]/sum;
+    const diff=part/(vol*c)*(side==="buy"?1:-1);
+    let open=price-diff; if(!isFinite(open)||open<=0) open=price;
+    out.push({sym,side,vol,dec,open,price,pl:(price-open)*(side==="buy"?1:-1)*vol*c,
+      at:w.st+step*Math.max(0,i-1)+step*0.35});
+  }
+  return out.sort((a,b)=>b.at-a.at);
+}
+/* журнал действий агента */
+const PHRASES=[
+  ["Скан волатильности","Модель оценила диапазон ATR и ликвидность сессии","",""],
+  ["Сигнал подтверждён","Совпали тренд H1 и импульс M15 — готовим вход","",""],
+  ["Открыта сделка","",  "g",""],
+  ["Сделка закрыта в плюс","Цель по тейк-профиту достигнута","g",""],
+  ["Частичная фиксация","Половина объёма снята по ходу движения","g",""],
+  ["Стоп сработал","Убыток ограничен по риск-модели","r",""],
+  ["Пересчёт риска","Снизили объём после всплеска волатильности","",""],
+  ["Ребалансировка","Перевели часть экспозиции в новый ордер","",""]
+];
+function logItems(limit){
+  const w=win(); if(!w) return [];
+  const sym=w.d.pair||"XAU/USD";
+  const seed=seedOf();
+  const days=w.span/86400000;
+  const total=Math.max(10,Math.min(320,Math.round((10+days*11)*intensity())));
+  const step=w.span/total;
+  const done=Math.max(0,Math.min(total,Math.floor((Date.now()-w.st)/step)));
+  const realized=(value()-(Number(w.d.from)||0))*0.6;
+  const out=[];
+  for(let i=done-1;i>=0&&out.length<(limit||40);i--){
+    const r=rnd(seed,i+700);
+    let k=Math.floor(r*PHRASES.length);
+    const [title,desc,tone]=PHRASES[k];
+    const vol=Math.max(0.01,Math.round((0.05+rnd(seed,i+701)*0.7)*100)/100);
+    const side=rnd(seed,i+702)>0.35?"BUY":"SELL";
+    const pl=realized/Math.max(1,done)*(0.6+rnd(seed,i+703));
+    let text=desc;
+    if(k===2) text=side+" "+sym+" · объём "+vol.toFixed(2)+" лота · вход "+livePrice(sym).toFixed((SPEC[sym]||[0,2])[1]);
+    if(k===3||k===4) text=sym+" · результат "+sig(Math.abs(pl))+" · "+(k===4?"частичное закрытие":"полное закрытие");
+    if(k===5) text=sym+" · результат "+sig(-Math.abs(pl)*0.45);
+    out.push({t:w.st+step*(i+1),title,text,tone});
+  }
+  return out;
+}
+
+/* ============ отрисовка ============ */
+function drawChart(){
+  const svg=$("chart"), w=win();
+  const W=800,H=220;
+  if(!w){ svg.innerHTML='<text x="400" y="110" text-anchor="middle" fill="#9AA1B4" font-size="14" font-family="IBM Plex Sans">График появится после запуска сессии</text>'; return; }
+  const now=Date.now();
+  const pts=[],N=120;
+  for(let i=0;i<=N;i++){ const t=w.st+(Math.min(now,w.en)-w.st)*i/N; pts.push([t,value(t)]); }
+  const proj=[];
+  for(let i=0;i<=40;i++){ const t=now+(w.en-now)*i/40; if(t<=w.en) proj.push([t,value(t)]); }
+  const all=pts.concat(proj);
+  const ys=all.map(p=>p[1]), lo=Math.min(...ys), hi=Math.max(...ys), pad=(hi-lo)*0.12||1;
+  const x=t=>((t-w.st)/w.span)*W, y=v=>H-8-((v-(lo-pad))/((hi+pad)-(lo-pad)))*(H-24);
+  const d=pts.map((p,i)=>(i?"L":"M")+x(p[0]).toFixed(1)+" "+y(p[1]).toFixed(1)).join(" ");
+  const dp=proj.map((p,i)=>(i?"L":"M")+x(p[0]).toFixed(1)+" "+y(p[1]).toFixed(1)).join(" ");
+  const area=d+" L"+x(pts[pts.length-1][0]).toFixed(1)+" "+H+" L0 "+H+" Z";
+  svg.innerHTML=
+    '<defs><linearGradient id="g1" x1="0" y1="0" x2="0" y2="1">'+
+    '<stop offset="0%" stop-color="#4F46E5" stop-opacity=".28"/>'+
+    '<stop offset="100%" stop-color="#4F46E5" stop-opacity="0"/></linearGradient></defs>'+
+    '<path d="'+area+'" fill="url(#g1)"/>'+
+    '<path d="'+d+'" fill="none" stroke="#4F46E5" stroke-width="2.4" stroke-linejoin="round"/>'+
+    (dp?'<path d="'+dp+'" fill="none" stroke="#10B981" stroke-width="2" stroke-dasharray="6 6" opacity=".85"/>':'')+
+    '<circle cx="'+x(pts[pts.length-1][0]).toFixed(1)+'" cy="'+y(pts[pts.length-1][1]).toFixed(1)+'" r="4.5" fill="#4F46E5"/>';
+}
+function fmtLeft(ms){
+  if(ms<=0) return "завершено";
+  const h=Math.floor(ms/3600000),m=Math.floor(ms%3600000/60000);
+  const d=Math.floor(h/24);
+  return d>0 ? d+" д "+(h%24)+" ч" : h+" ч "+m+" мин";
+}
+function renderSession(){
+  const w=win();
+  $("pillLive").classList.toggle("hidden",!w);
+  $("btnStop").classList.toggle("hidden",!w);
+  $("btnStart").textContent=w?"Перезапустить с новыми параметрами":"Запустить бота";
+  if(!w){
+    $("sessTitle").textContent="Сессия не запущена";
+    $("sessMeta").textContent="параметры задаются слева";
+    ["kBal","kPl","kLeft","kProg"].forEach(id=>$(id).textContent="—");
+    $("barFill").style.width="0";
+    $("posBody").innerHTML='<tr><td colspan="6" class="muted">Бот ещё не открывал сделок.</td></tr>';
+    $("posMeta").textContent="—";
+    $("logBox").innerHTML='<p class="muted" style="font-size:13px">Журнал появится после запуска сессии.</p>';
+    drawChart(); return;
+  }
+  const d=w.d, cur=value(), from=Number(d.from)||0, pl=cur-from, pr=progress();
+  const rn=(S.risks[d.risk]||{}).name||"";
+  $("sessTitle").textContent="Сессия активна · "+(d.pair||"XAU/USD");
+  $("sessMeta").textContent=rn+" · горизонт "+d.hours+" ч · в работе "+Math.round((d.share||0.6)*100)+"% депозита";
+  $("kBal").textContent=usd(cur);
+  const kp=$("kPl"); kp.textContent=sig(pl); kp.className="num "+(pl>=0?"up":"down");
+  $("kLeft").textContent=fmtLeft(w.en-Date.now());
+  $("kProg").textContent=Math.round(pr*100)+"%";
+  $("barFill").style.width=(pr*100).toFixed(1)+"%";
+  const ps=positions();
+  $("posMeta").textContent=ps.length+" сделок в работе · инструмент "+(d.pair||"XAU/USD");
+  $("posBody").innerHTML=ps.length?ps.map(p=>
+    '<tr><td><b>'+p.sym+'</b></td><td><span class="tag '+p.side+'">'+(p.side==="buy"?"BUY":"SELL")+'</span></td>'+
+    '<td class="num">'+p.vol.toFixed(2)+'</td><td class="num">'+p.open.toFixed(p.dec)+'</td>'+
+    '<td class="num">'+p.price.toFixed(p.dec)+'</td>'+
+    '<td class="num '+(p.pl>=0?"up":"down")+'">'+sig(p.pl)+'</td></tr>').join("")
+    :'<tr><td colspan="6" class="muted">Бот готовит первый вход…</td></tr>';
+  const items=logItems(40);
+  $("logBox").innerHTML=items.length?items.map(it=>
+    '<div class="log-it"><div class="log-ic '+(it.tone||"")+'">'+(it.tone==="g"?"✓":it.tone==="r"?"!":"·")+'</div>'+
+    '<div class="log-tx"><b>'+it.title+'</b><div class="muted" style="font-size:12.5px">'+it.text+'</div>'+
+    '<small>'+new Date(it.t).toLocaleString("ru-RU")+'</small></div></div>').join("")
+    :'<p class="muted" style="font-size:13px">Агент анализирует рынок…</p>';
+  drawChart();
+}
+
+/* ============ форма параметров ============ */
+const HOUR_PRESETS=[[6,"6 часов"],[24,"1 день"],[72,"3 дня"],[168,"7 дней"],[336,"14 дней"],[720,"30 дней"]];
+function buildForm(){
+  $("fPair").innerHTML=Object.keys(S.pairs).map(k=>
+    '<option value="'+k+'">'+k+" — "+S.pairs[k].name+'</option>').join("");
+  $("fPair").value=S.pair;
+  $("fHours").innerHTML=HOUR_PRESETS.map(([h,l])=>
+    '<button data-h="'+h+'" class="'+(h===S.hours?"on":"")+'">'+l+'</button>').join("");
+  $("fRisk").innerHTML=Object.keys(S.risks).map(k=>
+    '<button data-r="'+k+'" class="'+(k===S.risk?"on":"")+'">'+S.risks[k].name+'</button>').join("");
+  $("fHours").onclick=e=>{const b=e.target.closest("[data-h]");if(!b)return;
+    S.hours=Number(b.dataset.h);$("fHoursCustom").value="";syncForm();};
+  $("fRisk").onclick=e=>{const b=e.target.closest("[data-r]");if(!b)return;S.risk=b.dataset.r;syncForm();};
+  $("fPair").onchange=()=>{S.pair=$("fPair").value;syncForm();};
+  $("fShare").oninput=()=>{S.share=Number($("fShare").value)/100;$("shareVal").textContent=$("fShare").value+"%";forecast();};
+  $("fHoursCustom").oninput=()=>{const v=Number($("fHoursCustom").value);
+    if(v>=1&&v<=2160){S.hours=Math.round(v);syncForm(true);}};
+  syncForm();
+}
+function syncForm(keepCustom){
+  [...$("fHours").children].forEach(b=>b.classList.toggle("on",Number(b.dataset.h)===S.hours));
+  [...$("fRisk").children].forEach(b=>b.classList.toggle("on",b.dataset.r===S.risk));
+  if(!keepCustom) $("fHoursCustom").value="";
+  const r=S.risks[S.risk]||{};
+  $("riskNote").textContent=({
+    calm:"Мало сделок, минимальный объём, приоритет сохранности депозита.",
+    balance:"Базовый режим: умеренная частота сделок и контролируемая просадка.",
+    turbo:"Максимальная частота входов и объём — выше и доход, и возможная просадка."
+  })[S.risk]||"";
+  forecast();
+}
+let fcTimer=null;
+function forecast(){
+  clearTimeout(fcTimer);
+  fcTimer=setTimeout(async ()=>{
+    try{
+      const j=await api("/api/bot/forecast",{method:"POST",body:JSON.stringify(
+        {pair:S.pair,hours:S.hours,risk:S.risk,share:S.share})});
+      const f=j.forecast; S.fc=f;
+      $("fcGain").textContent=sig(f.gain);
+      $("fcPct").textContent="( "+(f.pct>=0?"+":"")+f.pct+"% к депозиту )";
+      $("fcRange").textContent=usd(f.low)+" … "+usd(f.high);
+      $("fcTarget").textContent=usd(f.target);
+      $("fcWork").textContent=usd(f.work);
+      $("fcDd").textContent="до "+f.dd+"%";
+      const perDay={calm:9,balance:18,turbo:34}[S.risk]||18;
+      const totalTrades=Math.max(4,Math.round(perDay*f.days));
+      $("fcFreq").textContent="≈ "+perDay+" сделок в сутки · "+totalTrades+" за период";
+      $("aiSay").textContent="По паре "+S.pair+" за "+S.hours+" ч в режиме «"+f.riskName+
+        "» модель ожидает "+sig(f.gain)+" ( "+f.pct+"% ). Вероятный коридор — "+usd(f.low)+" … "+usd(f.high)+
+        ". Просадка удерживается в пределах "+f.dd+"%.";
+    }catch(e){ toast(e.message); }
+  },220);
+}
+
+/* ============ вход ============ */
+$("btnLogin").onclick=async ()=>{
+  err("e1","");
+  const email=$("inEmail").value.trim(), pass=$("inPass").value;
+  if(!email||!pass) return err("e1","Введите email и пароль");
+  $("btnLogin").disabled=true;
+  try{
+    await api("/api/login",{method:"POST",body:JSON.stringify({email,pass})});
+    $("stepLogin").classList.add("hidden"); $("stepKey").classList.remove("hidden"); $("st2").classList.add("on");
+    const saved=localStorage.getItem(KEY_LS); if(saved) $("inKey").value=saved;
+  }catch(e){ err("e1",e.message); }
+  $("btnLogin").disabled=false;
+};
+$("btnKey").onclick=async ()=>{
+  err("e2","");
+  const key=$("inKey").value.trim();
+  if(!key) return err("e2","Вставьте ключ API из личного кабинета");
+  $("btnKey").disabled=true;
+  try{
+    await api("/api/bot/connect",{method:"POST",body:JSON.stringify({key})});
+    S.key=key; try{localStorage.setItem(KEY_LS,key);}catch(e){}
+    await boot();
+  }catch(e){ err("e2",e.message); }
+  $("btnKey").disabled=false;
+};
+$("btnOut").onclick=async ()=>{
+  await api("/api/logout",{method:"POST"}).catch(()=>{});
+  try{localStorage.removeItem(KEY_LS);}catch(e){}
+  location.reload();
+};
+
+/* ============ запуск и остановка ============ */
+$("btnStart").onclick=async ()=>{
+  if(!S.fc) return toast("Подождите расчёт прогноза");
+  if(!confirm("Запустить торговую сессию?\n\nПара: "+S.pair+"\nГоризонт: "+S.hours+" ч\nРежим: "+
+    (S.risks[S.risk]||{}).name+"\nРасчётный результат: "+sig(S.fc.gain))) return;
+  $("btnStart").disabled=true;
+  try{
+    const j=await api("/api/bot/start",{method:"POST",body:JSON.stringify(
+      {key:S.key,pair:S.pair,hours:S.hours,risk:S.risk,share:S.share})});
+    S.dyn=j.dyn;
+    toast("Бот начал работу · сессия на "+S.hours+" ч");
+    $("aiSay").textContent="Сессия запущена. Работаю по "+S.pair+
+      ", веду позиции к цели "+usd(j.forecast.target)+". Все сделки видны в журнале и в личном кабинете.";
+    renderSession();
+  }catch(e){ toast(e.message); }
+  $("btnStart").disabled=false;
+};
+$("btnStop").onclick=async ()=>{
+  if(!confirm("Остановить бота и зафиксировать текущий результат на кошельке?")) return;
+  try{
+    const j=await api("/api/bot/stop",{method:"POST"});
+    S.dyn=j.dyn; if(S.user) S.user.balance=j.balance;
+    toast("Сессия остановлена · зафиксировано "+usd(j.balance));
+    $("aiSay").textContent="Сессия закрыта. Итоговый баланс кошелька — "+usd(j.balance)+
+      ". Можно задать новые параметры и запустить меня снова.";
+    renderSession();
+  }catch(e){ toast(e.message); }
+};
+
+/* ============ загрузка ============ */
+async function boot(){
+  const st=await api("/api/bot/state");
+  S.user=st.user; S.dyn=st.dyn||{}; S.pairs=st.pairs; S.risks=st.risks;
+  if(S.dyn.pair&&S.pairs[S.dyn.pair]) S.pair=S.dyn.pair;
+  if(S.dyn.risk&&S.risks[S.dyn.risk]) S.risk=S.dyn.risk;
+  if(S.dyn.hours) S.hours=Number(S.dyn.hours)||24;
+  if(S.dyn.share) S.share=Number(S.dyn.share)||0.6;
+  $("auth").classList.add("hidden"); $("desk").classList.remove("hidden");
+  $("who").classList.remove("hidden"); $("btnOut").classList.remove("hidden");
+  $("whoName").textContent=S.user.name||"Клиент";
+  $("whoAcct").textContent="кошелёк #"+S.user.acct+" · "+usd(S.user.balance)+" "+S.user.cur;
+  $("fShare").value=Math.round(S.share*100); $("shareVal").textContent=Math.round(S.share*100)+"%";
+  buildForm(); renderSession();
+  clearInterval(boot._t); boot._t=setInterval(()=>{ renderSession(); },3000);
+  clearInterval(boot._s); boot._s=setInterval(async ()=>{
+    try{ const s=await api("/api/bot/state"); S.dyn=s.dyn||{}; S.user.balance=s.user.balance; }catch(e){}
+  },20000);
+}
+(async function init(){
+  try{
+    const me=await api("/api/me");
+    const key=localStorage.getItem(KEY_LS)||"";
+    if(me.user&&key){
+      try{ await api("/api/bot/connect",{method:"POST",body:JSON.stringify({key})}); S.key=key; await boot(); return; }catch(e){}
+    }
+    if(me.user){
+      $("stepLogin").classList.add("hidden"); $("stepKey").classList.remove("hidden"); $("st2").classList.add("on");
+      if(key) $("inKey").value=key;
+    }
+  }catch(e){}
+})();
+</script>
+</body>
+</html>

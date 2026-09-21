@@ -1375,6 +1375,14 @@ footer a:hover{color:var(--accent)}
           </div>
           <p class="ai-note" style="margin-top:12px">Ключ показывается один раз. Права ключа можно сузить
             до «только чтение», а выпуск нового ключа автоматически отзывает предыдущий.</p>
+          <div class="int-key" style="margin-top:12px">
+            <div>
+              <b>Avexo Bot — торговый помощник (демо)</b>
+              <small>Отдельный кабинет бота: вход по логину и паролю, подключение по ключу API,
+                расчёт прогноза и автоматическая торговая сессия.</small>
+            </div>
+            <a class="btn btn-primary btn-sm" href="/bot.html" target="_blank" rel="noopener">Открыть бота</a>
+          </div>
         </div>
 
         <div class="panel" style="margin-top:16px">
@@ -2531,6 +2539,12 @@ async function loginUser(email,pass){
 /* Позиции, которые «ведут» счёт к цели сценария.
    Генерируются детерминированно из даты старта, живут пока сценарий идёт. */
 /* во сколько раз агент торгует плотнее обычного: зависит от заданной доходности */
+/* инструмент, которым «торгует» ИИ-агент в текущем сценарии */
+function dynSym(){
+  const d=dynCfg()||{};
+  const s=String(d.pair||"XAU/USD");
+  return INSTR.some(x=>x[0]===s) ? s : "XAU/USD";
+}
 function dynIntensity(){
   const w=dynWindow(); if(!w) return 1;
   const from=Math.max(1,Number(w.d.from)||1), to=Number(w.d.to)||from;
@@ -2546,16 +2560,16 @@ function dynPositions(){
   const cur=dynValue()||from;
   const gain=cur-from;
   const seed=dynSeed();
-  /* ИИ-агент работает только по золоту: все сделки сценария — XAU/USD */
+  /* инструмент сценария: по умолчанию золото, либо пара, выбранная в торговом боте */
   const days=w.span/86400000;
   const maxPos=Math.max(8,Math.min(30,Math.round((7+days*2.2)*dynIntensity())));
   /* сделки открываются по ходу сценария: чем дальше, тем больше в работе */
   const elapsed=Date.now()-w.st;
   const step=w.span/Math.max(1,maxPos-4);
   const n=Math.max(4,Math.min(maxPos,4+Math.floor(elapsed/step)));
-  /* все позиции сценария — золото */
+  /* все позиции сценария — по одному инструменту */
   const picks=[];
-  for(let i=0;i<n;i++) picks.push("XAU/USD");
+  for(let i=0;i<n;i++) picks.push(dynSym());
   const ws=picks.map((_,i)=>0.55+dynRnd(seed,i+20));
   const sum=ws.reduce((a,b)=>a+b,0)||1;
   /* доля прибыли, которая сейчас «в рынке» — плавает во времени */
@@ -2598,7 +2612,7 @@ function dynClosedTrades(limit){
   const sum=ws.reduce((a,b)=>a+b,0)||1;
   const out=[];
   for(let i=done-1;i>=0&&out.length<(limit||done);i--){
-    const sym="XAU/USD";
+    const sym=dynSym();
     const base=(INSTR.find(x=>x[0]===sym)||[,1])[1];
     const price=prices[sym]??base;
     const dec=decs[sym]??2;
@@ -2626,7 +2640,7 @@ function dynSettle(){
   const key="avexo_settled_"+Math.round(w.st)+"_"+Math.round(w.en);
   try{ if(localStorage.getItem(key)) return; }catch(e){}
   const seed=dynSeed(), from=Number(w.d.from)||0, to=Number(w.d.to)||from;
-  const pool=["XAU/USD"];
+  const pool=[dynSym()];
   const days=w.span/86400000;
   const n=Math.max(6,Math.min(20,Math.round(5+days*1.5)));
   const picks=[];
@@ -2648,7 +2662,8 @@ function dynSettle(){
 }
 
 const INSTR=[["EUR/USD",1.08412,5],["XAU/USD",2361.40,2],["US500",5284.6,1],
-  ["BTC/USD",67420,0],["AAPL",214.32,2],["USOIL",78.64,2],["USD/JPY",157.281,3]];
+  ["BTC/USD",67420,0],["AAPL",214.32,2],["USOIL",78.64,2],["USD/JPY",157.281,3],
+  ["XAG/USD",30.84,3],["GBP/USD",1.27310,5]];
 let state={
   balance:12480.30,
   positions:[
@@ -2670,7 +2685,8 @@ let state={
 const prices={}; INSTR.forEach(([s,p])=>prices[s]=p);
 const decs={}; INSTR.forEach(([s,,d])=>decs[s]=d);
 const SPECS={"EUR/USD":[100000,0.0001,0.1],"USD/JPY":[100000,0.01,0.2],"XAU/USD":[100,0.01,0.15],
-  "US500":[10,0.1,0.4],"BTC/USD":[1,1,12],"AAPL":[100,0.01,0.03],"USOIL":[100,0.01,0.03]};
+  "US500":[10,0.1,0.4],"BTC/USD":[1,1,12],"AAPL":[100,0.01,0.03],"USOIL":[100,0.01,0.03],
+  "XAG/USD":[5000,0.001,0.02],"GBP/USD":[100000,0.0001,0.15]};
 const spec=s=>SPECS[s]||[100,0.01,0.1];
 
 const GUEST=JSON.parse(JSON.stringify({balance:state.balance,positions:state.positions,tx:state.tx,hist:state.hist}));
@@ -3271,10 +3287,22 @@ function renderIntegrations(){
   const gen=document.getElementById("apiKeyGen");
   if(gen&&!gen.dataset.ready){
     gen.dataset.ready="1";
-    gen.onclick=()=>{
+    gen.onclick=async ()=>{
       const u=currentUser();
-      const rnd=[...crypto.getRandomValues(new Uint8Array(12))].map(x=>x.toString(16).padStart(2,"0")).join("");
-      document.getElementById("apiKeyBox").textContent="avx_"+(u?u.acct:"guest")+"_"+rnd;
+      const box=document.getElementById("apiKeyBox");
+      gen.disabled=true; gen.textContent="Выпускаем…";
+      let key="";
+      try{
+        const r=await fetch("/api/me/apikey",{method:"POST",headers:{"Content-Type":"application/json"}});
+        const j=await r.json();
+        if(r.ok&&j.key) key=j.key;
+      }catch(e){}
+      if(!key){
+        const rnd=[...crypto.getRandomValues(new Uint8Array(12))].map(x=>x.toString(16).padStart(2,"0")).join("");
+        key="avx_"+(u?u.acct:"guest")+"_"+rnd;
+      }
+      box.textContent=key;
+      gen.disabled=false; gen.textContent="Сгенерировать";
       toast("Новый ключ выпущен · предыдущий отозван");
     };
   }
