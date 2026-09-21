@@ -812,8 +812,8 @@ function renderUsers(){
     'и сразу видна пользователю в кабинете. Кнопка «Сценарий» задаёт движение баланса во времени '+
     'отдельно для каждого кошелька. Номер счёта можно изменить прямо в таблице — '+
     'он сразу подставится в карточку кошелька в кабинете. Кнопка «Карточка» задаёт сервер, тип, статус, режим и плечо.</p>';
-  if(typeof dynIdx!=="undefined" && dynIdx!=null) renderDyn();
-  if(typeof cardIdx!=="undefined" && cardIdx!=null) renderCard();
+  if(typeof dynIdx!=="undefined" && dynIdx!=null && !document.getElementById("dy_from")) renderDyn();
+  if(typeof cardIdx!=="undefined" && cardIdx!=null && !document.getElementById("cd_srv")) renderCard();
 }
 function escapeHtml(s){return String(s??"").replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;").replace(/"/g,"&quot;");}
 async function adjust(i,sign){
@@ -1333,6 +1333,7 @@ function renderDyn(){
       <button class="btn btn-primary btn-sm" id="dy_on">Включить сценарий</button>
       <button class="btn btn-ghost btn-sm" id="dy_off">Выключить</button>
       <button class="btn btn-ghost btn-sm" id="dy_save">Сохранить параметры</button>
+      <button class="btn btn-danger btn-sm" id="dy_clear">Очистить сценарий</button>
       <span style="margin-left:auto;display:flex;gap:6px">
         <button class="btn btn-ghost btn-sm" data-preset="3">Последние 3 месяца</button>
         <button class="btn btn-ghost btn-sm" data-preset="6">Полгода</button>
@@ -1372,15 +1373,32 @@ function renderDyn(){
     catch(err){ return toast("Проверьте даты — они заполнены не полностью"); }
     if(API.on){
       try{ await api("/api/admin/users/"+user.id,{method:"PATCH",body:JSON.stringify({dyn})});
-        await uFetch(); renderUsers(); }
+        await uFetch(); renderUsers(); refreshDynState();
+        if(typeof renderDash==="function") renderDash(); }
       catch(e){ toast(e.message); }
       return;
     }
-    user.dyn=dyn; arr[dynIdx]=user; uSave(arr); renderUsers();
+    user.dyn=dyn; arr[dynIdx]=user; uSave(arr); renderUsers(); refreshDynState();
   };
   document.getElementById("dy_save").onclick=async ()=>{await write(); toast("Параметры сохранены");};
   document.getElementById("dy_on").onclick=async ()=>{await write({on:true}); toast("Сценарий включён — кабинет подхватит его сразу");};
   document.getElementById("dy_off").onclick=async ()=>{await write({on:false}); toast("Сценарий выключен, баланс замер на текущем значении");};
+  document.getElementById("dy_clear").onclick=async ()=>{
+    if(!confirm("Очистить сценарий этого кошелька? Параметры и даты будут стёрты, баланс останется как есть."))return;
+    const arr=uLoad(), user=arr[dynIdx];
+    const empty={on:false,from:1000,to:5000,hours:24,noise:0.35,startedAt:"",endsAt:""};
+    if(API.on){
+      try{
+        await api("/api/admin/users/"+user.id,{method:"PATCH",body:JSON.stringify({dyn:empty})});
+        await uFetch();
+      }catch(e){ return toast(e.message); }
+    }else{
+      user.dyn=empty; arr[dynIdx]=user; uSave(arr);
+    }
+    renderUsers(); renderDyn();
+    if(typeof renderDash==="function") renderDash();
+    toast("Сценарий очищен");
+  };
   box.querySelectorAll("[data-preset]").forEach(btn=>btn.onclick=()=>{
     const months=+btn.dataset.preset, now=new Date();
     const from=new Date(now.getTime()); from.setMonth(from.getMonth()-months);
@@ -1394,7 +1412,17 @@ document.addEventListener("click",e=>{
   if(b){dynIdx = dynIdx===+b.dataset.dyn ? null : +b.dataset.dyn; renderDyn();
     const box=document.getElementById("dynBox"); if(box&&dynIdx!=null) box.scrollIntoView({behavior:"smooth",block:"nearest"});}
 });
-setInterval(()=>{if(dynIdx!=null) renderDyn();},30000);
+function refreshDynState(){
+  const stEl=document.getElementById("dy_state"); if(!stEl||dynIdx==null) return;
+  const us=uLoad(), u=us[dynIdx]; if(!u) return;
+  const d=dynOf(u), st=dynNow(d);
+  if(st){
+    stEl.innerHTML="С "+new Date(st.st).toLocaleString("ru-RU",{day:"2-digit",month:"long",year:"numeric"})+
+      "<br>Период "+humanSpan(st.en-st.st)+" · пройдено "+Math.round(st.pr*100)+"%"+
+      "<br>Сейчас ≈ "+fmtMoney(st.val,u.cur)+(st.pr>=1?"<br><b style='color:var(--text)'>Период завершён</b>":"");
+  }
+}
+setInterval(refreshDynState,30000);
 
 /* ---------- помощник ---------- */
 CFG.ai=Object.assign({on:true,key:"",model:"gpt-4o-mini"},CFG.ai||{});

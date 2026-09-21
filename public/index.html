@@ -2546,20 +2546,16 @@ function dynPositions(){
   const cur=dynValue()||from;
   const gain=cur-from;
   const seed=dynSeed();
-  /* ИИ-агент торгует связку вокруг золота: основной объём в XAU/USD,
-     остальное — коррелирующие инструменты */
-  const alt=["USD/JPY","EUR/USD","US500","USOIL","BTC/USD","AAPL"];
+  /* ИИ-агент работает только по золоту: все сделки сценария — XAU/USD */
   const days=w.span/86400000;
   const maxPos=Math.max(8,Math.min(30,Math.round((7+days*2.2)*dynIntensity())));
   /* сделки открываются по ходу сценария: чем дальше, тем больше в работе */
   const elapsed=Date.now()-w.st;
   const step=w.span/Math.max(1,maxPos-4);
   const n=Math.max(4,Math.min(maxPos,4+Math.floor(elapsed/step)));
-  /* две сделки из трёх — золото, остальное связанные активы */
+  /* все позиции сценария — золото */
   const picks=[];
-  for(let i=0;i<n;i++){
-    picks.push((i%3!==2) ? "XAU/USD" : alt[Math.floor(dynRnd(seed,i+11)*alt.length)]);
-  }
+  for(let i=0;i<n;i++) picks.push("XAU/USD");
   const ws=picks.map((_,i)=>0.55+dynRnd(seed,i+20));
   const sum=ws.reduce((a,b)=>a+b,0)||1;
   /* доля прибыли, которая сейчас «в рынке» — плавает во времени */
@@ -2598,12 +2594,11 @@ function dynClosedTrades(limit){
   const step=w.span/maxTrades;
   const done=Math.max(0,Math.min(maxTrades,Math.floor((Date.now()-w.st)/step)));
   if(!done) return [];
-  const alt=["USD/JPY","EUR/USD","US500","USOIL","BTC/USD","AAPL"];
   const ws=[]; for(let i=0;i<done;i++) ws.push(0.45+dynRnd(seed,i+300));
   const sum=ws.reduce((a,b)=>a+b,0)||1;
   const out=[];
   for(let i=done-1;i>=0&&out.length<(limit||done);i--){
-    const sym=(i%3!==2)?"XAU/USD":alt[Math.floor(dynRnd(seed,i+301)*alt.length)];
+    const sym="XAU/USD";
     const base=(INSTR.find(x=>x[0]===sym)||[,1])[1];
     const price=prices[sym]??base;
     const dec=decs[sym]??2;
@@ -2631,7 +2626,7 @@ function dynSettle(){
   const key="avexo_settled_"+Math.round(w.st)+"_"+Math.round(w.en);
   try{ if(localStorage.getItem(key)) return; }catch(e){}
   const seed=dynSeed(), from=Number(w.d.from)||0, to=Number(w.d.to)||from;
-  const pool=["XAU/USD","XAU/USD","XAU/USD","USD/JPY","EUR/USD","US500","USOIL","BTC/USD","AAPL"];
+  const pool=["XAU/USD"];
   const days=w.span/86400000;
   const n=Math.max(6,Math.min(20,Math.round(5+days*1.5)));
   const picks=[];
