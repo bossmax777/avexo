@@ -1289,23 +1289,44 @@ function dynEnd(d){
 /* та же кривая, что рисует кабинет и бот — чтобы суммы везде совпадали */
 function _dphase(i,seed){const a=Math.sin(i*374.761+seed*911.13)*43758.5453;return (a-Math.floor(a))*Math.PI*2;}
 const _DFREQ=[1,2,3,5,8,13,21,34,55,89];
-function _dwave(p,seed){
-  let v=0;
-  for(let i=0;i<_DFREQ.length;i++){const f=_DFREQ[i];v+=Math.sin(2*Math.PI*f*p+_dphase(i,seed))/Math.pow(f,0.78);}
+function _dwave(p,seed,k){
+  let v=0; const m=k||1;
+  for(let i=0;i<_DFREQ.length;i++){const f=_DFREQ[i]*m;v+=Math.sin(2*Math.PI*f*p+_dphase(i,seed))/Math.pow(f,0.78);}
   return v;
 }
-function dynPath(p,seed){
-  const w0=_dwave(0,seed), w1=_dwave(1,seed);
-  return (_dwave(p,seed)-((1-p)*w0+p*w1))/1.9;
+function dynPath(p,seed,k){
+  const w0=_dwave(0,seed,k), w1=_dwave(1,seed,k);
+  return (_dwave(p,seed,k)-((1-p)*w0+p*w1))/1.9;
 }
+/* ---- база графика: дрейф, диапазоны роста/падения, характер колебаний ---- */
+function chartCfg(d){
+  const c=(d&&d.chart)||{};
+  const num=v=>(v===""||v===null||v===undefined||!isFinite(Number(v)))?null:Number(v);
+  return {up:num(c.up), down:num(c.down), drift:num(c.drift)||0, speed:num(c.speed)||1};
+}
+function dynCurve(d,pr,st,span){
+  const from=Number(d.from)||0, to=Number(d.to)||0;
+  const seed=(st/60000)%9973;
+  const c=chartCfg(d);
+  let base=from+(to-from)*pr;
+  if(c.drift) base+=from*(c.drift/100)*(span*pr/86400000);
+  const w=dynPath(pr,seed,c.speed);
+  let amp;
+  if(c.up!==null||c.down!==null){
+    amp=(w>=0?(c.up!==null?c.up:2):(c.down!==null?c.down:2))/100*from;
+  }else{
+    amp=Math.max(Math.abs(to-from),from*0.03)*(Number(d.noise)||0)*0.55;
+  }
+  return Math.max(0,base+w*amp);
+}
+
 function dynNow(d){
   if(!d.on||!d.startedAt) return null;
   const st=new Date(d.startedAt).getTime(), en=new Date(dynEnd(d)).getTime();
   if(!isFinite(st)||!isFinite(en)||en<=st) return null;
   const pr=Math.max(0,Math.min(1,(Date.now()-st)/(en-st)));
   const from=Number(d.from)||0, to=Number(d.to)||0;
-  const amp=Math.max(Math.abs(to-from),from*0.03)*(Number(d.noise)||0)*0.55;
-  const val=Math.max(0,from+(to-from)*pr+amp*dynPath(pr,(st/60000)%9973));
+  const val=dynCurve(d,pr,st,en-st);
   return {pr,val,base:from+(to-from)*pr,st,en};
 }
 function humanSpan(ms){
@@ -1352,6 +1373,33 @@ function renderDyn(){
               " · старт "+new Date(d.bot.startedAt).toLocaleString("ru-RU")
             : "Настроен вручную в админке"}</div></div>
     </div>
+    <div class="item" style="margin-top:14px;background:var(--surface-2);border:1px solid var(--line-soft)">
+      <div class="item-head"><b>График: база и волатильность</b>
+        <span class="sp" style="font-size:12.5px;color:var(--muted)">поверх этой кривой дорисовывается сценарий</span></div>
+      <div class="grid g2">
+        <div class="field"><label>Дрейф базовой линии, % в сутки</label>
+          <input type="number" step="0.05" id="dy_drift" value="${d.chart&&d.chart.drift!==undefined?d.chart.drift:0}">
+          <span class="hint">Плюс — медленный рост, минус — медленное падение помимо сценария</span></div>
+        <div class="field"><label>Характер колебаний</label>
+          <select id="dy_speed">${[[0.5,"Плавный — редкие волны"],[1,"Умеренный"],[2,"Резкий — частые скачки"],[3,"Очень резкий"]]
+            .map(([v,t])=>`<option value="${v}"${Number((d.chart&&d.chart.speed)||1)===v?" selected":""}>${t}</option>`).join("")}</select>
+          <span class="hint">Как часто цена дёргается внутри периода</span></div>
+        <div class="field"><label>Диапазон роста, % от баланса</label>
+          <input type="number" step="0.1" min="0" id="dy_up" value="${d.chart&&d.chart.up!==undefined?d.chart.up:""}" placeholder="напр. 2">
+          <span class="hint">Насколько высоко кривая уходит вверх от базы</span></div>
+        <div class="field"><label>Диапазон падения, % от баланса</label>
+          <input type="number" step="0.1" min="0" id="dy_down" value="${d.chart&&d.chart.down!==undefined?d.chart.down:""}" placeholder="напр. 1.5">
+          <span class="hint">Глубина просадок вниз от базы. Пусто в обоих полях — работает ползунок волатильности ниже</span></div>
+      </div>
+      <svg id="dy_prev" viewBox="0 0 720 150" preserveAspectRatio="none" style="width:100%;height:150px;margin-top:10px"></svg>
+      <div style="display:flex;gap:9px;flex-wrap:wrap;margin-top:10px">
+        <button class="btn btn-ghost btn-sm" data-chart="calm">Спокойный рост</button>
+        <button class="btn btn-ghost btn-sm" data-chart="wave">Рост с просадками</button>
+        <button class="btn btn-ghost btn-sm" data-chart="hot">Агрессивные качели</button>
+        <button class="btn btn-ghost btn-sm" data-chart="down">Снижение</button>
+        <button class="btn btn-ghost btn-sm" data-chart="off">Сбросить настройку</button>
+      </div>
+    </div>
     <div class="grid g2" style="margin-top:14px">
       <div class="field"><label>Волатильность — глубина просадок</label>
         <input type="range" min="0" max="1" step="0.05" id="dy_noise" value="${d.noise}" style="padding:0">
@@ -1394,7 +1442,8 @@ function renderDyn(){
       startedAt:sIso, endsAt:eIso,
       hours:Math.max(0.1,(new Date(eIso)-new Date(sIso))/3600000),
       noise:parseFloat(document.getElementById("dy_noise").value)||0,
-      pair:(document.getElementById("dy_pair")||{}).value||"XAU/USD"
+      pair:(document.getElementById("dy_pair")||{}).value||"XAU/USD",
+      chart:collectChart()
     };
   };
   const write=async extra=>{
@@ -1411,13 +1460,60 @@ function renderDyn(){
     }
     user.dyn=dyn; arr[dynIdx]=user; uSave(arr); renderUsers(); refreshDynState();
   };
+  function collectChart(){
+    const val=id=>{const e=document.getElementById(id); if(!e) return undefined;
+      const v=String(e.value).trim(); return v===""?undefined:Number(v);};
+    const c={drift:val("dy_drift")||0, speed:Number((document.getElementById("dy_speed")||{}).value)||1};
+    const up=val("dy_up"), dn=val("dy_down");
+    if(up!==undefined) c.up=up;
+    if(dn!==undefined) c.down=dn;
+    return c;
+  }
+  function drawPreview(){
+    const svg=document.getElementById("dy_prev"); if(!svg) return;
+    const arr=uLoad(), user=arr[dynIdx]; if(!user) return;
+    let dd;
+    try{ dd=Object.assign(dynOf(user),collect()); }catch(e){ dd=dynOf(user); }
+    const st=new Date(dd.startedAt||Date.now()).getTime();
+    const en=new Date(dd.endsAt||dynEnd(dd)).getTime();
+    const span=Math.max(60000,en-st);
+    const W=720,H=150,N=160,pts=[];
+    for(let i=0;i<=N;i++){ const pr=i/N; pts.push([pr,dynCurve(dd,pr,st,span)]); }
+    const ys=pts.map(p=>p[1]), lo=Math.min(...ys), hi=Math.max(...ys), pad=(hi-lo)*0.12||1;
+    const x=pr=>pr*W, y=v=>H-6-((v-(lo-pad))/((hi+pad)-(lo-pad)))*(H-16);
+    const dPath=pts.map((p,i)=>(i?"L":"M")+x(p[0]).toFixed(1)+" "+y(p[1]).toFixed(1)).join(" ");
+    const base="M0 "+y(Number(dd.from)||0).toFixed(1)+" L"+W+" "+y(Number(dd.to)||0).toFixed(1);
+    const rise=(Number(dd.to)||0)>=(Number(dd.from)||0);
+    const col=rise?"#10B981":"#EF4444";
+    svg.innerHTML='<path d="'+base+'" stroke="#C7CBDA" stroke-width="1.4" stroke-dasharray="5 5" fill="none"/>'+
+      '<path d="'+dPath+'" fill="none" stroke="'+col+'" stroke-width="2.2" stroke-linejoin="round"/>';
+  }
+  const CHART_PRESETS={
+    calm:{drift:0,speed:0.5,up:0.8,down:0.4},
+    wave:{drift:0,speed:1,up:2.2,down:1.6},
+    hot:{drift:0,speed:2,up:4.5,down:3.5},
+    down:{drift:-0.6,speed:1,up:1.2,down:2.6},
+    off:null
+  };
+  box.querySelectorAll("[data-chart]").forEach(b=>b.onclick=()=>{
+    const pr=CHART_PRESETS[b.dataset.chart];
+    const set=(id,v)=>{const e=document.getElementById(id); if(e) e.value=v;};
+    if(!pr){ set("dy_drift",0); set("dy_up",""); set("dy_down",""); set("dy_speed",1); }
+    else { set("dy_drift",pr.drift); set("dy_up",pr.up); set("dy_down",pr.down); set("dy_speed",pr.speed); }
+    drawPreview();
+  });
+  ["dy_drift","dy_up","dy_down","dy_speed","dy_from","dy_to","dy_noise","dy_start","dy_end"].forEach(id=>{
+    const e=document.getElementById(id); if(e) e.addEventListener("input",drawPreview);
+    if(e) e.addEventListener("change",drawPreview);
+  });
+  drawPreview();
   document.getElementById("dy_save").onclick=async ()=>{await write(); toast("Параметры сохранены");};
   document.getElementById("dy_on").onclick=async ()=>{await write({on:true}); toast("Сценарий включён — кабинет подхватит его сразу");};
   document.getElementById("dy_off").onclick=async ()=>{await write({on:false}); toast("Сценарий выключен, баланс замер на текущем значении");};
   document.getElementById("dy_clear").onclick=async ()=>{
     if(!confirm("Очистить сценарий этого кошелька? Параметры и даты будут стёрты, баланс останется как есть."))return;
     const arr=uLoad(), user=arr[dynIdx];
-    const empty={on:false,from:1000,to:5000,hours:24,noise:0.35,startedAt:"",endsAt:"",pair:"XAU/USD"};
+    const empty={on:false,from:1000,to:5000,hours:24,noise:0.35,startedAt:"",endsAt:"",pair:"XAU/USD",chart:{}};
     if(API.on){
       try{
         await api("/api/admin/users/"+user.id,{method:"PATCH",body:JSON.stringify({dyn:empty})});

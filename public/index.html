@@ -2003,10 +2003,7 @@ function dynSeed(){
 function dynValue(t){
   const w=dynWindow(); if(!w) return null;
   const pr=Math.max(0,Math.min(1,((t||Date.now())-w.st)/w.span));
-  const from=Number(w.d.from)||0, to=Number(w.d.to)||0;
-  const base=from+(to-from)*pr;
-  const amp=Math.max(Math.abs(to-from),from*0.03)*(Number(w.d.noise)||0)*0.55;
-  return Math.max(0,base+amp*dynPath(pr,dynSeed()));
+  return dynCurve(w.d,pr,w.st,w.span);
 }
 function dynSeries(n){
   const w=dynWindow(); if(!w) return [];

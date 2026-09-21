@@ -157,7 +157,6 @@ table.data tr:last-child td{border-bottom:0}
   <div class="wrap top-in">
     <a class="logo" href="/"><img src="/img/logo.png" alt="Avexo">
       <span>Avexo Bot<small>торговый помощник · демо</small></span></a>
-    <span class="pill demo">Демо-режим</span>
     <span class="pill live hidden" id="pillLive"><i class="dot"></i>сессия активна</span>
     <div class="spacer"></div>
     <div class="who hidden" id="who"><b id="whoName">—</b><small id="whoAcct">—</small></div>
@@ -333,23 +332,42 @@ function rnd(seed,i){const x=Math.sin(seed*13.17+i*97.31)*43758.5453;return x-Ma
 /* волна и кривая — один в один с кабинетом, чтобы цифры совпадали */
 function phase(i,seed){const a=Math.sin(i*374.761+seed*911.13)*43758.5453;return (a-Math.floor(a))*Math.PI*2;}
 const FREQ=[1,2,3,5,8,13,21,34,55,89];
-function _wave(p,seed){
-  let v=0;
-  for(let i=0;i<FREQ.length;i++){const f=FREQ[i];v+=Math.sin(2*Math.PI*f*p+phase(i,seed))/Math.pow(f,0.78);}
+function _wave(p,seed,k){
+  let v=0; const m=k||1;
+  for(let i=0;i<FREQ.length;i++){const f=FREQ[i]*m;v+=Math.sin(2*Math.PI*f*p+phase(i,seed))/Math.pow(f,0.78);}
   return v;
 }
-function wave(p,seed){
-  const w0=_wave(0,seed), w1=_wave(1,seed);
-  return (_wave(p,seed)-((1-p)*w0+p*w1))/1.9;
+function dynPath(p,seed,k){
+  const w0=_wave(0,seed,k), w1=_wave(1,seed,k);
+  return (_wave(p,seed,k)-((1-p)*w0+p*w1))/1.9;
 }
+/* ---- база графика: дрейф, диапазоны роста/падения, характер колебаний ---- */
+function chartCfg(d){
+  const c=(d&&d.chart)||{};
+  const num=v=>(v===""||v===null||v===undefined||!isFinite(Number(v)))?null:Number(v);
+  return {up:num(c.up), down:num(c.down), drift:num(c.drift)||0, speed:num(c.speed)||1};
+}
+function dynCurve(d,pr,st,span){
+  const from=Number(d.from)||0, to=Number(d.to)||0;
+  const seed=(st/60000)%9973;
+  const c=chartCfg(d);
+  let base=from+(to-from)*pr;
+  if(c.drift) base+=from*(c.drift/100)*(span*pr/86400000);
+  const w=dynPath(pr,seed,c.speed);
+  let amp;
+  if(c.up!==null||c.down!==null){
+    amp=(w>=0?(c.up!==null?c.up:2):(c.down!==null?c.down:2))/100*from;
+  }else{
+    amp=Math.max(Math.abs(to-from),from*0.03)*(Number(d.noise)||0)*0.55;
+  }
+  return Math.max(0,base+w*amp);
+}
+
 function progress(t){const w=win();if(!w)return null;return Math.max(0,Math.min(1,((t||Date.now())-w.st)/w.span));}
 function value(t){
   const w=win(); if(!w) return S.user?S.user.balance:0;
   const pr=Math.max(0,Math.min(1,((t||Date.now())-w.st)/w.span));
-  const from=Number(w.d.from)||0,to=Number(w.d.to)||0;
-  const base=from+(to-from)*pr;
-  const amp=Math.max(Math.abs(to-from),from*0.03)*(Number(w.d.noise)||0)*0.55;
-  return Math.max(0,base+amp*wave(pr,seedOf()));
+  return dynCurve(w.d,pr,w.st,w.span);
 }
 const SPEC={"XAU/USD":[100,2],"XAG/USD":[5000,3],"EUR/USD":[100000,5],"GBP/USD":[100000,5],
   "USD/JPY":[100000,3],"BTC/USD":[1,0],"US500":[10,1],"USOIL":[100,2]};
