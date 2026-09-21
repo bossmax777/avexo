@@ -41,6 +41,7 @@ CREATE TABLE IF NOT EXISTS users (
   tx          JSONB NOT NULL DEFAULT '[]'::jsonb,
   hist        JSONB NOT NULL DEFAULT '[]'::jsonb,
   card        JSONB NOT NULL DEFAULT '{}'::jsonb,
+  apikey      TEXT NOT NULL DEFAULT '',
   created_at  TIMESTAMPTZ NOT NULL DEFAULT now()
 );
 CREATE TABLE IF NOT EXISTS sessions (
@@ -57,6 +58,7 @@ CREATE TABLE IF NOT EXISTS site_config (
   CONSTRAINT site_config_single CHECK (id = 1)
 );
 ALTER TABLE users ADD COLUMN IF NOT EXISTS card JSONB NOT NULL DEFAULT '{}'::jsonb;
+ALTER TABLE users ADD COLUMN IF NOT EXISTS apikey TEXT NOT NULL DEFAULT '';
 INSERT INTO site_config (id, data) VALUES (1, '{}'::jsonb) ON CONFLICT (id) DO NOTHING;
 `;
 

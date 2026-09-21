@@ -48,6 +48,7 @@ const toUser = r => r && ({
   positions: r.positions || [],
   tx: r.tx || [],
   hist: r.hist || [],
+  apikey: r.apikey || '',
   created: r.created_at
 });
 const newAcct = () => String(4030000 + Math.floor(Math.random() * 9000) + Math.floor(Math.random() * 99));
@@ -180,6 +181,151 @@ app.put('/api/me/state', async (req, res) => {
        tx ? JSON.stringify(tx.slice(0, 200)) : null,
        hist ? JSON.stringify(hist.slice(0, 200)) : null]);
     res.json({ user: toUser(r.rows[0]) });
+  } catch (e) { bad(res, 500, e.message); }
+});
+
+/* ---------- ключ REST API ---------- */
+const newKey = acct => 'avx_' + acct + '_' + crypto.randomBytes(12).toString('hex');
+
+app.post('/api/me/apikey', async (req, res) => {
+  try {
+    const me = await sessionUser(req);
+    if (!me) return bad(res, 401, 'Нужен вход');
+    const key = newKey(me.acct);
+    await q('UPDATE users SET apikey = $2 WHERE id = $1', [me.id, key]);
+    res.json({ key });
+  } catch (e) { bad(res, 500, e.message); }
+});
+
+/* ---------- торговый бот (отдельная страница /bot) ---------- */
+/* Учебная симуляция: бот не отправляет ордера на биржу, он рассчитывает
+   прогноз по выбранным параметрам и включает сценарий роста демо-кошелька. */
+const BOT_PAIRS = {
+  'XAU/USD': { name: 'Золото', vol: 1.00 },
+  'XAG/USD': { name: 'Серебро', vol: 1.35 },
+  'EUR/USD': { name: 'Евро / Доллар', vol: 0.55 },
+  'GBP/USD': { name: 'Фунт / Доллар', vol: 0.70 },
+  'USD/JPY': { name: 'Доллар / Иена', vol: 0.65 },
+  'BTC/USD': { name: 'Bitcoin', vol: 2.10 },
+  'US500':   { name: 'S&P 500', vol: 0.75 },
+  'USOIL':   { name: 'WTI Crude', vol: 1.20 }
+};
+const BOT_RISK = {
+  calm:    { name: 'Консервативный', day: 0.009, noise: 0.22, dd: 3 },
+  balance: { name: 'Сбалансированный', day: 0.021, noise: 0.34, dd: 7 },
+  turbo:   { name: 'Агрессивный', day: 0.042, noise: 0.52, dd: 14 }
+};
+/* прогноз: сложный процент от доли депозита в работе, с поправкой на волатильность пары */
+function botForecast({ balance, pair, hours, risk, share }) {
+  const p = BOT_PAIRS[pair] || BOT_PAIRS['XAU/USD'];
+  const r = BOT_RISK[risk] || BOT_RISK.balance;
+  const days = Math.max(hours, 1) / 24;
+  const work = balance * Math.max(0.1, Math.min(1, share));
+  const rate = r.day * (0.72 + p.vol * 0.38);
+  const gain = work * (Math.pow(1 + rate, days) - 1);
+  return {
+    pairName: p.name,
+    riskName: r.name,
+    noise: r.noise,
+    work: +work.toFixed(2),
+    gain: +gain.toFixed(2),
+    low: +(gain * 0.62).toFixed(2),
+    high: +(gain * 1.31).toFixed(2),
+    target: +(balance + gain).toFixed(2),
+    pct: balance > 0 ? +(gain / balance * 100).toFixed(2) : 0,
+    dd: r.dd,
+    days: +days.toFixed(2)
+  };
+}
+
+async function botUser(req, res) {
+  const me = await sessionUser(req);
+  if (!me) { bad(res, 401, 'Нужен вход'); return null; }
+  return me;
+}
+
+/* проверка ключа, выпущенного в личном кабинете */
+app.post('/api/bot/connect', async (req, res) => {
+  try {
+    const me = await botUser(req, res); if (!me) return;
+    const key = String((req.body || {}).key || '').trim();
+    if (!me.apikey) return bad(res, 409, 'Для этого кошелька ключ ещё не выпущен — создайте его в личном кабинете, раздел «Подключение сторонних торговых помощников»');
+    if (key !== me.apikey) return bad(res, 403, 'Ключ не подходит к этому кошельку');
+    res.json({ ok: true, user: { name: me.name, acct: me.acct, cur: me.cur, balance: me.balance }, dyn: me.dyn || {} });
+  } catch (e) { bad(res, 500, e.message); }
+});
+
+app.get('/api/bot/state', async (req, res) => {
+  try {
+    const me = await botUser(req, res); if (!me) return;
+    res.json({
+      user: { name: me.name, acct: me.acct, cur: me.cur, balance: me.balance, hasKey: !!me.apikey },
+      dyn: me.dyn || {},
+      pairs: BOT_PAIRS, risks: BOT_RISK
+    });
+  } catch (e) { bad(res, 500, e.message); }
+});
+
+/* расчёт прогноза без запуска */
+app.post('/api/bot/forecast', async (req, res) => {
+  try {
+    const me = await botUser(req, res); if (!me) return;
+    const b = req.body || {};
+    res.json({ forecast: botForecast({
+      balance: me.balance,
+      pair: b.pair, hours: Number(b.hours) || 24,
+      risk: b.risk, share: Number(b.share) || 0.6
+    }) });
+  } catch (e) { bad(res, 500, e.message); }
+});
+
+/* запуск: включает сценарий роста кошелька — тот же, что настраивается в админке */
+app.post('/api/bot/start', async (req, res) => {
+  try {
+    const me = await botUser(req, res); if (!me) return;
+    const b = req.body || {};
+    const key = String(b.key || '').trim();
+    if (!me.apikey || key !== me.apikey) return bad(res, 403, 'Нужен действующий ключ API');
+    const pair = BOT_PAIRS[b.pair] ? b.pair : 'XAU/USD';
+    const risk = BOT_RISK[b.risk] ? b.risk : 'balance';
+    const hours = Math.max(1, Math.min(2160, Math.round(Number(b.hours) || 24)));
+    const share = Math.max(0.1, Math.min(1, Number(b.share) || 0.6));
+    if (me.balance <= 0) return bad(res, 400, 'На кошельке нет средств — бот не может начать работу');
+    const f = botForecast({ balance: me.balance, pair, hours, risk, share });
+    const now = new Date();
+    const dyn = {
+      ...(me.dyn || {}),
+      on: true,
+      from: +me.balance.toFixed(2),
+      to: f.target,
+      hours,
+      noise: f.noise,
+      pair, risk, share,
+      startedAt: now.toISOString(),
+      endsAt: new Date(now.getTime() + hours * 3600000).toISOString(),
+      bot: { on: true, pair, risk, share, startedAt: now.toISOString(), forecast: f.gain }
+    };
+    await q('UPDATE users SET dyn = $2::jsonb WHERE id = $1', [me.id, JSON.stringify(dyn)]);
+    res.json({ ok: true, dyn, forecast: f });
+  } catch (e) { bad(res, 500, e.message); }
+});
+
+/* остановка: фиксируем достигнутый результат как новый баланс и гасим сценарий */
+app.post('/api/bot/stop', async (req, res) => {
+  try {
+    const me = await botUser(req, res); if (!me) return;
+    const d = me.dyn || {};
+    const st = new Date(d.startedAt || 0).getTime(), en = new Date(d.endsAt || 0).getTime();
+    let value = me.balance;
+    if (d.on && isFinite(st) && isFinite(en) && en > st) {
+      const pr = Math.max(0, Math.min(1, (Date.now() - st) / (en - st)));
+      const from = Number(d.from) || me.balance, to = Number(d.to) || from;
+      value = from + (to - from) * pr;
+    }
+    const dyn = { ...d, on: false, bot: { ...(d.bot || {}), on: false, stoppedAt: new Date().toISOString() } };
+    await q('UPDATE users SET dyn = $2::jsonb, balance = $3 WHERE id = $1',
+      [me.id, JSON.stringify(dyn), +value.toFixed(2)]);
+    res.json({ ok: true, balance: +value.toFixed(2), dyn });
   } catch (e) { bad(res, 500, e.message); }
 });
 
