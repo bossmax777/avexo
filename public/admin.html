@@ -1041,8 +1041,10 @@ function renderDash(){
       const STS={active:["ok","активен"],hold:["wait","приостановлен"],arch:["rej","архив"]};
       const st=STS[c.status]||STS.active;
       const pend=(u.tx||[]).filter(t=>["wait","appr"].includes(t[3])).length;
+      const botTag = d.bot&&d.bot.startedAt
+        ? ` <span class="badge ok" style="font-size:10.5px">бот · ${escapeHtml(String(d.pair||"XAU/USD"))}</span>` : "";
       const scen = n
-        ? `<b class="d-num">${money(d.from)} → ${money(d.to)}</b>
+        ? `<b class="d-num">${money(d.from)} → ${money(d.to)}</b>${botTag}
            <span class="d-goal">${new Date(n.st).toLocaleDateString("ru-RU")} — ${new Date(n.en).toLocaleDateString("ru-RU")}</span>`
         : (d.on?'<span style="color:var(--dim)">включён, не запущен</span>'
                :'<span style="color:var(--dim)">не задан</span>');
@@ -1053,7 +1055,8 @@ function renderDash(){
       return `<tr>
         <td class="d-user"><b>${escapeHtml(u.name||"—")}</b><small>${escapeHtml(u.email)}</small></td>
         <td class="d-num">${escapeHtml(u.acct||"—")}</td>
-        <td class="d-num"><b>${money(u.balance)}</b> <small style="color:var(--dim)">${escapeHtml(u.cur||"USD")}</small></td>
+        <td class="d-num"><b>${money(n?n.val:u.balance)}</b> <small style="color:var(--dim)">${escapeHtml(u.cur||"USD")}</small>${
+          n?'<span class="d-goal">по сценарию · в базе '+money(u.balance)+'</span>':""}</td>
         <td>${scen}</td>
         <td>${prog}</td>
         <td>${escapeHtml(c.type||"Standard")}<span class="d-goal"><span class="badge ${st[0]}">${st[1]}</span></span></td>
@@ -1283,12 +1286,27 @@ function dynEnd(d){
   const st=new Date(d.startedAt||Date.now()).getTime();
   return new Date(st+(Number(d.hours)||24)*3600000).toISOString();
 }
+/* та же кривая, что рисует кабинет и бот — чтобы суммы везде совпадали */
+function _dphase(i,seed){const a=Math.sin(i*374.761+seed*911.13)*43758.5453;return (a-Math.floor(a))*Math.PI*2;}
+const _DFREQ=[1,2,3,5,8,13,21,34,55,89];
+function _dwave(p,seed){
+  let v=0;
+  for(let i=0;i<_DFREQ.length;i++){const f=_DFREQ[i];v+=Math.sin(2*Math.PI*f*p+_dphase(i,seed))/Math.pow(f,0.78);}
+  return v;
+}
+function dynPath(p,seed){
+  const w0=_dwave(0,seed), w1=_dwave(1,seed);
+  return (_dwave(p,seed)-((1-p)*w0+p*w1))/1.9;
+}
 function dynNow(d){
   if(!d.on||!d.startedAt) return null;
   const st=new Date(d.startedAt).getTime(), en=new Date(dynEnd(d)).getTime();
   if(!isFinite(st)||!isFinite(en)||en<=st) return null;
   const pr=Math.max(0,Math.min(1,(Date.now()-st)/(en-st)));
-  return {pr,val:Number(d.from)+(Number(d.to)-Number(d.from))*pr,st,en};
+  const from=Number(d.from)||0, to=Number(d.to)||0;
+  const amp=Math.max(Math.abs(to-from),from*0.03)*(Number(d.noise)||0)*0.55;
+  const val=Math.max(0,from+(to-from)*pr+amp*dynPath(pr,(st/60000)%9973));
+  return {pr,val,base:from+(to-from)*pr,st,en};
 }
 function humanSpan(ms){
   const days=ms/86400000;

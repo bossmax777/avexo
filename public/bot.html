@@ -330,12 +330,17 @@ function win(){
 }
 function seedOf(){const w=win();return w?(w.st/60000)%9973:1;}
 function rnd(seed,i){const x=Math.sin(seed*13.17+i*97.31)*43758.5453;return x-Math.floor(x);}
+/* волна и кривая — один в один с кабинетом, чтобы цифры совпадали */
 function phase(i,seed){const a=Math.sin(i*374.761+seed*911.13)*43758.5453;return (a-Math.floor(a))*Math.PI*2;}
 const FREQ=[1,2,3,5,8,13,21,34,55,89];
+function _wave(p,seed){
+  let v=0;
+  for(let i=0;i<FREQ.length;i++){const f=FREQ[i];v+=Math.sin(2*Math.PI*f*p+phase(i,seed))/Math.pow(f,0.78);}
+  return v;
+}
 function wave(p,seed){
-  let v=0,amp=0;
-  for(let i=0;i<FREQ.length;i++){const a=1/Math.pow(FREQ[i],.82);amp+=a;v+=a*Math.sin(p*Math.PI*2*FREQ[i]+phase(i,seed));}
-  return v/(amp||1);
+  const w0=_wave(0,seed), w1=_wave(1,seed);
+  return (_wave(p,seed)-((1-p)*w0+p*w1))/1.9;
 }
 function progress(t){const w=win();if(!w)return null;return Math.max(0,Math.min(1,((t||Date.now())-w.st)/w.span));}
 function value(t){
@@ -343,8 +348,8 @@ function value(t){
   const pr=Math.max(0,Math.min(1,((t||Date.now())-w.st)/w.span));
   const from=Number(w.d.from)||0,to=Number(w.d.to)||0;
   const base=from+(to-from)*pr;
-  const amp=Math.max(Math.abs(to-from),from*0.25)*(Number(w.d.noise)||0)*0.55;
-  return Math.max(0,base+amp*wave(pr,seedOf())*(1-pr*0.45));
+  const amp=Math.max(Math.abs(to-from),from*0.03)*(Number(w.d.noise)||0)*0.55;
+  return Math.max(0,base+amp*wave(pr,seedOf()));
 }
 const SPEC={"XAU/USD":[100,2],"XAG/USD":[5000,3],"EUR/USD":[100000,5],"GBP/USD":[100000,5],
   "USD/JPY":[100000,3],"BTC/USD":[1,0],"US500":[10,1],"USOIL":[100,2]};
@@ -482,9 +487,10 @@ function renderSession(){
   $("sessTitle").textContent="Сессия активна · "+(d.pair||"XAU/USD");
   $("sessMeta").textContent=rn+" · горизонт "+d.hours+" ч · в работе "+Math.round((d.share||0.6)*100)+"% депозита";
   $("kBal").textContent=usd(cur);
+  $("whoAcct").textContent="кошелёк #"+S.user.acct+" · "+usd(cur)+" "+S.user.cur;
   const kp=$("kPl"); kp.textContent=sig(pl); kp.className="num "+(pl>=0?"up":"down");
   $("kLeft").textContent=fmtLeft(w.en-Date.now());
-  $("kProg").textContent=Math.round(pr*100)+"%";
+  $("kProg").textContent=(pr*100<10?(pr*100).toFixed(1):Math.round(pr*100))+"%";
   $("barFill").style.width=(pr*100).toFixed(1)+"%";
   const ps=positions();
   $("posMeta").textContent=ps.length+" сделок в работе · инструмент "+(d.pair||"XAU/USD");
