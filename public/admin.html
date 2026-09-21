@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
 <meta name="robots" content="noindex,nofollow">
-<title>Avexo — админка сайта</title>
+<title>BullWaves — админка сайта</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Sora:wght@400;600;700&family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500&display=swap">
@@ -183,7 +183,7 @@ body{background:radial-gradient(900px 520px at 88% -8%,rgba(79,70,229,.10),trans
 
 <header class="head">
   <div class="head-in">
-    <div class="logo"><span class="mark" id="hMark"></span> Avexo · админка</div>
+    <div class="logo"><span class="mark" id="hMark"></span> BullWaves · админка</div>
     <div class="right">
       <span class="state-top" id="stateTop"></span>
       <a class="btn btn-ghost" href="./" target="_blank" rel="noopener">Открыть сайт ↗</a>
@@ -239,7 +239,7 @@ body{background:radial-gradient(900px 520px at 88% -8%,rgba(79,70,229,.10),trans
 
   <div data-pane="assist" hidden>
     <div class="card">
-      <h2>Avexo Copilot</h2>
+      <h2>BullWaves Copilot</h2>
       <p class="sub">Раздел «Помощник» в кабинете. Без ключа работает встроенная база знаний и расчётный модуль:
         разбор открытых позиций, расчёт объёма под заданный риск и стоп, проверка уровня маржи и точки стоп-аута,
         обзор рынка по живым котировкам, объяснение спреда, плеча, лота, свопа и волатильности.
@@ -537,7 +537,7 @@ async function apiBoot(){
 const CFG_KEY="avexo_site_config_v1";
 const DEFAULTS={
   html:{},
-  brand:{name:"Avexo",suffix:"Trade",mark:"A",accent:"#4F46E5",red:"#EF4444"},
+  brand:{name:"BullWaves",suffix:"Trade",mark:"A",accent:"#4F46E5",red:"#EF4444"},
   hero:{eyebrow:"Учебный демонстрационный проект",
     h1:"Брокер, который работает\nна скорости рынка",
     lead:"2 100+ инструментов, исполнение от 12 мс и спред от 0 пунктов. Один счёт — валюты, металлы, индексы, фьючерсы, акции и ETF.",
@@ -545,13 +545,13 @@ const DEFAULTS={
     note:"Торговля с кредитным плечом сопряжена с высоким риском убытков. Все данные на этой странице вымышлены."},
   heads:{markets:"Торгуйте тем, что движет рынком",
     marketsP:"Котировки обновляются в реальном времени. Выберите категорию, чтобы увидеть инструменты.",
-    benefits:"Почему трейдеры выбирают Avexo",
+    benefits:"Почему трейдеры выбирают BullWaves",
     stats:"Условия торговли",statsP:"Одинаковые условия для всех клиентов — без скрытых наценок к спреду.",
     accounts:"Четыре типа счетов",accountsP:"От первого депозита до институционального объёма. Тип счёта можно сменить в личном кабинете.",
     platforms:"Торговые платформы",platformsP:"Один счёт — пять способов торговать. Десктоп, браузер и мобильные приложения синхронизированы.",
     classes:"Классы активов",mobile:"Терминал в кармане",achv:"Компания в цифрах"},
-  cta:{h:"Торгуйте как профессионал",p:"Откройте счёт за пять минут или попробуйте демо-кабинет без регистрации.",btn:"Зарегистрироваться в Avexo"},
-  foot:{about:"Вымышленный брокер, созданный как учебный макет интерфейса. Компании Avexo Trade не существует.",
+  cta:{h:"Торгуйте как профессионал",p:"Откройте счёт за пять минут или попробуйте демо-кабинет без регистрации.",btn:"Зарегистрироваться в BullWaves"},
+  foot:{about:"Вымышленный брокер, созданный как учебный макет интерфейса. Компании BullWaves не существует.",
     note:"Демо-макет · не финансовая услуга",
     disclaimer:"Предупреждение о рисках: торговля производными финансовыми инструментами с кредитным плечом связана с высоким риском и подходит не всем инвесторам. Вы можете потерять весь вложенный капитал. Страница является учебным прототипом интерфейса: бренд, лицензии, котировки, отзывы и статистика вымышлены, счета и платежи не существуют, персональные данные не собираются и никуда не передаются."},
   benefits:[
@@ -568,7 +568,7 @@ const DEFAULTS={
     {n:"Elite",tag:"Крупный объём",dep:"$10 000",spr:"от 0.0 пт",com:"$2.0 за лот",lev:"1:100",f:false},
     {n:"Pro API",tag:"Алгоритмы и FIX",dep:"$25 000",spr:"от 0.0 пт",com:"$1.5 за лот",lev:"1:100",f:false}],
   platforms:[
-    {n:"Avexo Terminal",d:"Собственный десктопный терминал: 68 индикаторов, стакан заявок, горячие клавиши и тестер стратегий.",t:"Windows · macOS · Linux"},
+    {n:"BullWaves Terminal",d:"Собственный десктопный терминал: 68 индикаторов, стакан заявок, горячие клавиши и тестер стратегий.",t:"Windows · macOS · Linux"},
     {n:"Веб-терминал",d:"Полный функционал в браузере без установки. Рабочие пространства синхронизируются между устройствами.",t:"Любой браузер"},
     {n:"Мобильное приложение",d:"Push-уведомления по уровням, вход по биометрии, быстрое пополнение счёта.",t:"iOS · Android"},
     {n:"API и FIX 4.4",d:"Прямое подключение для алгоритмической торговли, REST и WebSocket, песочница для тестов.",t:"Для разработчиков"},
@@ -887,7 +887,7 @@ function renderCard(){
         К имени сервера всегда добавляется пометка -DEMO.</p>
       <div class="grid g3">
         <div class="field"><label for="cd_srv">Имя сервера</label>
-          <input id="cd_srv" value="${escapeHtml(String(c.srv||"Avexo").replace(/-DEMO$/i,""))}"></div>
+          <input id="cd_srv" value="${escapeHtml(String(c.srv||"BullWaves").replace(/-DEMO$/i,""))}"></div>
         <div class="field"><label for="cd_type">Тип счёта</label>
           <select id="cd_type">${TYPES.map(t=>`<option${t===(c.type||"Standard")?" selected":""}>${t}</option>`).join("")}</select></div>
         <div class="field"><label for="cd_status">Статус счёта</label>
@@ -905,7 +905,7 @@ function renderCard(){
 }
 async function saveCard(i){
   const us=uLoad(), u=us[i]; if(!u) return;
-  const srv=(document.getElementById("cd_srv").value||"Avexo").trim();
+  const srv=(document.getElementById("cd_srv").value||"BullWaves").trim();
   const card={
     srv, type:document.getElementById("cd_type").value,
     status:document.getElementById("cd_status").value,
@@ -1184,10 +1184,23 @@ const PAGES=[
     ["text:dashSub","Обзор — подпись","строка под заголовком «Обзор счёта»"],
     ["text:profSub","Профиль — подпись","строка под заголовком «Профиль»"],
     ["text:payTitle","Платежи — заголовок","подпись формы пополнения"]
+  ]],
+  ["Кабинет бота (/bot.html)",[
+    ["bot:head","Шапка бота","логотип, плашки статуса, кнопка выхода"],
+    ["bot:auth","Экран входа целиком","карточка входа с обоими шагами"],
+    ["bot:login","Вход — шаг 1","email, пароль, подсказки"],
+    ["bot:key","Вход — шаг 2","ключ API, кнопки подключения и выпуска ключа"],
+    ["bot:params","Параметры сессии","пара, горизонт, риск, доля депозита, прогноз, кнопки"],
+    ["bot:ai","Карточка ИИ-ассистента","аватар и реплика помощника"],
+    ["bot:session","Мониторинг сессии","заголовок, KPI, прогресс и график"],
+    ["bot:pos","Открытые позиции бота","таблица сделок"],
+    ["bot:log","Журнал ИИ-агента","лента решений агента"],
+    ["bot:foot","Подвал бота","дисклеймер внизу страницы"]
   ]]
 ];
-let PG_SRC=null, pgKey="";
+let PG_SRC=null, PG_SRC_BOT=null, pgKey="";
 function pgSelector(k){
+  if(k.indexOf("bot:")===0) return '[data-bot="'+k.slice(4)+'"]';
   if(k.indexOf("text:")===0) return "#"+k.slice(5);
   if(k==="head")    return "header.site-head .head-in";
   if(k==="apphead") return "header.app-head .app-head-in";
@@ -1196,16 +1209,23 @@ function pgSelector(k){
   if(k.indexOf("view:")===0) return '[data-view="'+k.slice(5)+'"]';
   return null;
 }
-async function pgLoadSource(){
+async function pgLoadSource(k){
+  const bot=String(k||pgKey).indexOf("bot:")===0;
+  if(bot){
+    if(PG_SRC_BOT) return PG_SRC_BOT;
+    const t=await (await fetch("./bot.html?src="+Date.now(),{cache:"no-store"})).text();
+    PG_SRC_BOT=new DOMParser().parseFromString(t,"text/html");
+    return PG_SRC_BOT;
+  }
   if(PG_SRC) return PG_SRC;
-  const r=await fetch("./index.html?src="+Date.now(),{cache:"no-store"});
-  const t=await r.text();
+  const t=await (await fetch("./index.html?src="+Date.now(),{cache:"no-store"})).text();
   PG_SRC=new DOMParser().parseFromString(t,"text/html");
   return PG_SRC;
 }
 function pgOriginal(k){
-  if(!PG_SRC) return "";
-  const el=PG_SRC.querySelector(pgSelector(k));
+  const doc=String(k).indexOf("bot:")===0?PG_SRC_BOT:PG_SRC;
+  if(!doc) return "";
+  const el=doc.querySelector(pgSelector(k));
   return el?el.innerHTML.trim():"";
 }
 function pgRenderTree(){
@@ -1218,7 +1238,7 @@ function pgRenderTree(){
 }
 async function pgOpen(k){
   pgKey=k;
-  await pgLoadSource();
+  await pgLoadSource(k);
   const h=CFG.html||{};
   const cur=(typeof h[k]==="string"&&h[k].trim())?h[k]:pgOriginal(k);
   const item=PAGES.reduce((a,[,items])=>a||items.find(x=>x[0]===k),null);
@@ -1256,11 +1276,11 @@ document.getElementById("pgReset").onclick=()=>{
   toast("Блок возвращён к исходному виду и опубликован");
 };
 document.getElementById("pgOpen").onclick=()=>{
-  const app=pgKey.indexOf("view:")===0||pgKey==="apphead"||pgKey==="side";
-  window.open(app?"./":"./","_blank","noopener");
+  window.open(pgKey.indexOf("bot:")===0?"./bot.html":"./","_blank","noopener");
 };
 pgRenderTree();
-pgLoadSource().then(pgRenderTree).catch(()=>{});
+pgLoadSource("index").then(pgRenderTree).catch(()=>{});
+pgLoadSource("bot:head").then(pgRenderTree).catch(()=>{});
 
 
 

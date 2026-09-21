@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
-<title>Avexo Bot — торговый помощник</title>
+<title>BullWaves Bot — торговый помощник</title>
 <link rel="icon" href="/img/favicon.png">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -154,9 +154,9 @@ table.data tr:last-child td{border-bottom:0}
 <body>
 
 <header class="top">
-  <div class="wrap top-in">
-    <a class="logo" href="/"><img src="/img/logo.png" alt="Avexo">
-      <span>Avexo Bot<small>торговый помощник · демо</small></span></a>
+  <div class="wrap top-in" data-bot="head">
+    <a class="logo" href="/"><img src="/img/logo.png" alt="BullWaves">
+      <span>BullWaves Bot<small>торговый помощник · демо</small></span></a>
     <span class="pill live hidden" id="pillLive"><i class="dot"></i>сессия активна</span>
     <div class="spacer"></div>
     <div class="who hidden" id="who"><b id="whoName">—</b><small id="whoAcct">—</small></div>
@@ -165,23 +165,23 @@ table.data tr:last-child td{border-bottom:0}
 </header>
 
 <!-- ВХОД -->
-<section class="auth" id="auth">
+<section class="auth" id="auth" data-bot="auth">
   <div class="auth-card">
     <div class="steps"><i class="step on" id="st1"></i><i class="step" id="st2"></i></div>
 
-    <div id="stepLogin">
+    <div id="stepLogin" data-bot="login">
       <h1>Вход в кабинет бота</h1>
-      <p class="sub">Используйте логин и пароль от кошелька Avexo. Бот подключается к кошельку
+      <p class="sub">Используйте логин и пароль от кошелька BullWaves. Бот подключается к кошельку
         по ключу REST API, который выпускается в личном кабинете.</p>
       <div class="err" id="e1"></div>
       <div class="field"><label>Email</label><input id="inEmail" type="email" autocomplete="username" placeholder="you@mail.com"></div>
       <div class="field"><label>Пароль</label><input id="inPass" type="password" autocomplete="current-password" placeholder="••••••••"></div>
       <button class="btn btn-primary btn-full" id="btnLogin">Войти</button>
-      <p class="hint">Нет кошелька? <a href="/" style="color:var(--accent);font-weight:600">Зарегистрируйтесь на сайте Avexo</a>,
+      <p class="hint">Нет кошелька? <a href="/" style="color:var(--accent);font-weight:600">Зарегистрируйтесь на сайте BullWaves</a>,
         затем вернитесь сюда.</p>
     </div>
 
-    <div id="stepKey" class="hidden">
+    <div id="stepKey" class="hidden" data-bot="key">
       <h1>Подключение по API</h1>
       <p class="sub">Вставьте ключ REST API из личного кабинета: <b>Профиль → Подключение сторонних
         торговых помощников → Сгенерировать</b>. Ключ даёт боту право читать счёт и вести сделки,
@@ -203,7 +203,7 @@ table.data tr:last-child td{border-bottom:0}
 
     <!-- параметры -->
     <div>
-      <div class="panel">
+      <div class="panel" data-bot="params">
         <div class="panel-head"><h3>Параметры сессии</h3><span class="muted">шаг 1</span></div>
 
         <div class="field"><label>Торговая пара</label>
@@ -242,14 +242,14 @@ table.data tr:last-child td{border-bottom:0}
           <button class="btn btn-danger hidden" id="btnStop">Остановить</button>
         </div>
         <p class="hint">Запуск включает автоматическую торговую сессию: бот открывает и закрывает сделки
-          по выбранной паре и ведёт кошелёк к расчётному результату. Прогресс виден и в личном кабинете Avexo.</p>
+          по выбранной паре и ведёт кошелёк к расчётному результату. Прогресс виден и в личном кабинете BullWaves.</p>
       </div>
 
-      <div class="panel">
+      <div class="panel" data-bot="ai">
         <div class="aiwrap">
           <div class="ai-av">AI</div>
           <div>
-            <b style="font-size:14px">Avexo AI Assistant</b>
+            <b style="font-size:14px">BullWaves AI Assistant</b>
             <div class="ai-say" id="aiSay" style="margin-top:8px">Готов к работе. Выберите пару и горизонт —
               я рассчитаю ожидаемый результат и возьму сделки на себя.</div>
           </div>
@@ -259,7 +259,7 @@ table.data tr:last-child td{border-bottom:0}
 
     <!-- мониторинг -->
     <div>
-      <div class="panel">
+      <div class="panel" data-bot="session">
         <div class="panel-head">
           <h3 id="sessTitle">Сессия не запущена</h3>
           <span class="muted" id="sessMeta">параметры задаются слева</span>
@@ -275,7 +275,7 @@ table.data tr:last-child td{border-bottom:0}
              style="width:100%;height:220px;margin-top:16px"></svg>
       </div>
 
-      <div class="panel">
+      <div class="panel" data-bot="pos">
         <div class="panel-head"><h3>Открытые позиции бота</h3><span class="muted" id="posMeta">—</span></div>
         <div class="tbl-scroll">
           <table class="data" style="min-width:620px">
@@ -285,7 +285,7 @@ table.data tr:last-child td{border-bottom:0}
         </div>
       </div>
 
-      <div class="panel">
+      <div class="panel" data-bot="log">
         <div class="panel-head"><h3>Журнал ИИ-агента</h3><span class="muted">решения и действия в реальном времени</span></div>
         <div class="log" id="logBox"><p class="muted" style="font-size:13px">Журнал появится после запуска сессии.</p></div>
       </div>
@@ -294,8 +294,8 @@ table.data tr:last-child td{border-bottom:0}
 </main>
 
 <footer class="foot">
-  <div class="wrap">
-    Avexo Bot — учебный демонстрационный проект. Торговля симулируется на демо-кошельке:
+  <div class="wrap" data-bot="foot">
+    BullWaves Bot — учебный демонстрационный проект. Торговля симулируется на демо-кошельке:
     ордера не отправляются на биржу, доходность рассчитывается моделью и не является инвестиционной
     рекомендацией или прогнозом реального рынка.
   </div>
@@ -593,7 +593,9 @@ async function prefillKey(){
 }
 
 /* ============ вход ============ */
-$("btnLogin").onclick=async ()=>{
+function on(id,fn){ const e=$(id); if(e) e.onclick=fn; }
+function bindAll(){
+on("btnLogin",async ()=>{
   err("e1","");
   const email=$("inEmail").value.trim(), pass=$("inPass").value;
   if(!email||!pass) return err("e1","Введите email и пароль");
@@ -604,8 +606,8 @@ $("btnLogin").onclick=async ()=>{
     await prefillKey();
   }catch(e){ err("e1",e.message); }
   $("btnLogin").disabled=false;
-};
-$("btnKey").onclick=async ()=>{
+});
+on("btnKey",async ()=>{
   err("e2","");
   const key=$("inKey").value.trim();
   if(!key) return err("e2","Вставьте ключ API из личного кабинета");
@@ -616,8 +618,8 @@ $("btnKey").onclick=async ()=>{
     await boot();
   }catch(e){ err("e2",e.message); }
   $("btnKey").disabled=false;
-};
-$("btnNewKey").onclick=async ()=>{
+});
+on("btnNewKey",async ()=>{
   err("e2","");
   $("btnNewKey").disabled=true; $("btnNewKey").textContent="Выпускаем ключ…";
   try{
@@ -629,22 +631,22 @@ $("btnNewKey").onclick=async ()=>{
     toast("Выпущен новый ключ · бот подключён");
   }catch(e){ err("e2",e.message); }
   $("btnNewKey").disabled=false; $("btnNewKey").textContent="Выпустить новый ключ для этого кошелька";
-};
-$("btnOut").onclick=async ()=>{
+});
+on("btnOut",async ()=>{
   await api("/api/logout",{method:"POST"}).catch(()=>{});
   try{localStorage.removeItem(KEY_LS);}catch(e){}
   location.reload();
-};
+});
 
 function checkBalance(){
   const empty=!S.user||Number(S.user.balance)<=0;
-  err("eBal", empty ? "На кошельке нет средств: боту нечем торговать. Пополните кошелёк в личном кабинете Avexo — после зачисления расчёт и запуск станут доступны." : "");
+  err("eBal", empty ? "На кошельке нет средств: боту нечем торговать. Пополните кошелёк в личном кабинете BullWaves — после зачисления расчёт и запуск станут доступны." : "");
   $("btnStart").disabled=empty;
   if(empty) $("aiSay").textContent="Кошелёк пуст — сначала нужно зачисление. Как только на счёте появятся средства, я рассчитаю план и возьму сделки на себя.";
 }
 
 /* ============ запуск и остановка ============ */
-$("btnStart").onclick=async ()=>{
+on("btnStart",async ()=>{
   if(!S.fc) return toast("Подождите расчёт прогноза");
   if(!confirm("Запустить торговую сессию?\n\nПара: "+S.pair+"\nГоризонт: "+S.hours+" ч\nРежим: "+
     (S.risks[S.risk]||{}).name+"\nРасчётный результат: "+sig(S.fc.gain))) return;
@@ -659,8 +661,8 @@ $("btnStart").onclick=async ()=>{
     renderSession();
   }catch(e){ toast(e.message); }
   $("btnStart").disabled=false;
-};
-$("btnStop").onclick=async ()=>{
+});
+on("btnStop",async ()=>{
   if(!confirm("Остановить бота и зафиксировать текущий результат на кошельке?")) return;
   try{
     const j=await api("/api/bot/stop",{method:"POST"});
@@ -670,7 +672,50 @@ $("btnStop").onclick=async ()=>{
       ". Можно задать новые параметры и запустить меня снова.";
     renderSession();
   }catch(e){ toast(e.message); }
-};
+});
+}
+bindAll();
+
+/* ============ HTML-блоки из админки ============ */
+const BOT_KEYS=["head","auth","login","key","params","ai","session","pos","log","foot"];
+const B_ORIG={}, B_ON={};
+let CFG={};
+function botEl(k){ return document.querySelector('[data-bot="'+k+'"]'); }
+function snapBot(){ BOT_KEYS.forEach(k=>{ if(B_ORIG[k]!=null) return; const el=botEl(k); if(el) B_ORIG[k]=el.innerHTML; }); }
+function applyBotBlocks(){
+  snapBot();
+  const h=(CFG&&CFG.html)||{};
+  let changed=false;
+  BOT_KEYS.forEach(k=>{
+    const el=botEl(k); if(!el) return;
+    const v=h["bot:"+k];
+    if(typeof v==="string"&&v.trim()){
+      if(B_ON[k]!==v){ el.innerHTML=v; B_ON[k]=v; changed=true; }
+    }else if(B_ON[k]!==undefined){
+      if(B_ORIG[k]!=null) el.innerHTML=B_ORIG[k];
+      delete B_ON[k]; changed=true;
+    }
+  });
+  if(changed) afterBotSwap();
+}
+function afterBotSwap(){
+  bindAll();
+  try{ if(S.user){ buildForm(); renderSession(); checkBalance(); } }catch(e){}
+}
+let CFG_V=0;
+async function pollCfg(){
+  try{
+    const r=await fetch("/api/config/v",{cache:"no-store"});
+    const j=await r.json();
+    if(j.v&&j.v!==CFG_V){
+      CFG_V=j.v;
+      const c=await (await fetch("/api/config",{cache:"no-store"})).json();
+      CFG=c.config||{};
+      applyBotBlocks();
+    }
+  }catch(e){}
+}
+(async ()=>{ snapBot(); await pollCfg(); setInterval(pollCfg,4000); })();
 
 /* ============ загрузка ============ */
 async function boot(){
