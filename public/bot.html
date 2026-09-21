@@ -235,6 +235,7 @@ table.data tr:last-child td{border-bottom:0}
           <div class="fc-row"><span class="muted">Плановая частота сделок</span><b class="num" id="fcFreq">—</b></div>
         </div>
 
+        <div class="err" id="eBal" style="margin-top:14px"></div>
         <div style="margin-top:16px;display:flex;gap:10px">
           <button class="btn btn-primary btn-full" id="btnStart">Запустить бота</button>
           <button class="btn btn-danger hidden" id="btnStop">Остановить</button>
@@ -582,6 +583,13 @@ $("btnOut").onclick=async ()=>{
   location.reload();
 };
 
+function checkBalance(){
+  const empty=!S.user||Number(S.user.balance)<=0;
+  err("eBal", empty ? "На кошельке нет средств: боту нечем торговать. Пополните кошелёк в личном кабинете Avexo — после зачисления расчёт и запуск станут доступны." : "");
+  $("btnStart").disabled=empty;
+  if(empty) $("aiSay").textContent="Кошелёк пуст — сначала нужно зачисление. Как только на счёте появятся средства, я рассчитаю план и возьму сделки на себя.";
+}
+
 /* ============ запуск и остановка ============ */
 $("btnStart").onclick=async ()=>{
   if(!S.fc) return toast("Подождите расчёт прогноза");
@@ -624,10 +632,12 @@ async function boot(){
   $("whoName").textContent=S.user.name||"Клиент";
   $("whoAcct").textContent="кошелёк #"+S.user.acct+" · "+usd(S.user.balance)+" "+S.user.cur;
   $("fShare").value=Math.round(S.share*100); $("shareVal").textContent=Math.round(S.share*100)+"%";
-  buildForm(); renderSession();
+  buildForm(); renderSession(); checkBalance();
   clearInterval(boot._t); boot._t=setInterval(()=>{ renderSession(); },3000);
   clearInterval(boot._s); boot._s=setInterval(async ()=>{
-    try{ const s=await api("/api/bot/state"); S.dyn=s.dyn||{}; S.user.balance=s.user.balance; }catch(e){}
+    try{ const s=await api("/api/bot/state"); S.dyn=s.dyn||{}; S.user.balance=s.user.balance;
+      $("whoAcct").textContent="кошелёк #"+S.user.acct+" · "+usd(S.user.balance)+" "+S.user.cur;
+      checkBalance(); }catch(e){}
   },20000);
 }
 (async function init(){
