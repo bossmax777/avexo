@@ -1368,9 +1368,12 @@ footer a:hover{color:var(--accent)}
           <div class="int-key">
             <div>
               <b>Ключ REST API</b>
-              <small>Права: чтение счёта, котировки, постановка и снятие ордеров. Без права вывода средств.</small>
+              <small>Права: чтение счёта, котировки, постановка и снятие ордеров. Без права вывода средств.
+                Именно этот ключ (вида avx_номер-счёта_…) нужен для входа в кабинет бота — идентификаторы
+                avx-… из карточек выше для этого не подходят.</small>
             </div>
             <code class="num" id="apiKeyBox">••••••••••••••••••••••••</code>
+            <button class="btn btn-ghost btn-sm" id="apiKeyCopy">Копировать</button>
             <button class="btn btn-ghost btn-sm" id="apiKeyGen">Сгенерировать</button>
           </div>
           <p class="ai-note" style="margin-top:12px">Ключ показывается один раз. Права ключа можно сузить
@@ -3281,8 +3284,8 @@ function renderIntegrations(){
     b.textContent="Переподключить";
     let line=card&&card.querySelector(".int-token");
     if(!line&&card){ line=document.createElement("code"); line.className="int-token"; card.appendChild(line); }
-    if(line) line.textContent=token;
-    toast("«"+b.dataset.int+"» подключён · идентификатор "+token);
+    if(line) line.textContent="ID интеграции: "+token+" (не ключ API)";
+    toast("«"+b.dataset.int+"» подключён · идентификатор интеграции "+token);
   };
   const gen=document.getElementById("apiKeyGen");
   if(gen&&!gen.dataset.ready){
@@ -3306,6 +3309,30 @@ function renderIntegrations(){
       toast("Новый ключ выпущен · предыдущий отозван");
     };
   }
+  const cp=document.getElementById("apiKeyCopy");
+  if(cp&&!cp.dataset.ready){
+    cp.dataset.ready="1";
+    cp.onclick=async ()=>{
+      const v=document.getElementById("apiKeyBox").textContent.trim();
+      if(!v||v.indexOf("avx_")!==0) return toast("Сначала выпустите ключ кнопкой «Сгенерировать»");
+      try{ await navigator.clipboard.writeText(v); toast("Ключ скопирован"); }
+      catch(e){
+        const r=document.createRange(); r.selectNodeContents(document.getElementById("apiKeyBox"));
+        const sel=getSelection(); sel.removeAllRanges(); sel.addRange(r);
+        toast("Ключ выделен — скопируйте его");
+      }
+    };
+  }
+  /* показываем ключ, выпущенный для этого кошелька ранее */
+  (async ()=>{
+    const b=document.getElementById("apiKeyBox"); if(!b||b.dataset.loaded) return;
+    b.dataset.loaded="1";
+    try{
+      const r=await fetch("/api/me/apikey");
+      const j=await r.json();
+      if(r.ok&&j.key) b.textContent=j.key;
+    }catch(e){}
+  })();
 }
 
 /* ---------------- инструменты трейдера ---------------- */

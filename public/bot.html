@@ -190,7 +190,9 @@ table.data tr:last-child td{border-bottom:0}
       <div class="err" id="e2"></div>
       <div class="field"><label>Ключ API</label><input id="inKey" class="num" placeholder="avx_4034457_…"></div>
       <button class="btn btn-primary btn-full" id="btnKey">Подключить бота</button>
-      <p class="hint">Ключ хранится только в этом браузере и передаётся на сервер Avexo при запуске сессии.
+      <button class="btn btn-ghost btn-full" id="btnNewKey" style="margin-top:10px">Выпустить новый ключ для этого кошелька</button>
+      <p class="hint">Нужен ключ вида <b class="num">avx_номер-счёта_…</b> из блока «Ключ REST API».
+        Идентификаторы <b class="num">avx-…</b> из карточек интеграций — это метки подключений, для входа они не подходят.
         <a href="/#profile" target="_blank" style="color:var(--accent);font-weight:600">Открыть кабинет</a></p>
     </div>
   </div>
@@ -556,6 +558,16 @@ function forecast(){
   },220);
 }
 
+/* подставляем ключ, уже выпущенный для этого кошелька */
+async function prefillKey(){
+  try{
+    const j=await api("/api/me/apikey");
+    if(j.key){ $("inKey").value=j.key; return; }
+  }catch(e){}
+  const saved=localStorage.getItem(KEY_LS); if(saved) $("inKey").value=saved;
+  if(!$("inKey").value) err("e2","Для этого кошелька ключ ещё не выпущен — нажмите «Выпустить новый ключ для этого кошелька».");
+}
+
 /* ============ вход ============ */
 $("btnLogin").onclick=async ()=>{
   err("e1","");
@@ -565,7 +577,7 @@ $("btnLogin").onclick=async ()=>{
   try{
     await api("/api/login",{method:"POST",body:JSON.stringify({email,pass})});
     $("stepLogin").classList.add("hidden"); $("stepKey").classList.remove("hidden"); $("st2").classList.add("on");
-    const saved=localStorage.getItem(KEY_LS); if(saved) $("inKey").value=saved;
+    await prefillKey();
   }catch(e){ err("e1",e.message); }
   $("btnLogin").disabled=false;
 };
@@ -580,6 +592,19 @@ $("btnKey").onclick=async ()=>{
     await boot();
   }catch(e){ err("e2",e.message); }
   $("btnKey").disabled=false;
+};
+$("btnNewKey").onclick=async ()=>{
+  err("e2","");
+  $("btnNewKey").disabled=true; $("btnNewKey").textContent="Выпускаем ключ…";
+  try{
+    const j=await api("/api/me/apikey",{method:"POST"});
+    $("inKey").value=j.key;
+    await api("/api/bot/connect",{method:"POST",body:JSON.stringify({key:j.key})});
+    S.key=j.key; try{localStorage.setItem(KEY_LS,j.key);}catch(e){}
+    await boot();
+    toast("Выпущен новый ключ · бот подключён");
+  }catch(e){ err("e2",e.message); }
+  $("btnNewKey").disabled=false; $("btnNewKey").textContent="Выпустить новый ключ для этого кошелька";
 };
 $("btnOut").onclick=async ()=>{
   await api("/api/logout",{method:"POST"}).catch(()=>{});
@@ -653,7 +678,7 @@ async function boot(){
     }
     if(me.user){
       $("stepLogin").classList.add("hidden"); $("stepKey").classList.remove("hidden"); $("st2").classList.add("on");
-      if(key) $("inKey").value=key;
+      await prefillKey();
     }
   }catch(e){}
 })();
