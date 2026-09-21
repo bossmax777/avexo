@@ -405,8 +405,12 @@ function logItems(limit){
   const seed=seedOf();
   const days=w.span/86400000;
   const total=Math.max(10,Math.min(320,Math.round((10+days*11)*intensity())));
-  const step=w.span/total;
-  const done=Math.max(0,Math.min(total,Math.floor((Date.now()-w.st)/step)));
+  /* первые решения агента появляются сразу после запуска, дальше — равномерно по периоду */
+  const warm=Math.min(w.span*0.06,12*60000);
+  const rest=(w.span-warm)/Math.max(1,total-6);
+  const at=i=> i<6 ? w.st+warm*(i+1)/6 : w.st+warm+rest*(i-5);
+  const now=Date.now();
+  let done=0; while(done<total && at(done)<=now) done++;
   const realized=(value()-(Number(w.d.from)||0))*0.6;
   const out=[];
   for(let i=done-1;i>=0&&out.length<(limit||40);i--){
@@ -420,7 +424,7 @@ function logItems(limit){
     if(k===2) text=side+" "+sym+" · объём "+vol.toFixed(2)+" лота · вход "+livePrice(sym).toFixed((SPEC[sym]||[0,2])[1]);
     if(k===3||k===4) text=sym+" · результат "+sig(Math.abs(pl))+" · "+(k===4?"частичное закрытие":"полное закрытие");
     if(k===5) text=sym+" · результат "+sig(-Math.abs(pl)*0.45);
-    out.push({t:w.st+step*(i+1),title,text,tone});
+    out.push({t:at(i),title,text,tone});
   }
   return out;
 }
