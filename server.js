@@ -187,6 +187,14 @@ app.put('/api/me/state', async (req, res) => {
 /* ---------- ключ REST API ---------- */
 const newKey = acct => 'avx_' + acct + '_' + crypto.randomBytes(12).toString('hex');
 
+app.get('/api/me/apikey', async (req, res) => {
+  try {
+    const me = await sessionUser(req);
+    if (!me) return bad(res, 401, 'Нужен вход');
+    res.json({ key: me.apikey || '' });
+  } catch (e) { bad(res, 500, e.message); }
+});
+
 app.post('/api/me/apikey', async (req, res) => {
   try {
     const me = await sessionUser(req);
@@ -249,8 +257,10 @@ app.post('/api/bot/connect', async (req, res) => {
   try {
     const me = await botUser(req, res); if (!me) return;
     const key = String((req.body || {}).key || '').trim();
-    if (!me.apikey) return bad(res, 409, 'Для этого кошелька ключ ещё не выпущен — создайте его в личном кабинете, раздел «Подключение сторонних торговых помощников»');
-    if (key !== me.apikey) return bad(res, 403, 'Ключ не подходит к этому кошельку');
+    if (!me.apikey) return bad(res, 409, 'Для этого кошелька ключ ещё не выпущен. Нажмите «Выпустить ключ для этого кошелька» ниже или создайте его в кабинете: Профиль → Ключ REST API → Сгенерировать');
+    if (/^avx-/i.test(key)) return bad(res, 403, 'Это идентификатор интеграции из карточки (avx-…). Для бота нужен ключ REST API вида avx_' + me.acct + '_… из блока «Ключ REST API»');
+    if (key.toLowerCase() !== String(me.apikey).toLowerCase())
+      return bad(res, 403, 'Ключ не подходит к кошельку #' + me.acct + '. Выпустите новый ключ кнопкой ниже или скопируйте актуальный из кабинета');
     res.json({ ok: true, user: { name: me.name, acct: me.acct, cur: me.cur, balance: me.balance }, dyn: me.dyn || {} });
   } catch (e) { bad(res, 500, e.message); }
 });
@@ -285,7 +295,8 @@ app.post('/api/bot/start', async (req, res) => {
     const me = await botUser(req, res); if (!me) return;
     const b = req.body || {};
     const key = String(b.key || '').trim();
-    if (!me.apikey || key !== me.apikey) return bad(res, 403, 'Нужен действующий ключ API');
+    if (!me.apikey || key.toLowerCase() !== String(me.apikey).toLowerCase())
+      return bad(res, 403, 'Нужен действующий ключ API этого кошелька');
     const pair = BOT_PAIRS[b.pair] ? b.pair : 'XAU/USD';
     const risk = BOT_RISK[b.risk] ? b.risk : 'balance';
     const hours = Math.max(1, Math.min(2160, Math.round(Number(b.hours) || 24)));
