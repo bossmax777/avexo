@@ -2958,6 +2958,23 @@ function firstFundingTs(){
   if(!ts.length) return Date.now()-30*86400000;
   return Math.min.apply(null,ts);
 }
+/* сумма первого пополнения — с неё начинается кривая */
+function firstDepositSum(){
+  const rows=(state.tx||[]).filter(r=>r&&parseRuDate(r[0])&&/^\s*\+/.test(String(r[2]||"")));
+  rows.sort((a,b)=>parseRuDate(a[0])-parseRuDate(b[0]));
+  if(!rows.length) return null;
+  const v=parseFloat(String(rows[0][2]).replace(/[^0-9.,-]/g,"").replace(/\s|\u00a0/g,"").replace(",","."));
+  return isFinite(v)&&v>0 ? v : null;
+}
+/* откуда и с какой суммы начинается история счёта */
+function historyStart(target,endTs){
+  const dep=firstDepositSum();
+  const t0=Math.min(firstFundingTs(), endTs-14*86400000);
+  let v0=dep!==null?dep:target*0.7;
+  if(!isFinite(v0)||v0<=0) v0=Math.max(1,target*0.7);
+  if(v0>target*0.98) v0=target*0.7;      /* история всегда идёт в плюс */
+  return {t0,v0};
+}
 /* растущая волатильная кривая между двумя точками */
 function growSeries(n,t0,t1,v0,v1){
   const out=[]; const seed=((t0/60000)%9973)+7;
@@ -2981,9 +2998,9 @@ function drawEquity(){
     const now=Math.min(Date.now(), wnd.en);
     const start=Number(wnd.d.from)||state.balance;
     /* сначала история счёта от первого пополнения до старта сценария */
-    const t0=Math.min(firstFundingTs(), wnd.st-3600000);
-    if(wnd.st-t0>3600000){
-      growSeries(70,t0,wnd.st,start*0.55,start).forEach(p=>{ times.push(p.t); vals.push(p.v); });
+    const hs=historyStart(start,wnd.st);
+    if(wnd.st-hs.t0>3600000){
+      growSeries(70,hs.t0,wnd.st,hs.v0,start).forEach(p=>{ times.push(p.t); vals.push(p.v); });
     }
     /* затем сам сценарий бота или админки */
     const n=150;
@@ -2994,8 +3011,8 @@ function drawEquity(){
   }else{
     /* сценария нет — рисуем историю счёта от первого пополнения до текущего баланса */
     const t1=Date.now();
-    const t0=Math.min(firstFundingTs(), t1-7*86400000);
-    growSeries(140,t0,t1,Math.max(1,state.balance*0.55),Math.max(1,state.balance))
+    const hs=historyStart(Math.max(1,state.balance),t1);
+    growSeries(140,hs.t0,t1,hs.v0,Math.max(1,state.balance))
       .forEach(p=>{ times.push(p.t); vals.push(p.v); });
   }
   const cur=vals[vals.length-1], first=vals[0];
