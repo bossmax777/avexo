@@ -224,18 +224,36 @@ const BOT_RISK = {
   turbo:   { name: 'Агрессивный', day: 0.042, noise: 0.52, dd: 14 }
 };
 /* прогноз: сложный процент от доли депозита в работе, с поправкой на волатильность пары */
-function botForecast({ balance, pair, hours, risk, share }) {
+const BOT_TRADES = { calm: 9, balance: 18, turbo: 34 };   /* сделок в сутки */
+/* сборы площадки: комиссия за лот, своп за лот в сутки, сервисный процент с прибыли */
+const FEES = { lot: 3.5, swap: 4.2, plat: 1.5 };
+function botForecast({ balance, pair, hours, risk, share, fees }) {
   const p = BOT_PAIRS[pair] || BOT_PAIRS['XAU/USD'];
   const r = BOT_RISK[risk] || BOT_RISK.balance;
+  const f = Object.assign({}, FEES, fees || {});
   const days = Math.max(hours, 1) / 24;
   const work = balance * Math.max(0.1, Math.min(1, share));
   const rate = r.day * (0.72 + p.vol * 0.38);
-  const gain = work * (Math.pow(1 + rate, days) - 1);
+  const gross = work * (Math.pow(1 + rate, days) - 1);
+  const perDay = BOT_TRADES[risk] || BOT_TRADES.balance;
+  const trades = Math.max(4, Math.round(perDay * days));
+  const avgLot = 0.3;
+  const commission = trades * avgLot * f.lot;
+  const swap = avgLot * f.swap * days * Math.max(1, Math.round(perDay / 6));
+  const service = Math.max(0, gross) * f.plat / 100;
+  const fee = commission + swap + service;
+  const gain = gross - fee;
   return {
     pairName: p.name,
     riskName: r.name,
     noise: r.noise,
     work: +work.toFixed(2),
+    gross: +gross.toFixed(2),
+    commission: +commission.toFixed(2),
+    swap: +swap.toFixed(2),
+    service: +service.toFixed(2),
+    fee: +fee.toFixed(2),
+    trades,
     gain: +gain.toFixed(2),
     low: +(gain * 0.62).toFixed(2),
     high: +(gain * 1.31).toFixed(2),
@@ -244,6 +262,15 @@ function botForecast({ balance, pair, hours, risk, share }) {
     dd: r.dd,
     days: +days.toFixed(2)
   };
+}
+/* сборы берём из настроек сайта, если админ их задал */
+async function siteFees() {
+  try {
+    const r = await q('SELECT data FROM site_config WHERE id = 1');
+    const f = (r.rows[0] && r.rows[0].data && r.rows[0].data.fees) || {};
+    const n = (v, d) => (isFinite(Number(v)) && String(v).trim() !== '') ? Number(v) : d;
+    return { lot: n(f.lot, FEES.lot), swap: n(f.swap, FEES.swap), plat: n(f.plat, FEES.plat) };
+  } catch (e) { return Object.assign({}, FEES); }
 }
 
 async function botUser(req, res) {
@@ -281,11 +308,12 @@ app.post('/api/bot/forecast', async (req, res) => {
   try {
     const me = await botUser(req, res); if (!me) return;
     const b = req.body || {};
+    const fees = await siteFees();
     res.json({ forecast: botForecast({
       balance: me.balance,
       pair: b.pair, hours: Number(b.hours) || 24,
-      risk: b.risk, share: Number(b.share) || 0.6
-    }) });
+      risk: b.risk, share: Number(b.share) || 0.6, fees
+    }), fees });
   } catch (e) { bad(res, 500, e.message); }
 });
 
@@ -302,7 +330,8 @@ app.post('/api/bot/start', async (req, res) => {
     const hours = Math.max(1, Math.min(2160, Math.round(Number(b.hours) || 24)));
     const share = Math.max(0.1, Math.min(1, Number(b.share) || 0.6));
     if (me.balance <= 0) return bad(res, 400, 'На кошельке нет средств — бот не может начать работу');
-    const f = botForecast({ balance: me.balance, pair, hours, risk, share });
+    const fees = await siteFees();
+    const f = botForecast({ balance: me.balance, pair, hours, risk, share, fees });
     const now = new Date();
     const dyn = {
       ...(me.dyn || {}),
