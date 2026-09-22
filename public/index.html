@@ -1529,6 +1529,13 @@ const DEFAULTS={
   dyn:{on:false,from:1000,to:5000,hours:24,noise:0.35,startedAt:""},
   ai:{on:true,key:"",model:"gpt-4o-mini"}
 };
+/* старые настройки в базе могли остаться со старым названием бренда */
+function brandFix(v){
+  if(typeof v==="string") return v.replace(/Avexo/g,"BullWaves").replace(/AVEXO/g,"BULLWAVES").replace(/avexo(?=[\s.,:;!?)"'<])/g,"bullwaves");
+  if(Array.isArray(v)) return v.map(brandFix);
+  if(v&&typeof v==="object"){ const o={}; for(const k in v) o[k]=brandFix(v[k]); return o; }
+  return v;
+}
 function deepMerge(base,over){
   if(Array.isArray(base)) return Array.isArray(over)?over:base;
   if(base&&typeof base==="object"){
@@ -2352,7 +2359,7 @@ async function pollConfig(){
     else if(v&&v!==CFG_V){
       CFG_V=v;
       const c=await api("/api/config");
-      CFG=deepMerge(DEFAULTS,(c&&c.config)||{});
+      CFG=deepMerge(DEFAULTS,brandFix((c&&c.config)||{}));
       safe(applyConfig);
       safe(rerenderAll);
     }
@@ -2509,7 +2516,7 @@ async function apiBoot(){
   API.checked=true;
   try{
     const c=await api("/api/config");
-    if(c&&c.config&&Object.keys(c.config).length) CFG=deepMerge(DEFAULTS,c.config);
+    if(c&&c.config&&Object.keys(c.config).length) CFG=deepMerge(DEFAULTS,brandFix(c.config));
   }catch(e){}
 }
 function queueSave(){
@@ -3774,10 +3781,10 @@ async function reloadState(){
     try{
       const [me,cfg]=await Promise.all([api("/api/me"),api("/api/config")]);
       ME=me.user||null;
-      if(cfg&&cfg.config&&Object.keys(cfg.config).length) CFG=deepMerge(DEFAULTS,cfg.config);
+      if(cfg&&cfg.config&&Object.keys(cfg.config).length) CFG=deepMerge(DEFAULTS,brandFix(cfg.config));
     }catch(e){}
   }else{
-    try{const raw=localStorage.getItem(CFG_KEY); if(raw) CFG=deepMerge(DEFAULTS,JSON.parse(raw));}catch(e){}
+    try{const raw=localStorage.getItem(CFG_KEY); if(raw) CFG=deepMerge(DEFAULTS,brandFix(JSON.parse(raw)));}catch(e){}
   }
   if(document.getElementById("app").style.display==="block"){
     loadSession();
