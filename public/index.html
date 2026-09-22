@@ -2999,11 +2999,21 @@ function drawEquity(){
     const start=Number(wnd.d.from)||state.balance;
     /* сначала история счёта от первого пополнения до старта сценария */
     const hs=historyStart(start,wnd.st);
-    if(wnd.st-hs.t0>3600000){
-      growSeries(70,hs.t0,wnd.st,hs.v0,start).forEach(p=>{ times.push(p.t); vals.push(p.v); });
+    let t0=hs.t0, v0=hs.v0;
+    /* показываем столько истории, сколько длится сам сценарий, —
+       иначе рабочий участок сжимается в прямую линию */
+    const full=wnd.st-t0;
+    const show=Math.min(full, Math.max(12*3600000, Math.min(7*86400000, wnd.span)));
+    if(full>show){
+      const k=show/full;
+      v0=start-(start-v0)*Math.pow(k,0.92);
+      t0=wnd.st-show;
+    }
+    if(wnd.st-t0>600000){
+      growSeries(90,t0,wnd.st,v0,start).forEach(p=>{ times.push(p.t); vals.push(p.v); });
     }
     /* затем сам сценарий бота или админки */
-    const n=150;
+    const n=180;
     for(let i=0;i<n;i++){
       const t=wnd.st+(now-wnd.st)*(i/(n-1));
       times.push(t); vals.push(dynValue(t));
