@@ -1073,6 +1073,7 @@ footer a:hover{color:var(--accent)}
             </table>
           </div>
           <div class="empty" id="posEmpty" hidden>Открытых позиций нет. Откройте сделку во вкладке «Терминал».</div>
+          <p class="ai-note" id="posFees" style="margin-top:12px"></p>
         </div>
         <div class="panel">
           <div class="panel-head"><h3>История операций</h3></div>
@@ -2792,7 +2793,7 @@ document.getElementById("side").addEventListener("click",e=>{
 /* баланс */
 function renderBalance(){
   const POS=activePositions();
-  const pl=POS.reduce((s,p)=>s+pnl(p),0);
+  const pl=POS.reduce((s,p)=>s+netPnl(p),0);
   const equity=state.balance+pl;
   const margin=POS.reduce((s,p)=>{
     const [c]=spec(p.sym); return s+p.vol*c*(prices[p.sym]??p.open)/200;},0);
@@ -2836,6 +2837,24 @@ function pnl(p){
   const [c]=spec(p.sym);
   const diff=(cur-p.open)*(p.side==="buy"?1:-1);
   return diff*p.vol*c;
+}
+/* ---- сборы площадки: комиссия за лот, своп за ночь, сервисный сбор ---- */
+function feeCfg(){
+  const f=(CFG&&CFG.fees)||{};
+  const n=(v,d)=>isFinite(Number(v))&&String(v).trim()!==""?Number(v):d;
+  return {lot:n(f.lot,3.5), swap:n(f.swap,4.2), plat:n(f.plat,1.5)};
+}
+/* сколько удержано по одной позиции: комиссия при открытии + своп за время удержания */
+function posFee(p){
+  const f=feeCfg();
+  const days=p.openedAt?Math.max(0,(Date.now()-p.openedAt)/86400000):0;
+  const comm=p.vol*f.lot;
+  const swap=p.vol*f.swap*days;
+  return {comm,swap,total:comm+swap};
+}
+function netPnl(p){ return pnl(p)-posFee(p).total; }
+function feesTotal(list){
+  return (list||[]).reduce((s,p)=>s+posFee(p).total,0);
 }
 function renderAgent(){
   const box=document.getElementById("agentBox"); if(!box) return;
@@ -2920,18 +2939,30 @@ function renderPositions(){
   document.getElementById("posEmpty").hidden=POS.length>0;
   document.getElementById("posCount").textContent=POS.length+" шт.";
   b.innerHTML=POS.map((p,i)=>{
-    const v=pnl(p);
+    const fe=posFee(p);
+    const v=pnl(p)-fe.total;
     return `<tr><td><b>${p.sym}</b></td>
       <td><span class="badge ${p.side}">${p.side==="buy"?"Buy":"Sell"}</span></td>
       <td class="num">${fmt(p.vol,2)}</td>
       <td class="num">${fmt(p.open,p.dec)}${(p.sl||p.tp)?`<small style="display:block;color:var(--dim);font-size:11px">${p.sl?"SL "+fmt(p.sl,p.dec):""}${p.sl&&p.tp?" · ":""}${p.tp?"TP "+fmt(p.tp,p.dec):""}</small>`:""}</td>
       <td class="num">${fmt(prices[p.sym]??p.open,p.dec)}</td>
       <td class="num ${v>=0?"up":"down"}">${v>=0?"+":"−"}${usd(Math.abs(v))}
+        <small style="display:block;color:var(--dim);font-size:11px">комиссия −${usd(fe.comm)} · своп −${usd(fe.swap)}</small>
         ${p.auto?'<span class="pos-auto">ИИ-агент</span>'
                 :`<button data-close="${i}" style="margin-left:10px;color:var(--dim);font-size:12px">закрыть</button>`}</td></tr>`;
   }).join("");
+  const feeBox=document.getElementById("posFees");
+  if(feeBox){
+    const f=feeCfg(), tot=feesTotal(POS);
+    feeBox.innerHTML=POS.length
+      ? 'Удержано площадкой по открытым сделкам: <b class="num down">−'+usd(tot)+
+        '</b> <span style="color:var(--dim)">· комиссия '+usd(f.lot)+' за лот · своп '+usd(f.swap)+
+        ' за лот в сутки · сервисный сбор '+fmt(f.plat,2)+'% от прибыли</span>'
+      : 'Комиссия площадки: '+usd(f.lot)+' за лот, своп '+usd(f.swap)+
+        ' за лот в сутки, сервисный сбор '+fmt(f.plat,2)+'% от прибыли.';
+  }
   b.querySelectorAll("[data-close]").forEach(btn=>btn.onclick=()=>{
-    const i=+btn.dataset.close,p=state.positions[i],v=pnl(p);
+    const i=+btn.dataset.close,p=state.positions[i],v=netPnl(p);
     state.balance+=v;
     state.hist.unshift([new Date().toLocaleDateString("ru-RU"),"Закрытие сделки",p.sym,
       (v>=0?"+":"−")+usd(Math.abs(v)),"ok"]);

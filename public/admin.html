@@ -256,6 +256,31 @@ body{background:radial-gradient(900px 520px at 88% -8%,rgba(79,70,229,.10),trans
     </div>
   </div>
 
+  <div data-pane="fees" hidden>
+    <div class="card">
+      <h2>Комиссии площадки</h2>
+      <p class="sub">Эти сборы удерживаются с клиента: комиссия берётся при открытии сделки,
+        своп — за каждые сутки удержания позиции, сервисный сбор — процент с заработанной прибыли.
+        Значения сразу применяются в кабинете и в кабинете бота.</p>
+      <div class="grid g3">
+        <div class="field"><label for="fe_lot">Комиссия за лот, $</label>
+          <input id="fe_lot" type="number" step="0.1" min="0">
+          <span class="hint">Списывается при открытии каждой сделки</span></div>
+        <div class="field"><label for="fe_swap">Своп за лот в сутки, $</label>
+          <input id="fe_swap" type="number" step="0.1" min="0">
+          <span class="hint">Начисляется за перенос позиции через ночь</span></div>
+        <div class="field"><label for="fe_plat">Сервисный сбор, % с прибыли</label>
+          <input id="fe_plat" type="number" step="0.1" min="0">
+          <span class="hint">Процент, который площадка удерживает с заработка бота</span></div>
+      </div>
+      <div style="margin-top:14px;display:flex;gap:9px;flex-wrap:wrap">
+        <button class="btn btn-primary btn-sm" id="fe_save">Сохранить и опубликовать</button>
+        <button class="btn btn-ghost btn-sm" id="fe_reset">Вернуть стандартные</button>
+      </div>
+      <p class="sub" style="margin-top:14px" id="fe_demo"></p>
+    </div>
+  </div>
+
   <div data-pane="quotes" hidden>
     <div class="card">
       <h2>Реальные котировки</h2>
@@ -603,7 +628,7 @@ const NAV=[
   ["Контент сайта",[["pages","Страницы и HTML"],["blocks","Блоки"],["brand","Бренд"],
     ["hero","Первый экран"],["heads","Заголовки"],["benefits","Преимущества"],["stats","Цифры"],
     ["accounts","Счета"],["platforms","Платформы"],["foot","CTA и футер"]]],
-  ["Система",[["assist","Помощник"],["quotes","Котировки"],["code","Код и правки"]]]
+  ["Система",[["fees","Комиссии"],["assist","Помощник"],["quotes","Котировки"],["code","Код и правки"]]]
 ];
 const tabsEl=document.getElementById("tabs");
 tabsEl.innerHTML=NAV.map(([group,items])=>
@@ -614,6 +639,7 @@ function showTab(k){
   document.querySelectorAll("[data-pane]").forEach(p=>p.hidden=p.dataset.pane!==k);
   if(k==="payouts"&&typeof renderPayouts==="function") renderPayouts();
   if(k==="dash"&&typeof renderDash==="function") renderDash();
+  if(k==="fees"&&typeof renderFees==="function") renderFees();
   window.scrollTo({top:0,behavior:"smooth"});
 }
 tabsEl.addEventListener("click",e=>{
@@ -713,6 +739,37 @@ document.addEventListener("click",e=>{
 });
 
 /* ---------- сохранение ---------- */
+/* ---------- комиссии площадки ---------- */
+const FEE_DEF={lot:3.5,swap:4.2,plat:1.5};
+function feeVals(){
+  const f=(CFG.fees)||{};
+  const n=(v,d)=>isFinite(Number(v))&&String(v).trim()!==""?Number(v):d;
+  return {lot:n(f.lot,FEE_DEF.lot), swap:n(f.swap,FEE_DEF.swap), plat:n(f.plat,FEE_DEF.plat)};
+}
+function renderFees(){
+  const f=feeVals();
+  const set=(id,v)=>{const e=document.getElementById(id); if(e) e.value=v;};
+  set("fe_lot",f.lot); set("fe_swap",f.swap); set("fe_plat",f.plat);
+  const box=document.getElementById("fe_demo");
+  if(box) box.innerHTML="Пример: сделка 0,30 лота, открыта сутки → комиссия $"+
+    (0.3*f.lot).toFixed(2)+" + своп $"+(0.3*f.swap).toFixed(2)+
+    ". При прибыли $1 000 сервисный сбор составит $"+(1000*f.plat/100).toFixed(2)+".";
+}
+(function bindFees(){
+  const save=document.getElementById("fe_save"), reset=document.getElementById("fe_reset");
+  if(!save) return;
+  const num=(id,d)=>{const v=Number((document.getElementById(id)||{}).value); return isFinite(v)&&v>=0?v:d;};
+  save.onclick=async ()=>{
+    CFG.fees={lot:num("fe_lot",FEE_DEF.lot), swap:num("fe_swap",FEE_DEF.swap), plat:num("fe_plat",FEE_DEF.plat)};
+    renderFees(); await publishCfg(); toast("Комиссии обновлены — кабинет и бот подхватят их сразу");
+  };
+  reset.onclick=async ()=>{
+    CFG.fees=Object.assign({},FEE_DEF);
+    renderFees(); await publishCfg(); toast("Стандартные ставки возвращены");
+  };
+  renderFees();
+})();
+
 async function publishCfg(silent){
   if(!API.on){
     try{ localStorage.setItem(CFG_KEY,JSON.stringify(CFG)); }catch(e){}

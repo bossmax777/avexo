@@ -229,6 +229,8 @@ table.data tr:last-child td{border-bottom:0}
         <div class="fc" id="fcBox">
           <span class="muted" style="font-size:12px">Расчётный доход за период</span>
           <div class="fc-main"><b id="fcGain">—</b><span class="muted num" id="fcPct"></span></div>
+          <div class="fc-row"><span class="muted">Валовая прибыль</span><b class="num" id="fcGross">—</b></div>
+          <div class="fc-row"><span class="muted">Комиссия площадки</span><b class="num down" id="fcFee">—</b></div>
           <div class="fc-row"><span class="muted">Вероятный диапазон</span><b class="num" id="fcRange">—</b></div>
           <div class="fc-row"><span class="muted">Целевой баланс</span><b class="num" id="fcTarget">—</b></div>
           <div class="fc-row"><span class="muted">В работе</span><b class="num" id="fcWork">—</b></div>
@@ -269,6 +271,7 @@ table.data tr:last-child td{border-bottom:0}
           <div class="kpi"><small>Прибыль сессии</small><b class="num up" id="kPl">—</b></div>
           <div class="kpi"><small>Осталось времени</small><b class="num" id="kLeft">—</b></div>
           <div class="kpi"><small>Выполнено плана</small><b class="num" id="kProg">—</b></div>
+          <div class="kpi"><small>Удержано площадкой</small><b class="num down" id="kFee">—</b></div>
         </div>
         <div style="margin-top:14px" class="bar"><i id="barFill" style="width:0"></i></div>
         <svg id="chart" viewBox="0 0 800 220" preserveAspectRatio="none"
@@ -368,6 +371,12 @@ function value(t){
   const w=win(); if(!w) return S.user?S.user.balance:0;
   const pr=Math.max(0,Math.min(1,((t||Date.now())-w.st)/w.span));
   return dynCurve(w.d,pr,w.st,w.span);
+}
+let FEES={lot:3.5,swap:4.2,plat:1.5};
+function posFee(p){
+  const days=p.at?Math.max(0,(Date.now()-p.at)/86400000):0;
+  const comm=p.vol*FEES.lot, swap=p.vol*FEES.swap*days;
+  return {comm,swap,total:comm+swap};
 }
 const SPEC={"XAU/USD":[100,2],"XAG/USD":[5000,3],"EUR/USD":[100000,5],"GBP/USD":[100000,5],
   "USD/JPY":[100000,3],"BTC/USD":[1,0],"US500":[10,1],"USOIL":[100,2]};
@@ -511,13 +520,20 @@ function renderSession(){
   $("kProg").textContent=(pr*100<10?(pr*100).toFixed(1):Math.round(pr*100))+"%";
   $("barFill").style.width=(pr*100).toFixed(1)+"%";
   const ps=positions();
-  $("posMeta").textContent=ps.length+" сделок в работе · инструмент "+(d.pair||"XAU/USD");
-  $("posBody").innerHTML=ps.length?ps.map(p=>
-    '<tr><td><b>'+p.sym+'</b></td><td><span class="tag '+p.side+'">'+(p.side==="buy"?"BUY":"SELL")+'</span></td>'+
+  $("posMeta").textContent=ps.length+" сделок в работе · инструмент "+(d.pair||"XAU/USD")+
+    " · комиссия "+usd(FEES.lot)+"/лот, своп "+usd(FEES.swap)+"/лот в сутки";
+  let feeSum=0;
+  $("posBody").innerHTML=ps.length?ps.map(p=>{
+    const fe=posFee(p); feeSum+=fe.total;
+    const net=p.pl-fe.total;
+    return '<tr><td><b>'+p.sym+'</b></td><td><span class="tag '+p.side+'">'+(p.side==="buy"?"BUY":"SELL")+'</span></td>'+
     '<td class="num">'+p.vol.toFixed(2)+'</td><td class="num">'+p.open.toFixed(p.dec)+'</td>'+
     '<td class="num">'+p.price.toFixed(p.dec)+'</td>'+
-    '<td class="num '+(p.pl>=0?"up":"down")+'">'+sig(p.pl)+'</td></tr>').join("")
+    '<td class="num '+(net>=0?"up":"down")+'">'+sig(net)+
+    '<small style="display:block;color:var(--dim);font-size:11px">комиссия −'+usd(fe.comm)+' · своп −'+usd(fe.swap)+'</small></td></tr>';
+  }).join("")
     :'<tr><td colspan="6" class="muted">Бот готовит первый вход…</td></tr>';
+  const kf=$("kFee"); if(kf) kf.textContent="−"+usd(feeSum+(S.fc?S.fc.service*pr:0));
   const items=logItems(40);
   $("logBox").innerHTML=items.length?items.map(it=>
     '<div class="log-it"><div class="log-ic '+(it.tone||"")+'">'+(it.tone==="g"?"✓":it.tone==="r"?"!":"·")+'</div>'+
@@ -566,7 +582,10 @@ function forecast(){
       const j=await api("/api/bot/forecast",{method:"POST",body:JSON.stringify(
         {pair:S.pair,hours:S.hours,risk:S.risk,share:S.share})});
       const f=j.forecast; S.fc=f;
+      if(j.fees) FEES=j.fees;
       $("fcGain").textContent=sig(f.gain);
+      $("fcGross").textContent=sig(f.gross);
+      $("fcFee").textContent="−"+usd(f.fee)+" ("+usd(f.commission)+" комиссия · "+usd(f.swap)+" свопы · "+usd(f.service)+" сервис)";
       $("fcPct").textContent="( "+(f.pct>=0?"+":"")+f.pct+"% к депозиту )";
       $("fcRange").textContent=usd(f.low)+" … "+usd(f.high);
       $("fcTarget").textContent=usd(f.target);
