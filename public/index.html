@@ -777,6 +777,7 @@ footer a:hover{color:var(--accent)}
   background:linear-gradient(90deg,#4F46E5,#38BDF8 55%,#10B981);transition:width .6s var(--ease)}
 .agent-note{display:block;margin-top:9px;font-size:12px;color:var(--muted)}
 .agent-trades{margin-top:16px;border-top:1px solid var(--line-soft);padding-top:14px}
+.asum-h{font-size:12.5px;font-weight:600;color:var(--muted);margin-bottom:6px}
 .agent-sum{margin-top:14px;border-top:1px solid var(--line);padding-top:10px;max-width:420px}
 .asum-row{display:flex;justify-content:space-between;align-items:baseline;padding:6px 0;font-size:13.5px}
 .asum-row+.asum-row{border-top:1px dashed var(--line-soft)}
@@ -2944,13 +2945,16 @@ function renderAgentSum(all){
   const f=feeCfg();
   const trades=all||[];
   const holdDays=trades.length ? (w.span/Math.max(1,trades.length))/86400000 : 0;
-  const profit=trades.reduce((a,t)=>a+t.pl,0);
   const comm=trades.reduce((a,t)=>a+t.vol*f.lot,0);
   const swap=trades.reduce((a,t)=>a+t.vol*f.swap*holdDays,0);
   const dep=(firstDepositSum()!==null?firstDepositSum():Number(w.d.from))||0;
-  const bal=dep+profit-swap-comm;
+  /* баланс берём тот же, что в шапке и на карточке счёта,
+     прибыль выводим так, чтобы сводка сходилась: депозит + прибыль − своп − комиссия = баланс */
+  const bal=state.balance;
+  const profit=bal-dep+swap+comm;
   const row=(l,v,cls)=>`<div class="asum-row"><span>${l}</span><b class="num ${cls||""}">${v}</b></div>`;
   box.innerHTML=
+    '<div class="asum-h">Итог по счёту</div>'+
     row("Депозит", usd(dep))+
     row("Прибыль", (profit>=0?"+":"−")+usd(Math.abs(profit)), profit>=0?"up":"down")+
     row("Своп", "−"+usd(swap), "down")+
