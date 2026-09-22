@@ -777,6 +777,11 @@ footer a:hover{color:var(--accent)}
   background:linear-gradient(90deg,#4F46E5,#38BDF8 55%,#10B981);transition:width .6s var(--ease)}
 .agent-note{display:block;margin-top:9px;font-size:12px;color:var(--muted)}
 .agent-trades{margin-top:16px;border-top:1px solid var(--line-soft);padding-top:14px}
+.agent-sum{margin-top:14px;border-top:1px solid var(--line);padding-top:10px;max-width:420px}
+.asum-row{display:flex;justify-content:space-between;align-items:baseline;padding:6px 0;font-size:13.5px}
+.asum-row+.asum-row{border-top:1px dashed var(--line-soft)}
+.asum-row span{color:var(--muted)}
+.asum-row:last-child b{font-size:16px}
 .agent-trades-h{display:flex;justify-content:space-between;align-items:center;gap:10px;
   font-size:13px;font-weight:600;margin-bottom:8px}
 .agent-trades-h .muted{font-weight:400;font-size:12px;color:var(--dim)}
@@ -1062,6 +1067,7 @@ footer a:hover{color:var(--accent)}
                 <tbody id="agentTrades"></tbody>
               </table>
             </div>
+            <div class="agent-sum" id="agentSum"></div>
           </div>
         </div>
         <div class="panel" style="margin-bottom:16px">
@@ -2929,6 +2935,27 @@ function renderAgent(){
       <td class="num">${fmt(t.close,t.dec)}</td>
       <td class="num ${t.pl>=0?"up":"down"}">${t.pl>=0?"+":"−"}${usd(Math.abs(t.pl))}</td></tr>`).join("")
     ||'<tr><td colspan="7" style="color:var(--dim)">Первая сделка ещё в работе.</td></tr>';
+  renderAgentSum(all);
+}
+/* итог по счёту в стиле торгового терминала: депозит, прибыль, своп, комиссия, баланс */
+function renderAgentSum(all){
+  const box=document.getElementById("agentSum"); if(!box) return;
+  const w=dynWindow(); if(!w){ box.innerHTML=""; return; }
+  const f=feeCfg();
+  const trades=all||[];
+  const holdDays=trades.length ? (w.span/Math.max(1,trades.length))/86400000 : 0;
+  const profit=trades.reduce((a,t)=>a+t.pl,0);
+  const comm=trades.reduce((a,t)=>a+t.vol*f.lot,0);
+  const swap=trades.reduce((a,t)=>a+t.vol*f.swap*holdDays,0);
+  const dep=(firstDepositSum()!==null?firstDepositSum():Number(w.d.from))||0;
+  const bal=dep+profit-swap-comm;
+  const row=(l,v,cls)=>`<div class="asum-row"><span>${l}</span><b class="num ${cls||""}">${v}</b></div>`;
+  box.innerHTML=
+    row("Депозит", usd(dep))+
+    row("Прибыль", (profit>=0?"+":"−")+usd(Math.abs(profit)), profit>=0?"up":"down")+
+    row("Своп", "−"+usd(swap), "down")+
+    row("Комиссия", "−"+usd(comm), "down")+
+    row("Баланс", usd(bal));
 }
 function renderPositions(){
   dynSettle();
