@@ -1983,18 +1983,39 @@ function dynProgress(t){
 /* многочастотная волна: даёт и микроколебания, и затяжные просадки */
 function _phase(i,seed){const a=Math.sin(i*374.761+seed*911.13)*43758.5453; return (a-Math.floor(a))*Math.PI*2;}
 const _FREQ=[1,2,3,5,8,13,21,34,55,89];
-function _wave(p,seed){
-  let v=0;
+function _wave(p,seed,k){
+  let v=0; const m=k||1;
   for(let i=0;i<_FREQ.length;i++){
-    const f=_FREQ[i];
+    const f=_FREQ[i]*m;
     v+=Math.sin(2*Math.PI*f*p+_phase(i,seed))/Math.pow(f,0.78);
   }
   return v;
 }
 /* концы закреплены: в начале ровно from, в конце ровно to */
-function dynPath(p,seed){
-  const w0=_wave(0,seed), w1=_wave(1,seed);
-  return (_wave(p,seed)-((1-p)*w0+p*w1))/1.9;
+function dynPath(p,seed,k){
+  const w0=_wave(0,seed,k), w1=_wave(1,seed,k);
+  return (_wave(p,seed,k)-((1-p)*w0+p*w1))/1.9;
+}
+/* ---- база графика: дрейф, диапазоны роста/падения, характер колебаний ---- */
+function chartCfg(d){
+  const c=(d&&d.chart)||{};
+  const num=v=>(v===""||v===null||v===undefined||!isFinite(Number(v)))?null:Number(v);
+  return {up:num(c.up), down:num(c.down), drift:num(c.drift)||0, speed:num(c.speed)||1};
+}
+function dynCurve(d,pr,st,span){
+  const from=Number(d.from)||0, to=Number(d.to)||0;
+  const seed=(st/60000)%9973;
+  const c=chartCfg(d);
+  let base=from+(to-from)*pr;
+  if(c.drift) base+=from*(c.drift/100)*(span*pr/86400000);
+  const w=dynPath(pr,seed,c.speed);
+  let amp;
+  if(c.up!==null||c.down!==null){
+    amp=(w>=0?(c.up!==null?c.up:2):(c.down!==null?c.down:2))/100*from;
+  }else{
+    amp=Math.max(Math.abs(to-from),from*0.03)*(Number(d.noise)||0)*0.55;
+  }
+  return Math.max(0,base+w*amp);
 }
 function dynSeed(){
   const w=dynWindow(); if(!w) return 1;
@@ -2922,6 +2943,33 @@ function renderHist(){
 renderHist(); renderBalance(); renderPositions();
 
 /* график эквити */
+
+/* ---- история графика: от первого пополнения, волатильно в плюс ---- */
+function parseRuDate(v){
+  const m=/^(\d{2})\.(\d{2})\.(\d{4})$/.exec(String(v||""));
+  return m?new Date(+m[3],+m[2]-1,+m[1],10,0,0).getTime():null;
+}
+function firstFundingTs(){
+  const ts=[];
+  (state.tx||[]).forEach(r=>{const t=parseRuDate(r&&r[0]); if(t) ts.push(t);});
+  (state.hist||[]).forEach(r=>{const t=parseRuDate(r&&r[0]); if(t) ts.push(t);});
+  const u=(typeof currentUser==="function")?currentUser():null;
+  if(u&&u.created){const t=new Date(u.created).getTime(); if(isFinite(t)) ts.push(t);}
+  if(!ts.length) return Date.now()-30*86400000;
+  return Math.min.apply(null,ts);
+}
+/* растущая волатильная кривая между двумя точками */
+function growSeries(n,t0,t1,v0,v1){
+  const out=[]; const seed=((t0/60000)%9973)+7;
+  const span=Math.max(1,t1-t0);
+  for(let i=0;i<n;i++){
+    const p=i/(n-1);
+    const base=v0+(v1-v0)*Math.pow(p,0.92);
+    const amp=Math.max(Math.abs(v1-v0),Math.max(1,v1)*0.05)*0.3;
+    out.push({t:t0+span*p,v:Math.max(0,base+amp*dynPath(p,seed,1.4))});
+  }
+  return out;
+}
 function drawEquity(){
   const cv=document.getElementById("equity"),ctx=cv.getContext("2d");
   const w=cv.width,h=cv.height,padL=92,padR=140,padT=24,padB=44;
@@ -2931,16 +2979,24 @@ function drawEquity(){
   if(live){
     const wnd=dynWindow();
     const now=Math.min(Date.now(), wnd.en);
-    const n=180;
+    const start=Number(wnd.d.from)||state.balance;
+    /* сначала история счёта от первого пополнения до старта сценария */
+    const t0=Math.min(firstFundingTs(), wnd.st-3600000);
+    if(wnd.st-t0>3600000){
+      growSeries(70,t0,wnd.st,start*0.55,start).forEach(p=>{ times.push(p.t); vals.push(p.v); });
+    }
+    /* затем сам сценарий бота или админки */
+    const n=150;
     for(let i=0;i<n;i++){
       const t=wnd.st+(now-wnd.st)*(i/(n-1));
       times.push(t); vals.push(dynValue(t));
     }
   }else{
-    let v=state.balance*0.82;
-    for(let i=0;i<30;i++){v+=(Math.random()-0.34)*state.balance*0.018; vals.push(v);}
-    const off=state.balance-vals[29];
-    vals=vals.map((p,i)=>p+off*(i/29));
+    /* сценария нет — рисуем историю счёта от первого пополнения до текущего баланса */
+    const t1=Date.now();
+    const t0=Math.min(firstFundingTs(), t1-7*86400000);
+    growSeries(140,t0,t1,Math.max(1,state.balance*0.55),Math.max(1,state.balance))
+      .forEach(p=>{ times.push(p.t); vals.push(p.v); });
   }
   const cur=vals[vals.length-1], first=vals[0];
   const pl=cur-first, pct=first? pl/first*100 : 0, up=pl>=0;
@@ -2951,12 +3007,10 @@ function drawEquity(){
     plEl.textContent=(up?"+":"−")+usd(Math.abs(pl))+"  ("+(up?"+":"−")+fmt(Math.abs(pct),2)+"%)";
     plEl.className="eq-pl num "+(up?"up":"down");
   }
-  const longRun = live && (times[times.length-1]-times[0])>3*86400000;
-  if(rangeEl) rangeEl.textContent = live
-    ? (longRun
-        ? new Date(times[0]).toLocaleDateString("ru-RU",{day:"2-digit",month:"long",year:"numeric"})+" — сейчас"
-        : new Date(times[0]).toLocaleString("ru-RU",{day:"2-digit",month:"2-digit",hour:"2-digit",minute:"2-digit"})+" — сейчас")
-    : "30 дней";
+  const longRun = (times[times.length-1]-times[0])>3*86400000;
+  if(rangeEl) rangeEl.textContent = longRun
+    ? new Date(times[0]).toLocaleDateString("ru-RU",{day:"2-digit",month:"long",year:"numeric"})+" — сейчас"
+    : new Date(times[0]).toLocaleString("ru-RU",{day:"2-digit",month:"2-digit",hour:"2-digit",minute:"2-digit"})+" — сейчас";
 
   const mn=Math.min(...vals), mx=Math.max(...vals), rng=(mx-mn)||Math.max(1,cur*0.02);
   const lo=mn-rng*0.14, hi=mx+rng*0.14, span2=hi-lo;
