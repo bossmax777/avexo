@@ -1324,7 +1324,7 @@ footer a:hover{color:var(--accent)}
       <!-- Профиль -->
       <div data-view="prof" hidden>
         <h2>Профиль</h2>
-        <p class="pane-sub" id="profSub">Данные вашего кошелька.</p>
+        <p class="pane-sub" id="profSub" style="display:none"></p>
         <div class="mt-acct" id="mtAcct">
           <div class="mt-stage">
             <div class="mt-name" id="mtName"></div>
@@ -2054,9 +2054,14 @@ function profileData(){
 function renderProfile(){
   const d=profileData();
   const sub=document.getElementById("profSub");
-  if(sub) sub.textContent = d.guest
-    ? "Гостевой просмотр — зарегистрируйтесь, чтобы завести свой кошелёк."
-    : "Данные вашего кошелька. Кнопка «Изменить» правит их прямо здесь.";
+  if(sub){
+    /* подпись показываем только гостю, у клиента её нет */
+    const txt=(CFG.html&&typeof CFG.html["text:profSub"]==="string"&&CFG.html["text:profSub"].trim())
+      ? CFG.html["text:profSub"]
+      : (d.guest ? "Гостевой просмотр — зарегистрируйтесь, чтобы завести свой кошелёк." : "");
+    sub.innerHTML=txt;
+    sub.style.display=txt?"":"none";
+  }
   const set=(id,v)=>{const e=document.getElementById(id); if(e) e.textContent=v;};
   set("pfName",d.name); set("pfEmail",d.email); set("pfPhone",d.phone);
   set("pfCountry",d.country); set("pfSince",d.since);
