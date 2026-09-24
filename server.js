@@ -436,8 +436,11 @@ app.patch('/api/admin/users/:id', requireAdmin, async (req, res) => {
         ? date.split('-').reverse().join('.')
         : new Date().toLocaleDateString('ru-RU');
       const sum = (amt > 0 ? '+' : '−') + '$' + Math.abs(amt).toFixed(2);
-      const tx = [[when, note || 'Начисление администратором', sum, 'ok', amt > 0 ? 'Исполнено' : 'Списано'], ...u.tx];
-      const hist = [[when, amt > 0 ? 'Начисление' : 'Списание', '—', sum, 'ok'], ...u.hist];
+      const ref = 'AVX-' + String(Date.now()).slice(-6) + '-' +
+        Math.random().toString(36).slice(2, 5).toUpperCase();
+      const defMeth = amt > 0 ? ('Криптовалюта · заявка ' + ref) : ('Вывод на реквизиты клиента · заявка ' + ref);
+      const tx = [[when, note || defMeth, sum, 'ok', amt > 0 ? 'Исполнено' : 'Списано'], ...u.tx];
+      const hist = [[when, amt > 0 ? 'Пополнение' : 'Вывод', ref, sum, 'ok'], ...u.hist];
       await q('UPDATE users SET balance = balance + $2, tx = $3::jsonb, hist = $4::jsonb WHERE id = $1',
         [id, amt, JSON.stringify(tx.slice(0, 200)), JSON.stringify(hist.slice(0, 200))]);
     }
