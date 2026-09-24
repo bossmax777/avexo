@@ -1005,6 +1005,8 @@ function renderCard(){
       <div style="display:flex;gap:9px;flex-wrap:wrap;margin-top:12px">
         <button class="btn btn-primary btn-sm" id="tx_save">Сохранить операции</button>
         <button class="btn btn-ghost btn-sm" id="tx_add">Добавить операцию</button>
+        <button class="btn btn-ghost btn-sm" id="tx_recalc">Пересчитать баланс и график</button>
+        <span class="hint" id="tx_sum"></span>
       </div>
     </div>`;
   document.getElementById("cd_save").onclick=()=>saveCard(cardIdx);
@@ -1016,7 +1018,11 @@ function renderCard(){
     document.getElementById("txRows").innerHTML=txRowsHtml(uu);
     bindTxRows();
   };
-  bindTxRows();
+  bindTxRows(); txPreview();
+  const rc=document.getElementById("tx_recalc");
+  if(rc) rc.onclick=()=>recalcTx(cardIdx);
+  const rows=document.getElementById("txRows");
+  if(rows) rows.addEventListener("input",txPreview);
   box.querySelector("[data-card-close]").onclick=()=>{ cardIdx=null; renderUsers(); };
 }
 const TX_METHODS=["Криптовалюта","Пополнение через USDT TRC-20","Пополнение через USDT ERC-20",
@@ -1082,6 +1088,60 @@ function collectTx(){
     }
     return [date, meth, g("sum")||"+$0.00", g("st")||"ok", g("note")||""];
   });
+}
+
+/* ---- пересчёт баланса и журнала по строкам операций ---- */
+function txAmount(v){
+  const neg=/^\s*[\u2212-]/.test(String(v||""));
+  const n=parseFloat(String(v||"").replace(/[^\d.,]/g,"").replace(/\s/g,"").replace(",","."))||0;
+  return neg?-n:n;
+}
+function txToJournal(rows){
+  const iso=d=>{const m=/^(\d{2})\.(\d{2})\.(\d{4})$/.exec(String(d||""));
+    return m?`${m[3]}-${m[2]}-${m[1]}`:null;};
+  const list=rows.map(r=>({d:iso(r[0]),meth:String(r[1]||""),v:txAmount(r[2])}))
+    .filter(x=>x.d&&isFinite(x.v)&&x.v!==0)
+    .sort((a,b)=>Date.parse(a.d)-Date.parse(b.d));
+  if(!list.length) return null;
+  const isDay=x=>/итог торгового дня|результат дня/i.test(x.meth);
+  const isOut=x=>x.v<0||/вывод/i.test(x.meth);
+  let dep=0, depAt=null; const days=[];
+  list.forEach(x=>{
+    if(isDay(x)){ days.push({d:x.d,p:x.v,k:"day"}); return; }
+    if(isOut(x)){ days.push({d:x.d,p:Math.abs(x.v),k:"out"}); return; }
+    if(!dep){ dep=Math.abs(x.v); depAt=x.d; return; }        /* первое пополнение — депозит */
+    days.push({d:x.d,p:Math.abs(x.v),k:"in"});
+  });
+  if(!dep) return null;
+  const total=days.reduce((s,x)=>s+(x.k==="out"?-Math.abs(x.p):(x.k==="in"?Math.abs(x.p):x.p)),0);
+  return {dep,depAt,days,balance:dep+total};
+}
+function txPreview(){
+  const el=document.getElementById("tx_sum"); if(!el) return;
+  const j=txToJournal(collectTx());
+  el.textContent=j ? "По операциям: депозит $"+j.dep.toFixed(2)+" · строк "+j.days.length+
+    " · баланс $"+j.balance.toFixed(2) : "";
+}
+async function recalcTx(i){
+  const us=uLoad(), u=us[i]; if(!u) return;
+  const tx=collectTx();
+  const j=txToJournal(tx);
+  if(!j) return toast("Не удалось разобрать операции: нужна хотя бы одна строка пополнения с датой");
+  if(API.on){
+    try{
+      await api("/api/admin/users/"+u.id,{method:"PATCH",body:JSON.stringify({tx})});
+      await api("/api/admin/users/"+u.id,{method:"PATCH",body:JSON.stringify({balance:j.balance,
+        dyn:Object.assign({},u.dyn||{},{on:false,dep:j.dep,depAt:j.depAt,days:j.days})})});
+      await uFetch(); renderUsers(); renderCard();
+      if(typeof renderDash==="function") renderDash();
+      toast("Баланс пересчитан: $"+j.balance.toFixed(2)+" · график собран по "+j.days.length+" операциям");
+    }catch(e){ toast(e.message); }
+    return;
+  }
+  u.tx=tx; u.balance=j.balance;
+  u.dyn=Object.assign({},u.dyn||{},{on:false,dep:j.dep,depAt:j.depAt,days:j.days});
+  us[i]=u; uSave(us); renderUsers(); renderCard();
+  toast("Баланс пересчитан: $"+j.balance.toFixed(2));
 }
 async function saveTx(i){
   const us=uLoad(), u=us[i]; if(!u) return;
