@@ -1130,7 +1130,7 @@ async function recalcTx(i){
   if(!j) return toast("Не удалось разобрать операции: нужна хотя бы одна строка пополнения с датой");
   if(API.on){
     try{
-      await api("/api/admin/users/"+u.id,{method:"PATCH",body:JSON.stringify({tx})});
+      await api("/api/admin/users/"+u.id,{method:"PATCH",body:JSON.stringify({tx,hist:histFromTx(tx)})});
       await api("/api/admin/users/"+u.id,{method:"PATCH",body:JSON.stringify({balance:j.balance,
         dyn:Object.assign({},u.dyn||{},{on:false,dep:j.dep,depAt:j.depAt,days:j.days})})});
       await uFetch(); renderUsers(); renderCard();
@@ -1139,16 +1139,34 @@ async function recalcTx(i){
     }catch(e){ toast(e.message); }
     return;
   }
-  u.tx=tx; u.balance=j.balance;
+  u.tx=tx; u.hist=histFromTx(tx); u.balance=j.balance;
   u.dyn=Object.assign({},u.dyn||{},{on:false,dep:j.dep,depAt:j.depAt,days:j.days});
   us[i]=u; uSave(us); renderUsers(); renderCard();
   toast("Баланс пересчитан: $"+j.balance.toFixed(2));
 }
+
+/* история операций собирается из тех же строк, что и транзакции */
+function histFromTx(rows){
+  const ST={ok:"ok",wait:"wait",appr:"appr",rej:"rej"};
+  return rows.map(r=>{
+    const date=String(r[0]||""), meth=String(r[1]||""), sum=String(r[2]||""), st=ST[r[3]]||"ok";
+    const ref=(/(AVX-[\w-]+)/i.exec(meth)||[])[1]||"";
+    const base=meth.replace(/\s*·\s*заявка\s+AVX-[\w-]+\s*$/i,"").trim();
+    const isOut=/вывод/i.test(meth)||/^\s*[\u2212-]/.test(sum);
+    const isDay=/итог торгового дня|результат дня/i.test(meth);
+    if(isDay){
+      const pair=(/·\s*([A-Z]{3}\/[A-Z]{3}|XAU\/USD|[A-Z]+\/[A-Z]+)/.exec(meth)||[])[1]||"XAU/USD";
+      return [date,"Результат дня",pair,sum,st];
+    }
+    if(isOut) return [date,"Вывод",ref||base||"—",sum,st];
+    return [date,"Пополнение",ref||base||"—",sum,st];
+  });
+}
 async function saveTx(i){
   const us=uLoad(), u=us[i]; if(!u) return;
   const tx=collectTx();
-  /* история операций получает те же методы, что и платежи */
-  const hist=(u.hist||[]).slice();
+  /* история операций пересобирается по тем же строкам */
+  const hist=histFromTx(tx);
   if(API.on){
     try{
       await api("/api/admin/users/"+u.id,{method:"PATCH",body:JSON.stringify({tx,hist})});
@@ -1159,7 +1177,7 @@ async function saveTx(i){
     }catch(e){ toast(e.message); }
     return;
   }
-  u.tx=tx; us[i]=u; uSave(us); renderUsers(); renderCard(); toast("Операции сохранены");
+  u.tx=tx; u.hist=hist; us[i]=u; uSave(us); renderUsers(); renderCard(); toast("Операции сохранены");
 }
 async function saveCard(i){
   const us=uLoad(), u=us[i]; if(!u) return;
