@@ -1650,6 +1650,7 @@ function afterBlockSwap(k){
   if(k==="view:term"&&document.getElementById("app").style.display==="block")
     safe(()=>{ renderWatch(); drawCandles(); updateTicket(); });
   if(k==="view:prof") safe(()=>{ renderProfile(); renderAcct(); fitAcct(); renderIntegrations(); });
+  if(k==="view:pay") safe(()=>{ ensurePayNodes(); renderMethods(); calcPay(); renderTx(); });
   if(k==="view:out") safe(renderOut);
   if(k==="view:tools") safe(renderTools);
   if(k==="apphead") safe(syncHeader);
@@ -3621,7 +3622,29 @@ const NETS={
 };
 state.coin="usdt"; state.net="TRC-20";
 function coinRow(){ return COINS.find(c=>c[2]===state.coin)||COINS[0]; }
+/* если в админке сохранён свой HTML страницы «Платежи», дорисовываем новые блоки */
+function ensurePayNodes(){
+  const m=document.getElementById("methods");
+  if(m && !document.getElementById("cryptoBox")){
+    const box=document.createElement("div");
+    box.className="crypto"; box.id="cryptoBox"; box.hidden=true;
+    box.innerHTML='<div class="cr-lbl">Монета</div><div class="cr-row" id="crCoins"></div>'+
+      '<div class="cr-lbl">Сеть</div><div class="cr-row" id="crNets"></div><div class="cr-sum" id="crSum"></div>';
+    m.insertAdjacentElement("afterend",box);
+  }
+  const rb=document.getElementById("payRefBox");
+  if(rb && !document.getElementById("payAddrBox")){
+    const ab=document.createElement("div");
+    ab.className="pay-addr"; ab.id="payAddrBox"; ab.hidden=true;
+    ab.innerHTML='<span>Адрес для перевода <i>демо-заглушка</i></span><code class="num" id="payAddr">—</code>';
+    const small=rb.querySelector("small");
+    if(small){ small.id=small.id||"payRefNote"; rb.insertBefore(ab,small); } else rb.appendChild(ab);
+  }
+  const am=document.getElementById("amt");
+  if(am && !am.dataset.crBound){ am.dataset.crBound="1"; am.addEventListener("input",()=>{ try{renderCrypto();}catch(e){} }); }
+}
 function renderCrypto(){
+  ensurePayNodes();
   const box=document.getElementById("cryptoBox"); if(!box) return;
   const isCrypto=METHODS[state.method] && METHODS[state.method][1]==="Криптовалюта";
   box.hidden=!isCrypto;
@@ -3696,6 +3719,7 @@ document.getElementById("payGo").onclick=()=>{
       document.getElementById("payRefSum").textContent=usd(amt);
       document.getElementById("payRefEta").textContent=METHODS[state.method][4];
       const isCrypto=METHODS[state.method][1]==="Криптовалюта";
+      ensurePayNodes();
       const ab=document.getElementById("payAddrBox");
       if(ab){
         ab.hidden=!isCrypto;
@@ -3728,9 +3752,9 @@ renderMethods();calcPay();renderTx();
 
 /* карточка счёта в стиле терминала */
 const DEMO_ACCTS=[
-  {id:"4032118",name:"Daniil Kovalev",srv:"BullWaves",mode:"Hedge",type:"",lev:"1:200",bal:12480.30,cur:"USD",st:["wait",""]},
-  {id:"4032119",name:"Daniil Kovalev",srv:"BullWaves",mode:"Netting",type:"D",lev:"1:500",bal:340.00,cur:"EUR",st:["wait",""]},
-  {id:"9011455",name:"Daniil Kovalev",srv:"BullWaves",mode:"Hedge",type:"",lev:"1:100",bal:100000.00,cur:"USD",st:["wait",""]}
+  {id:"4032118",name:"Daniil Kovalev",srv:"BullWaves-DEMO",mode:"Hedge",type:"Demo",lev:"1:200",bal:12480.30,cur:"USD",st:["wait","демо"]},
+  {id:"4032119",name:"Daniil Kovalev",srv:"BullWaves-DEMO",mode:"Netting",type:"Demo",lev:"1:500",bal:340.00,cur:"EUR",st:["wait","демо"]},
+  {id:"9011455",name:"Daniil Kovalev",srv:"BullWaves-DEMO",mode:"Hedge",type:"Demo",lev:"1:100",bal:100000.00,cur:"USD",st:["wait","демо"]}
 ];
 let acctIdx=0;
 function acctList(){
@@ -3746,12 +3770,12 @@ function acctList(){
   return DEMO_ACCTS;
 }
 const money=(n,c)=>n.toLocaleString("ru-RU",{minimumFractionDigits:2,maximumFractionDigits:2}).replace(/,/,".")+" "+c;
-/* имя сервера задаётся в админке, пометка  добавляется всегда */
+/* имя сервера задаётся в админке, пометка -DEMO добавляется всегда */
 function srvName(v){
   let n=String(v||"BullWaves").trim().replace(/[<>"']/g,"").slice(0,24);
-  n=n.replace(/[-_ ]?(|live|real)$/i,"").replace(/[-_ ]+$/,"");
+  n=n.replace(/[-_ ]?(demo|live|real)$/i,"").replace(/[-_ ]+$/,"");
   if(!n) n="BullWaves";
-  return n+"";
+  return n+"-DEMO";
 }
 function renderAcct(){
   const list=acctList();
