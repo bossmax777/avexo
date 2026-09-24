@@ -3109,7 +3109,14 @@ function jrnlSeries(){
     const open=Date.parse(x.d+"T09:00:00"), close=Date.parse(x.d+"T22:00:00");
     if(!isFinite(open)) return;
     if(open>pts[pts.length-1].t) pts.push({t:open,v:acc});
-    const from=acc; acc=acc+(Number(x.p)||0);
+    const val=Number(x.p)||0;
+    if(x.k==="out"||x.k==="in"){
+      /* вывод или довнесение — ступенька на графике, без дневной волны */
+      acc=acc+(x.k==="out"?-Math.abs(val):Math.abs(val));
+      pts.push({t:open+3600000,v:Math.max(0,acc)});
+      return;
+    }
+    const from=acc; acc=acc+val;
     const seed=((open/60000)%9973)+3;
     for(let i=1;i<=14;i++){
       const pr=i/14;
