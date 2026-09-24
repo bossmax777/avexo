@@ -786,6 +786,22 @@ footer a:hover{color:var(--accent)}
 .agent-trades-h{display:flex;justify-content:space-between;align-items:center;gap:10px;
   font-size:13px;font-weight:600;margin-bottom:8px}
 .agent-trades-h .muted{font-weight:400;font-size:12px;color:var(--dim)}
+
+/* ---- выбор криптовалюты и сети в платежах ---- */
+.crypto{margin:14px 0 4px;padding:14px 16px;background:var(--surface-2);border:1px solid var(--line);border-radius:12px}
+.cr-lbl{font-size:11.5px;letter-spacing:.07em;text-transform:uppercase;color:var(--muted);margin:0 0 8px}
+.cr-row{display:flex;flex-wrap:wrap;gap:8px;margin-bottom:14px}
+.cr-row button{padding:9px 14px;border-radius:9px;border:1px solid var(--line);background:var(--surface);
+  color:var(--text);font-size:13.5px;cursor:pointer;display:flex;align-items:center;gap:8px}
+.cr-row button small{color:var(--muted);font-size:11.5px}
+.cr-row button.on{border-color:var(--accent);box-shadow:inset 0 0 0 1px var(--accent)}
+.cr-sum{font-size:13px;color:var(--muted);border-top:1px solid var(--line);padding-top:11px}
+.cr-sum b{color:var(--text)}
+.pay-addr{display:block!important;margin-top:10px;padding:11px 13px;border:1px dashed #C89538;border-radius:10px;background:rgba(200,149,56,.08)}
+.pay-addr span{display:block;font-size:12px;color:#9A7420;margin-bottom:6px}
+.pay-addr span i{font-style:normal;background:#C89538;color:#fff;border-radius:5px;padding:1px 6px;
+  margin-left:6px;font-size:10.5px;letter-spacing:.04em;text-transform:uppercase}
+.pay-addr code{display:block;word-break:break-all;font-size:13px;color:#8A6412;letter-spacing:.02em}
 </style>
 
 </head>
@@ -1158,6 +1174,13 @@ footer a:hover{color:var(--accent)}
               </div>
             </div>
             <div class="methods" id="methods"></div>
+            <div class="crypto" id="cryptoBox" hidden>
+              <div class="cr-lbl">Монета</div>
+              <div class="cr-row" id="crCoins"></div>
+              <div class="cr-lbl">Сеть</div>
+              <div class="cr-row" id="crNets"></div>
+              <div class="cr-sum" id="crSum"></div>
+            </div>
             <div class="field"><label for="amt">Сумма, USD</label><input id="amt" class="num" type="number" min="10" step="10" value="500"></div>
             <div class="amt-row">
               <button data-amt="100">$100</button><button data-amt="500">$500</button>
@@ -1174,7 +1197,11 @@ footer a:hover{color:var(--accent)}
               <div><span>Номер заявки</span><b class="num" id="payRefNo">—</b></div>
               <div><span>Сумма</span><b class="num" id="payRefSum">—</b></div>
               <div><span>Срок обработки</span><b id="payRefEta">—</b></div>
-              <small>Реквизиты для перевода приходят после подтверждения заявки —
+              <div class="pay-addr" id="payAddrBox" hidden>
+                <span>Адрес для перевода <i>демо-заглушка</i></span>
+                <code class="num" id="payAddr">—</code>
+              </div>
+              <small id="payRefNote">Реквизиты для перевода приходят после подтверждения заявки —
                 на странице они не публикуются. Баланс пополнится, когда операция будет проведена.</small>
             </div>
           </div>
@@ -3577,6 +3604,44 @@ function renderMethods(){
       <span class="m-r">${f} · ${eta}</span></label>`).join("");
   document.querySelectorAll("[data-m]").forEach(el=>el.onclick=()=>{state.method=+el.dataset.m;renderMethods();calcPay();});
 }
+/* ---- криптовалюта: монета, сеть, расчёт ---- */
+const COINS=[
+  ["USDT","Tether","usdt",1],
+  ["BTC","Bitcoin","btc",113400],
+  ["ETH","Ethereum","eth",4180],
+  ["TON","Toncoin","ton",3.15],
+  ["USDC","USD Coin","usdc",1]
+];
+const NETS={
+  usdt:[["TRC-20","Tron · комиссия сети ~$1"],["ERC-20","Ethereum · ~$4"],["BEP-20","BNB Smart Chain · ~$0.3"],["TON","TON · ~$0.05"]],
+  usdc:[["ERC-20","Ethereum · ~$4"],["BEP-20","BNB Smart Chain · ~$0.3"],["SOL","Solana · ~$0.02"]],
+  btc:[["Bitcoin","основная сеть · ~$1.5"],["BEP-20","BTCB в BNB Chain · ~$0.3"]],
+  eth:[["ERC-20","Ethereum · ~$4"],["ARB","Arbitrum One · ~$0.2"]],
+  ton:[["TON","основная сеть · ~$0.05"]]
+};
+state.coin="usdt"; state.net="TRC-20";
+function coinRow(){ return COINS.find(c=>c[2]===state.coin)||COINS[0]; }
+function renderCrypto(){
+  const box=document.getElementById("cryptoBox"); if(!box) return;
+  const isCrypto=METHODS[state.method] && METHODS[state.method][1]==="Криптовалюта";
+  box.hidden=!isCrypto;
+  if(!isCrypto) return;
+  document.getElementById("crCoins").innerHTML=COINS.map(([t,n,k])=>
+    `<button type="button" data-coin="${k}" class="${k===state.coin?"on":""}"><b>${t}</b><small>${n}</small></button>`).join("");
+  const nets=NETS[state.coin]||[];
+  if(!nets.some(([n])=>n===state.net)) state.net=nets[0][0];
+  document.getElementById("crNets").innerHTML=nets.map(([n,d])=>
+    `<button type="button" data-net="${n}" class="${n===state.net?"on":""}"><b>${n}</b><small>${d}</small></button>`).join("");
+  document.querySelectorAll("[data-coin]").forEach(b=>b.onclick=()=>{state.coin=b.dataset.coin;renderCrypto();});
+  document.querySelectorAll("[data-net]").forEach(b=>b.onclick=()=>{state.net=b.dataset.net;renderCrypto();});
+  const amt=parseFloat(document.getElementById("amt").value)||0;
+  const [tic,,,rate]=coinRow();
+  const qty=rate?amt/rate:0;
+  const prec=rate>1000?6:(rate>10?4:2);
+  document.getElementById("crSum").innerHTML=
+    "К переводу: <b>"+qty.toFixed(prec)+" "+tic+"</b> ("+tic+" "+state.net+", курс 1 "+tic+" ≈ "+usd(rate)+
+    "). Адрес для перевода появится после отправки заявки — в этом макете это заведомо нерабочая строка-заглушка.";
+}
 function calcPay(){
   const amt=parseFloat(document.getElementById("amt").value)||0;
   const m=METHODS[state.method];
@@ -3586,6 +3651,7 @@ function calcPay(){
   document.getElementById("payFee").textContent=usd(fee);
   document.getElementById("payEta").textContent=m[4];
   document.getElementById("payTotal").textContent=usd(Math.max(0,amt-fee));
+  renderCrypto();
 }
 document.getElementById("amt").addEventListener("input",calcPay);
 document.querySelectorAll("[data-amt]").forEach(b=>b.onclick=()=>{
@@ -3599,6 +3665,16 @@ document.querySelectorAll("[data-pay]").forEach(b=>b.onclick=()=>{
   document.getElementById("payGo").textContent=inMode?"Пополнить счёт":"Заказать вывод";
   calcPay();
 });
+function payMethodName(){
+  const m=METHODS[state.method];
+  if(m && m[1]==="Криптовалюта") return "Криптовалюта "+coinRow()[0]+" ("+state.net+")";
+  return m?m[1]:"Пополнение";
+}
+/* заведомо нерабочая строка вместо адреса: в макете настоящих реквизитов нет */
+function demoAddr(){
+  const net=String(state.net||"DEMO").toUpperCase().replace(/[^A-Z0-9]/g,"");
+  return net+"-DEMO-ADDRESS-NOT-A-REAL-WALLET";
+}
 function payRef(){
   return "AVX-"+String(Date.now()).slice(-6)+"-"+Math.random().toString(36).slice(2,5).toUpperCase();
 }
@@ -3610,7 +3686,7 @@ document.getElementById("payGo").onclick=()=>{
   const date=new Date().toLocaleDateString("ru-RU");
   if(inMode){
     /* пополнение оформляется заявкой: деньги зачислит администратор после подтверждения */
-    state.tx.unshift([date,METHODS[state.method][1]+" · заявка "+ref,
+    state.tx.unshift([date,payMethodName()+" · заявка "+ref,
       "+"+usd(amt),"wait","На рассмотрении"]);
     state.hist.unshift([date,"Заявка на пополнение",ref,"+"+usd(amt),"wait"]);
     const box=document.getElementById("payRefBox");
@@ -3619,13 +3695,23 @@ document.getElementById("payGo").onclick=()=>{
       document.getElementById("payRefNo").textContent=ref;
       document.getElementById("payRefSum").textContent=usd(amt);
       document.getElementById("payRefEta").textContent=METHODS[state.method][4];
+      const isCrypto=METHODS[state.method][1]==="Криптовалюта";
+      const ab=document.getElementById("payAddrBox");
+      if(ab){
+        ab.hidden=!isCrypto;
+        if(isCrypto) document.getElementById("payAddr").textContent=demoAddr();
+      }
+      const note=document.getElementById("payRefNote");
+      if(note) note.textContent=isCrypto
+        ? "Строка выше — заглушка учебного макета, а не кошелёк: переводить по ней нечего и некуда. В рабочей системе адрес выдаёт платёжный провайдер после подтверждения заявки."
+        : "Реквизиты для перевода приходят после подтверждения заявки — на странице они не публикуются. Баланс пополнится, когда операция будет проведена.";
     }
     saveSession(); renderTx(); renderHist(); renderBalance(); syncHeader();
     toast("Заявка на пополнение "+usd(amt)+" отправлена · "+ref);
     return;
   }
   state.balance+=inMode?amt:-amt;
-  state.tx.unshift([date,METHODS[state.method][1],
+  state.tx.unshift([date,payMethodName(),
     (inMode?"+":"−")+usd(amt),inMode?"ok":"wait",inMode?"Исполнено":"На рассмотрении"]);
   state.hist.unshift([date,inMode?"Пополнение":"Вывод","—",
     (inMode?"+":"−")+usd(amt),inMode?"ok":"wait"]);

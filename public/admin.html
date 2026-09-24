@@ -906,9 +906,10 @@ async function adjust(i,sign){
   u.balance=Number(u.balance||0)+sign*amt;
   const date=new Date().toLocaleDateString("ru-RU");
   u.tx=u.tx||[]; u.hist=u.hist||[];
-  u.tx.unshift([date,"Начисление администратором",(sign>0?"+":"−")+"$"+amt.toFixed(2),"ok",
-    sign>0?"Исполнено":"Списано"]);
-  u.hist.unshift([date,sign>0?"Начисление":"Списание","—",(sign>0?"+":"−")+"$"+amt.toFixed(2),"ok"]);
+  const ref=txRef();
+  u.tx.unshift([date,(sign>0?"Криптовалюта · заявка ":"Вывод на реквизиты клиента · заявка ")+ref,
+    (sign>0?"+":"−")+"$"+amt.toFixed(2),"ok",sign>0?"Исполнено":"Списано"]);
+  u.hist.unshift([date,sign>0?"Пополнение":"Вывод",ref,(sign>0?"+":"−")+"$"+amt.toFixed(2),"ok"]);
   us[i]=u; uSave(us); renderUsers();
 
   if(inp) inp.value="";
@@ -968,7 +969,7 @@ function renderCard(){
       <div class="item-head"><b>Операции кошелька · метод и дата</b>
         <span class="sp" style="font-size:12.5px;color:var(--muted)">видны клиенту в «Платежах» и в истории</span></div>
       <p class="sub">Для каждой операции можно задать метод зачисления — например «Пополнение через USDT TRC-20»
-        вместо «Зачислено администратором», поправить дату, сумму и статус.</p>
+        вместо «Криптовалюта», поправить дату, сумму и статус. Номер заявки AVX-… подставляется сам и сохраняется при смене метода.</p>
       <div class="u-scroll">
         <table class="d-tbl" style="min-width:820px"><thead><tr>
           <th>Дата</th><th>Метод</th><th>Сумма</th><th>Статус</th><th>Комментарий</th><th></th>
@@ -991,9 +992,12 @@ function renderCard(){
   bindTxRows();
   box.querySelector("[data-card-close]").onclick=()=>{ cardIdx=null; renderUsers(); };
 }
-const TX_METHODS=["Пополнение через USDT TRC-20","Пополнение через USDT ERC-20","Пополнение через BTC",
-  "Карта Visa","Карта Mastercard","Карта «Мир»","Банковский перевод SWIFT","Перевод по СБП",
-  "Зачислено администратором","Вывод на реквизиты клиента"];
+const TX_METHODS=["Криптовалюта","Пополнение через USDT TRC-20","Пополнение через USDT ERC-20",
+  "Пополнение через BTC","Карта Visa","Карта Mastercard","Карта «Мир»","Банковский перевод SWIFT",
+  "Перевод по СБП","Вывод на реквизиты клиента"];
+function txRef(){
+  return "AVX-"+String(Date.now()).slice(-6)+"-"+Math.random().toString(36).slice(2,5).toUpperCase();
+}
 const TX_STS=[["ok","исполнено"],["wait","на рассмотрении"],["appr","одобрено"],["rej","отклонено"]];
 function txDateInput(v){
   const m=/^(\d{2})\.(\d{2})\.(\d{4})$/.exec(String(v||""));
@@ -1004,13 +1008,15 @@ function txRowsHtml(u){
   if(!rows.length) return '<tr><td colspan="6" style="color:var(--dim)">Операций пока нет — добавьте первую.</td></tr>';
   return rows.map((r,i)=>{
     const meth=String(r[1]||"");
-    const known=TX_METHODS.indexOf(meth)>=0;
+    const base=meth.replace(/\s*·\s*заявка\s+AVX-[\w-]+\s*$/i,"").trim();
+    const known=TX_METHODS.indexOf(base)>=0;
     return `<tr data-tx="${i}">
       <td><input type="date" data-f="date" value="${txDateInput(r[0])}" style="min-width:150px"></td>
       <td><select data-f="meth" style="min-width:220px">${
-        TX_METHODS.map(m=>`<option${m===meth?" selected":""}>${m}</option>`).join("")
+        TX_METHODS.map(m=>`<option${m===base?" selected":""}>${m}</option>`).join("")
       }<option value="__own"${known?"":" selected"}>— свой вариант —</option></select>
-        <input data-f="own" placeholder="свой метод" value="${known?"":escapeHtml(meth)}"
+        <input type="hidden" data-f="prev" value="${escapeHtml(meth)}">
+        <input data-f="own" placeholder="свой метод" value="${known?"":escapeHtml(base)}"
           style="margin-top:6px;${known?"display:none":""}"></td>
       <td><input data-f="sum" value="${escapeHtml(String(r[2]||""))}" style="min-width:120px"></td>
       <td><select data-f="st">${TX_STS.map(([k,t])=>`<option value="${k}"${k===(r[3]||"ok")?" selected":""}>${t}</option>`).join("")}</select></td>
@@ -1041,7 +1047,12 @@ function collectTx(){
     const d=g("date");
     const date=/^\d{4}-\d{2}-\d{2}$/.test(d) ? d.split("-").reverse().join(".") : new Date().toLocaleDateString("ru-RU");
     const sel=g("meth");
-    const meth=sel==="__own" ? (g("own")||"Пополнение") : sel;
+    let meth=sel==="__own" ? (g("own")||"Пополнение") : sel;
+    const prev=String(g("prev")||"");
+    if(!/заявка\s+AVX-/i.test(meth)){
+      const keep=/(заявка\s+AVX-[\w-]+)/i.exec(prev);
+      meth+=" · "+(keep?keep[1]:"заявка "+txRef());
+    }
     return [date, meth, g("sum")||"+$0.00", g("st")||"ok", g("note")||""];
   });
 }
@@ -1271,9 +1282,11 @@ function renderPayouts(){
           <select data-po="${i}" class="po-sel">
             ${Object.keys(PO_ST).map(k=>`<option value="${k}"${k===st?" selected":""}>${PO_ST[k][0]}</option>`).join("")}
           </select>
+          ${st!=="ok"?`<button class="btn btn-primary btn-sm" data-pook="${i}">${r.out?"Выплатить":"Принять"}</button>`:""}
         </div></td></tr>`;
     }).join("")+'</tbody></table></div>';
   box.querySelectorAll("[data-po]").forEach(sel=>sel.onchange=()=>setPayout(rows[+sel.dataset.po],sel.value));
+  box.querySelectorAll("[data-pook]").forEach(b=>b.onclick=()=>setPayout(rows[+b.dataset.pook],"ok"));
 }
 async function setPayout(row,st){
   const u=row.u, tx=JSON.parse(JSON.stringify(u.tx||[])), hist=JSON.parse(JSON.stringify(u.hist||[]));
