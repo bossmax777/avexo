@@ -3091,6 +3091,36 @@ function growSeries(n,t0,t1,v0,v1){
   }
   return out;
 }
+/* ---- журнал торговых дней: график и итоги идут ровно по нему ---- */
+function jrnl(){
+  const u=currentUser(); const d=(u&&u.dyn)||{};
+  const days=Array.isArray(d.days)?d.days.filter(x=>x&&x.d):null;
+  const dep=Number(d.dep)||0;
+  if(!days||!days.length||!(dep>0)) return null;
+  const t0=Date.parse((d.depAt||days[0].d)+"T09:00:00");
+  if(!isFinite(t0)) return null;
+  return {dep,t0,days};
+}
+function jrnlSeries(){
+  const j=jrnl(); if(!j) return null;
+  const pts=[{t:j.t0,v:j.dep}];
+  let acc=j.dep;
+  j.days.forEach(x=>{
+    const open=Date.parse(x.d+"T09:00:00"), close=Date.parse(x.d+"T22:00:00");
+    if(!isFinite(open)) return;
+    if(open>pts[pts.length-1].t) pts.push({t:open,v:acc});
+    const from=acc; acc=acc+(Number(x.p)||0);
+    const seed=((open/60000)%9973)+3;
+    for(let i=1;i<=14;i++){
+      const pr=i/14;
+      const base=from+(acc-from)*Math.pow(pr,0.9);
+      const amp=Math.max(Math.abs(acc-from),Math.max(1,from)*0.003)*0.7;
+      pts.push({t:open+(close-open)*pr,v:Math.max(0,base+amp*dynPath(pr,seed,2.4))});
+    }
+    pts[pts.length-1].v=acc;
+  });
+  return pts;
+}
 function drawEquity(){
   const cv=document.getElementById("equity"),ctx=cv.getContext("2d");
   const w=cv.width,h=cv.height,padL=92,padR=140,padT=24,padB=44;
@@ -3123,11 +3153,17 @@ function drawEquity(){
       times.push(t); vals.push(dynValue(t));
     }
   }else{
+    /* журнал торговых дней, если он задан в админке */
+    const js=jrnlSeries();
+    if(js&&js.length>1){
+      js.forEach(p=>{ times.push(p.t); vals.push(p.v); });
+    }else{
     /* сценария нет — рисуем историю счёта от первого пополнения до текущего баланса */
     const t1=Date.now();
     const hs=historyStart(Math.max(1,state.balance),t1);
     growSeries(140,hs.t0,t1,hs.v0,Math.max(1,state.balance))
       .forEach(p=>{ times.push(p.t); vals.push(p.v); });
+    }
   }
   const cur=vals[vals.length-1], first=vals[0];
   const pl=cur-first, pct=first? pl/first*100 : 0, up=pl>=0;

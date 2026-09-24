@@ -222,6 +222,30 @@ body{background:radial-gradient(900px 520px at 88% -8%,rgba(79,70,229,.10),trans
       </div>
       <div id="usersBox"></div>
     </div>
+
+    <div class="card">
+      <h2>Демо-клиент по журналу доходности</h2>
+      <p class="sub">Заводит демо-кошелёк с первым депозитом и итогами по торговым дням: баланс, история
+        операций и график в кабинете собираются ровно по этим цифрам. Счёт остаётся демонстрационным —
+        сервер помечается «-DEMO», в кабинете видна плашка демо-режима.</p>
+      <div class="grid g2">
+        <div class="field"><label>Имя владельца</label><input id="gnName" placeholder="Имя Фамилия"></div>
+        <div class="field"><label>Номер счёта</label><input id="gnAcct" class="num" placeholder="4033125"></div>
+        <div class="field"><label>Email для входа</label><input id="gnMail" placeholder="client@demo.local"></div>
+        <div class="field"><label>Пароль</label><input id="gnPass" placeholder="создастся сам"></div>
+        <div class="field"><label>Первый депозит, USD</label><input id="gnDep" class="num" type="number" value="5000"></div>
+        <div class="field"><label>Дата депозита</label><input id="gnDepAt" type="date"></div>
+      </div>
+      <div class="field"><label>Итоги торговых дней</label>
+        <textarea id="gnDays" rows="8" placeholder="15.09 +230&#10;16.09 +332&#10;17.09 +248"></textarea>
+        <span class="hint">По строке на день: дата и результат. Минус пишется со знаком «−» или «-».
+          Год берётся текущий, если не указан (можно писать 15.09.2026).</span></div>
+      <div style="display:flex;gap:9px;flex-wrap:wrap;align-items:center">
+        <button class="btn btn-primary btn-sm" id="gnGo">Создать демо-клиента</button>
+        <span class="hint" id="gnSum"></span>
+      </div>
+      <div id="gnOut" class="hint" style="margin-top:12px"></div>
+    </div>
   </div>
 
   <div data-pane="blocks" hidden>
@@ -1109,6 +1133,87 @@ document.addEventListener("click",e=>{
         us.splice(+x.dataset.udel,1); uSave(us); renderUsers(); toast("Кошелёк удалён");
       }}}
 });
+
+/* ---------- демо-клиент по журналу доходности ---------- */
+function gnParseDays(txt){
+  const Y=new Date().getFullYear();
+  return String(txt||"").split(/\n+/).map(l=>l.trim()).filter(Boolean).map(l=>{
+    const m=/^(\d{1,2})[.\/-](\d{1,2})(?:[.\/-](\d{2,4}))?\s+([+\u2212-]?\s*[\d\s.,]+)/.exec(l);
+    if(!m) return null;
+    const dd=+m[1], mm=+m[2]; let yy=m[3]?+m[3]:Y; if(yy<100) yy+=2000;
+    const neg=/^[\u2212-]/.test(m[4].trim());
+    const val=parseFloat(m[4].replace(/[^\d.,]/g,"").replace(/\s/g,"").replace(",","."))||0;
+    const d=new Date(Date.UTC(yy,mm-1,dd));
+    if(isNaN(d)) return null;
+    return {d:yy+"-"+String(mm).padStart(2,"0")+"-"+String(dd).padStart(2,"0"), p:neg?-val:val};
+  }).filter(Boolean);
+}
+function gnPreview(){
+  const days=gnParseDays(document.getElementById("gnDays").value);
+  const dep=parseFloat(document.getElementById("gnDep").value)||0;
+  const sum=days.reduce((s,x)=>s+x.p,0);
+  const el=document.getElementById("gnSum");
+  if(el) el.textContent=days.length
+    ? "Дней: "+days.length+" · итог за период "+(sum>=0?"+":"\u2212")+"$"+Math.abs(sum).toFixed(2)+
+      " · баланс "+ "$"+(dep+sum).toFixed(2)
+    : "";
+}
+function gnRows(dep,depAt,days,cur){
+  const money=v=>(v<0?"\u2212":"+")+"$"+Math.abs(v).toFixed(2);
+  const ru=iso=>iso.split("-").reverse().join(".");
+  const tx=[], hist=[];
+  const ref="AVX-"+String(Date.now()).slice(-6)+"-"+Math.random().toString(36).slice(2,5).toUpperCase();
+  tx.push([ru(depAt),"\u041a\u0440\u0438\u043f\u0442\u043e\u0432\u0430\u043b\u044e\u0442\u0430 \u00b7 \u0437\u0430\u044f\u0432\u043a\u0430 "+ref,money(dep),"ok","\u0418\u0441\u043f\u043e\u043b\u043d\u0435\u043d\u043e"]);
+  hist.push([ru(depAt),"\u041f\u043e\u043f\u043e\u043b\u043d\u0435\u043d\u0438\u0435",ref,money(dep),"ok"]);
+  days.forEach(x=>{
+    tx.push([ru(x.d),"\u0418\u0442\u043e\u0433 \u0442\u043e\u0440\u0433\u043e\u0432\u043e\u0433\u043e \u0434\u043d\u044f \u00b7 XAU/USD",money(x.p),"ok",
+      x.p>=0?"\u041f\u0440\u0438\u0431\u044b\u043b\u044c":"\u0423\u0431\u044b\u0442\u043e\u043a"]);
+    hist.push([ru(x.d),x.p>=0?"\u0420\u0435\u0437\u0443\u043b\u044c\u0442\u0430\u0442 \u0434\u043d\u044f":"\u0420\u0435\u0437\u0443\u043b\u044c\u0442\u0430\u0442 \u0434\u043d\u044f","XAU/USD",money(x.p),"ok"]);
+  });
+  tx.reverse(); hist.reverse();
+  return {tx,hist};
+}
+(function bindGen(){
+  const go=document.getElementById("gnGo"); if(!go) return;
+  const dd=document.getElementById("gnDays"), dp=document.getElementById("gnDep");
+  if(dd) dd.addEventListener("input",gnPreview);
+  if(dp) dp.addEventListener("input",gnPreview);
+  go.onclick=async ()=>{
+    const name=(document.getElementById("gnName").value||"").trim();
+    const acct=(document.getElementById("gnAcct").value||"").replace(/\D/g,"");
+    let mail=(document.getElementById("gnMail").value||"").trim().toLowerCase();
+    let pass=(document.getElementById("gnPass").value||"").trim();
+    const dep=parseFloat(document.getElementById("gnDep").value)||0;
+    const depAt=document.getElementById("gnDepAt").value;
+    const days=gnParseDays(document.getElementById("gnDays").value);
+    if(!name) return toast("Укажите имя владельца");
+    if(!(dep>0)) return toast("Укажите первый депозит");
+    if(!depAt) return toast("Укажите дату депозита");
+    if(!days.length) return toast("Добавьте хотя бы один торговый день");
+    if(!mail) mail="demo"+String(Date.now()).slice(-6)+"@demo.local";
+    if(!pass) pass=Math.random().toString(36).slice(2,6)+"-"+Math.random().toString(36).slice(2,6);
+    const total=days.reduce((s,x)=>s+x.p,0);
+    const out=document.getElementById("gnOut");
+    go.disabled=true; go.textContent="Создаём\u2026";
+    try{
+      if(!API.on) throw new Error("Включите доступ к серверу (ключ админки) — кошелёк создаётся на сервере");
+      const r=await api("/api/admin/users",{method:"POST",body:JSON.stringify({name,email:mail,pass})});
+      const id=r.user.id;
+      if(acct) await api("/api/admin/users/"+id,{method:"PATCH",body:JSON.stringify({acct})});
+      await api("/api/admin/users/"+id,{method:"PATCH",body:JSON.stringify({delta:dep+total,date:depAt})});
+      const rows=gnRows(dep,depAt,days,r.user.cur||"USD");
+      await api("/api/admin/users/"+id,{method:"PATCH",body:JSON.stringify(
+        {tx:rows.tx,hist:rows.hist,dyn:{on:false,dep:dep,depAt:depAt,days:days}})});
+      await uFetch(); renderUsers();
+      if(out) out.innerHTML="<b>Демо-клиент создан.</b><br>Вход: <b>"+escapeHtml(mail)+
+        "</b> · пароль: <b>"+escapeHtml(pass)+"</b><br>Счёт: "+escapeHtml(acct||String(r.user.acct||""))+
+        " · баланс $"+(dep+total).toFixed(2)+" · дней в журнале: "+days.length;
+      toast("Демо-клиент создан");
+    }catch(e){ toast(e.message); if(out) out.textContent="Не получилось: "+e.message; }
+    go.disabled=false; go.textContent="Создать демо-клиента";
+  };
+  gnPreview();
+})();
 document.getElementById("uReload").onclick=async ()=>{await uFetch(); renderUsers(); toast("Список обновлён");};
 document.getElementById("uAdd").onclick=async ()=>{
   const email=(prompt("Email нового демо-кошелька:")||"").trim();
