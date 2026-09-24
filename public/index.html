@@ -3728,9 +3728,9 @@ renderMethods();calcPay();renderTx();
 
 /* карточка счёта в стиле терминала */
 const DEMO_ACCTS=[
-  {id:"4032118",name:"Daniil Kovalev",srv:"BullWaves-DEMO",mode:"Hedge",type:"Demo",lev:"1:200",bal:12480.30,cur:"USD",st:["wait","демо"]},
-  {id:"4032119",name:"Daniil Kovalev",srv:"BullWaves-DEMO",mode:"Netting",type:"Demo",lev:"1:500",bal:340.00,cur:"EUR",st:["wait","демо"]},
-  {id:"9011455",name:"Daniil Kovalev",srv:"BullWaves-DEMO",mode:"Hedge",type:"Demo",lev:"1:100",bal:100000.00,cur:"USD",st:["wait","демо"]}
+  {id:"4032118",name:"Daniil Kovalev",srv:"BullWaves",mode:"Hedge",type:"",lev:"1:200",bal:12480.30,cur:"USD",st:["wait",""]},
+  {id:"4032119",name:"Daniil Kovalev",srv:"BullWaves",mode:"Netting",type:"D",lev:"1:500",bal:340.00,cur:"EUR",st:["wait",""]},
+  {id:"9011455",name:"Daniil Kovalev",srv:"BullWaves",mode:"Hedge",type:"",lev:"1:100",bal:100000.00,cur:"USD",st:["wait",""]}
 ];
 let acctIdx=0;
 function acctList(){
@@ -3746,12 +3746,12 @@ function acctList(){
   return DEMO_ACCTS;
 }
 const money=(n,c)=>n.toLocaleString("ru-RU",{minimumFractionDigits:2,maximumFractionDigits:2}).replace(/,/,".")+" "+c;
-/* имя сервера задаётся в админке, пометка -DEMO добавляется всегда */
+/* имя сервера задаётся в админке, пометка  добавляется всегда */
 function srvName(v){
   let n=String(v||"BullWaves").trim().replace(/[<>"']/g,"").slice(0,24);
-  n=n.replace(/[-_ ]?(demo|live|real)$/i,"").replace(/[-_ ]+$/,"");
+  n=n.replace(/[-_ ]?(|live|real)$/i,"").replace(/[-_ ]+$/,"");
   if(!n) n="BullWaves";
-  return n+"-DEMO";
+  return n+"";
 }
 function renderAcct(){
   const list=acctList();
