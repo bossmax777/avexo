@@ -422,7 +422,7 @@ app.post('/api/admin/users', requireAdmin, async (req, res) => {
 /* начисление, списание, сценарий, номер счёта */
 app.patch('/api/admin/users/:id', requireAdmin, async (req, res) => {
   const id = Number(req.params.id);
-  const { delta, dyn, note, acct, card, date, tx: txSet, hist: histSet } = req.body || {};
+  const { delta, dyn, note, acct, card, date, pass, tx: txSet, hist: histSet } = req.body || {};
   try {
     const cur = await q('SELECT * FROM users WHERE id = $1', [id]);
     if (!cur.rows[0]) return bad(res, 404, 'Кошелёк не найден');
@@ -443,6 +443,11 @@ app.patch('/api/admin/users/:id', requireAdmin, async (req, res) => {
       const hist = [[when, amt > 0 ? 'Пополнение' : 'Вывод', ref, sum, 'ok'], ...u.hist];
       await q('UPDATE users SET balance = balance + $2, tx = $3::jsonb, hist = $4::jsonb WHERE id = $1',
         [id, amt, JSON.stringify(tx.slice(0, 200)), JSON.stringify(hist.slice(0, 200))]);
+    }
+    if (pass !== undefined) {
+      const pw = String(pass);
+      if (pw.length < 4) return bad(res, 400, 'Пароль слишком короткий');
+      await q('UPDATE users SET pass_hash = $2 WHERE id = $1', [id, hashPass(pw)]);
     }
     if (dyn !== undefined) {
       await q('UPDATE users SET dyn = $2::jsonb WHERE id = $1', [id, JSON.stringify(dyn || {})]);
