@@ -3095,8 +3095,17 @@ function growSeries(n,t0,t1,v0,v1){
 function jrnl(){
   const u=currentUser(); const d=(u&&u.dyn)||{};
   const days=Array.isArray(d.days)?d.days.filter(x=>x&&x.d):null;
-  const dep=Number(d.dep)||0;
-  if(!days||!days.length||!(dep>0)) return null;
+  if(!days||!days.length) return null;
+  let dep=Number(d.dep)||0;
+  if(!(dep>0)){
+    const moved=days.reduce((a,x)=>a+(x.k==="out"?-Math.abs(Number(x.p)||0)
+      :(x.k==="in"?Math.abs(Number(x.p)||0):(Number(x.p)||0))),0);
+    const bal=Number(u&&u.balance);
+    const fromBal=(isFinite(bal)?bal:(state.balance||0))-moved;
+    const fd=firstDepositSum();
+    dep=fromBal>0?fromBal:((fd&&fd>0)?fd:0);
+  }
+  if(!(dep>0)) return null;
   const t0=Date.parse((d.depAt||days[0].d)+"T09:00:00");
   if(!isFinite(t0)) return null;
   return {dep,t0,days};
@@ -3139,6 +3148,11 @@ function drawEquity(){
     const now=Math.min(Date.now(), wnd.en);
     const start=Number(wnd.d.from)||state.balance;
     /* сначала история счёта от первого пополнения до старта сценария */
+    const jb=jrnlSeries();
+    if(jb&&jb.length>1){
+      /* журнал задан в админке — рисуем его как есть, сценарий идёт продолжением */
+      jb.filter(pt=>pt.t<wnd.st).forEach(pt=>{ times.push(pt.t); vals.push(pt.v); });
+    }
     const hs=historyStart(start,wnd.st);
     let t0=hs.t0, v0=hs.v0;
     /* показываем столько истории, сколько длится сам сценарий, —
@@ -3150,7 +3164,7 @@ function drawEquity(){
       v0=start-(start-v0)*Math.pow(k,0.92);
       t0=wnd.st-show;
     }
-    if(wnd.st-t0>600000){
+    if(!times.length && wnd.st-t0>600000){
       growSeries(90,t0,wnd.st,v0,start).forEach(p=>{ times.push(p.t); vals.push(p.v); });
     }
     /* затем сам сценарий бота или админки */
@@ -3166,7 +3180,7 @@ function drawEquity(){
       js.forEach(p=>{ times.push(p.t); vals.push(p.v); });
     }else{
     /* сценария нет — рисуем историю счёта от первого пополнения до текущего баланса */
-    const t1=Date.now();
+    const t1=Math.floor(Date.now()/3600000)*3600000;   /* шаг в час: кривая не дрожит */
     const hs=historyStart(Math.max(1,state.balance),t1);
     growSeries(140,hs.t0,t1,hs.v0,Math.max(1,state.balance))
       .forEach(p=>{ times.push(p.t); vals.push(p.v); });
