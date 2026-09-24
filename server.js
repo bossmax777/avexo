@@ -422,7 +422,7 @@ app.post('/api/admin/users', requireAdmin, async (req, res) => {
 /* начисление, списание, сценарий, номер счёта */
 app.patch('/api/admin/users/:id', requireAdmin, async (req, res) => {
   const id = Number(req.params.id);
-  const { delta, dyn, note, acct, card, date, pass, tx: txSet, hist: histSet } = req.body || {};
+  const { delta, balance: balSet, dyn, note, acct, card, date, pass, email: mailSet, tx: txSet, hist: histSet } = req.body || {};
   try {
     const cur = await q('SELECT * FROM users WHERE id = $1', [id]);
     if (!cur.rows[0]) return bad(res, 404, 'Кошелёк не найден');
@@ -443,6 +443,21 @@ app.patch('/api/admin/users/:id', requireAdmin, async (req, res) => {
       const hist = [[when, amt > 0 ? 'Пополнение' : 'Вывод', ref, sum, 'ok'], ...u.hist];
       await q('UPDATE users SET balance = balance + $2, tx = $3::jsonb, hist = $4::jsonb WHERE id = $1',
         [id, amt, JSON.stringify(tx.slice(0, 200)), JSON.stringify(hist.slice(0, 200))]);
+    }
+    if (mailSet !== undefined) {
+      const m = String(mailSet).trim().toLowerCase();
+      if (!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(m)) return bad(res, 400, 'Некорректный email');
+      try {
+        await q('UPDATE users SET email = $2 WHERE id = $1', [id, m]);
+      } catch (e) {
+        if (e.code === '23505') return bad(res, 409, 'Такой email уже есть у другого кошелька');
+        throw e;
+      }
+    }
+    if (balSet !== undefined) {
+      const v = Number(balSet);
+      if (!Number.isFinite(v) || v < 0) return bad(res, 400, 'Некорректный баланс');
+      await q('UPDATE users SET balance = $2 WHERE id = $1', [id, v.toFixed(2)]);
     }
     if (pass !== undefined) {
       const pw = String(pass);
