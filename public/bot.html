@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
-<title>BullWaves Bot — торговый помощник</title>
+<title>BullWays Bot — торговый помощник</title>
 <link rel="icon" href="/img/favicon.png">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -155,8 +155,8 @@ table.data tr:last-child td{border-bottom:0}
 
 <header class="top">
   <div class="wrap top-in" data-bot="head">
-    <a class="logo" href="/"><img src="/img/logo.png" alt="BullWaves">
-      <span>BullWaves Bot<small>торговый помощник · демо</small></span></a>
+    <a class="logo" href="/"><img src="/img/logo.png" alt="BullWays">
+      <span>BullWays Bot<small>торговый помощник · демо</small></span></a>
     <span class="pill live hidden" id="pillLive"><i class="dot"></i>сессия активна</span>
     <div class="spacer"></div>
     <div class="who hidden" id="who"><b id="whoName">—</b><small id="whoAcct">—</small></div>
@@ -171,13 +171,13 @@ table.data tr:last-child td{border-bottom:0}
 
     <div id="stepLogin" data-bot="login">
       <h1>Вход в кабинет бота</h1>
-      <p class="sub">Используйте логин и пароль от кошелька BullWaves. Бот подключается к кошельку
+      <p class="sub">Используйте логин и пароль от кошелька BullWays. Бот подключается к кошельку
         по ключу REST API, который выпускается в личном кабинете.</p>
       <div class="err" id="e1"></div>
       <div class="field"><label>Email</label><input id="inEmail" type="email" autocomplete="username" placeholder="you@mail.com"></div>
       <div class="field"><label>Пароль</label><input id="inPass" type="password" autocomplete="current-password" placeholder="••••••••"></div>
       <button class="btn btn-primary btn-full" id="btnLogin">Войти</button>
-      <p class="hint">Нет кошелька? <a href="/" style="color:var(--accent);font-weight:600">Зарегистрируйтесь на сайте BullWaves</a>,
+      <p class="hint">Нет кошелька? <a href="/" style="color:var(--accent);font-weight:600">Зарегистрируйтесь на сайте BullWays</a>,
         затем вернитесь сюда.</p>
     </div>
 
@@ -244,14 +244,14 @@ table.data tr:last-child td{border-bottom:0}
           <button class="btn btn-danger hidden" id="btnStop">Остановить</button>
         </div>
         <p class="hint">Запуск включает автоматическую торговую сессию: бот открывает и закрывает сделки
-          по выбранной паре и ведёт кошелёк к расчётному результату. Прогресс виден и в личном кабинете BullWaves.</p>
+          по выбранной паре и ведёт кошелёк к расчётному результату. Прогресс виден и в личном кабинете BullWays.</p>
       </div>
 
       <div class="panel" data-bot="ai">
         <div class="aiwrap">
           <div class="ai-av">AI</div>
           <div>
-            <b style="font-size:14px">BullWaves AI Assistant</b>
+            <b style="font-size:14px">BullWays AI Assistant</b>
             <div class="ai-say" id="aiSay" style="margin-top:8px">Готов к работе. Выберите пару и горизонт —
               я рассчитаю ожидаемый результат и возьму сделки на себя.</div>
           </div>
@@ -298,7 +298,7 @@ table.data tr:last-child td{border-bottom:0}
 
 <footer class="foot">
   <div class="wrap" data-bot="foot">
-    BullWaves Bot — учебный демонстрационный проект. Торговля симулируется на демо-кошельке:
+    BullWays Bot — учебный демонстрационный проект. Торговля симулируется на демо-кошельке:
     ордера не отправляются на биржу, доходность рассчитывается моделью и не является инвестиционной
     рекомендацией или прогнозом реального рынка.
   </div>
@@ -659,7 +659,7 @@ on("btnOut",async ()=>{
 
 function checkBalance(){
   const empty=!S.user||Number(S.user.balance)<=0;
-  err("eBal", empty ? "На кошельке нет средств: боту нечем торговать. Пополните кошелёк в личном кабинете BullWaves — после зачисления расчёт и запуск станут доступны." : "");
+  err("eBal", empty ? "На кошельке нет средств: боту нечем торговать. Пополните кошелёк в личном кабинете BullWays — после зачисления расчёт и запуск станут доступны." : "");
   $("btnStart").disabled=empty;
   if(empty) $("aiSay").textContent="Кошелёк пуст — сначала нужно зачисление. Как только на счёте появятся средства, я рассчитаю план и возьму сделки на себя.";
 }
@@ -722,7 +722,8 @@ function afterBotSwap(){
   try{ if(S.user){ buildForm(); renderSession(); checkBalance(); } }catch(e){}
 }
 function brandFix(v){
-  if(typeof v==="string") return v.replace(/Avexo/g,"BullWaves");
+  if(typeof v==="string") return v.replace(/Avexo/g,"BullWays")
+    .replace(/BullWaves/g,"BullWays").replace(/BULLWAVES/g,"BULLWAYS").replace(/bullwaves/g,"bullways");
   if(Array.isArray(v)) return v.map(brandFix);
   if(v&&typeof v==="object"){ const o={}; for(const k in v) o[k]=brandFix(v[k]); return o; }
   return v;
