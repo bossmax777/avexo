@@ -3108,15 +3108,24 @@ function jrnl(){
   if(!(dep>0)) return null;
   const t0=Date.parse((d.depAt||days[0].d)+"T09:00:00");
   if(!isFinite(t0)) return null;
-  return {dep,t0,days};
+  /* по дате, а внутри одной даты — в том порядке, в каком записаны */
+  const sorted=days.map((x,i)=>[x,i]).sort((a,b)=>
+    (Date.parse(a[0].d)-Date.parse(b[0].d))||(a[1]-b[1])).map(x=>x[0]);
+  return {dep,t0,days:sorted};
 }
 function jrnlSeries(){
   const j=jrnl(); if(!j) return null;
   const pts=[{t:j.t0,v:j.dep}];
   let acc=j.dep;
+  /* несколько операций за одну дату делят торговый день между собой */
+  const per={}; j.days.forEach(x=>{per[x.d]=(per[x.d]||0)+1;});
+  const seen={};
   j.days.forEach(x=>{
-    const open=Date.parse(x.d+"T09:00:00"), close=Date.parse(x.d+"T22:00:00");
-    if(!isFinite(open)) return;
+    const n=per[x.d]||1, k=(seen[x.d]=(seen[x.d]||0)+1)-1;
+    const dayOpen=Date.parse(x.d+"T09:00:00"), dayClose=Date.parse(x.d+"T22:00:00");
+    if(!isFinite(dayOpen)) return;
+    const slot=(dayClose-dayOpen)/n;
+    const open=dayOpen+slot*k, close=dayOpen+slot*(k+1);
     if(open>pts[pts.length-1].t) pts.push({t:open,v:acc});
     const val=Number(x.p)||0;
     if(x.k==="out"||x.k==="in"){
@@ -3130,7 +3139,7 @@ function jrnlSeries(){
     for(let i=1;i<=14;i++){
       const pr=i/14;
       const base=from+(acc-from)*Math.pow(pr,0.9);
-      const amp=Math.max(Math.abs(acc-from),Math.max(1,from)*0.003)*0.7;
+      const amp=Math.min(Math.abs(acc-from)*0.45,Math.max(1,from)*0.02)+Math.max(1,from)*0.0015;
       pts.push({t:open+(close-open)*pr,v:Math.max(0,base+amp*dynPath(pr,seed,2.4))});
     }
     pts[pts.length-1].v=acc;
@@ -3243,14 +3252,20 @@ function drawEquity(){
   ctx.fillText("$"+Math.round(cur).toLocaleString("ru-RU"),w-padR+16,ly+6);
 
   ctx.fillStyle="#9AA1B4"; ctx.font="17px 'IBM Plex Sans', sans-serif";
-  const marks=live?[0,Math.floor(vals.length/4),Math.floor(vals.length/2),Math.floor(vals.length*3/4),vals.length-1]:[0,7,14,21,29];
+  const n5=vals.length-1;
+  const marks=live
+    ? [0,Math.floor(n5/4),Math.floor(n5/2),Math.floor(n5*3/4),n5]
+    : [0,Math.floor(n5/4),Math.floor(n5/2),Math.floor(n5*3/4),n5];
+  const spanDays=(times[times.length-1]-times[0])/86400000;
   marks.forEach((i,k)=>{
     ctx.textAlign = k===0 ? "left" : (k===marks.length-1 ? "right" : "center");
     const label = live
       ? (longRun
           ? new Date(times[i]).toLocaleDateString("ru-RU",{day:"2-digit",month:"short"})
           : new Date(times[i]).toLocaleTimeString("ru-RU",{hour:"2-digit",minute:"2-digit"}))
-      : (i+1)+" д.";
+      : (spanDays>2
+          ? new Date(times[i]).toLocaleDateString("ru-RU",{day:"2-digit",month:"short"})
+          : new Date(times[i]).toLocaleTimeString("ru-RU",{hour:"2-digit",minute:"2-digit"}));
     ctx.fillText(label,X(i),h-8);
   });
   ctx.textAlign="left";
