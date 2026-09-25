@@ -855,11 +855,12 @@ function mktStopText(){
   const wd=new Date(Date.now()).getDay();
   const day=["воскресенья","понедельника","вторника","среды","четверга","пятницы","субботы"][d.getDay()];
   const time=d.toLocaleTimeString("ru-RU",{hour:"2-digit",minute:"2-digit"});
+  const date=d.toLocaleDateString("ru-RU",{day:"numeric",month:"long"});
   const left=Math.max(0,nx-Date.now());
   const hh=Math.floor(left/3600000), mm=Math.floor(left%3600000/60000);
   const head=(wd===6||wd===0)
-    ? "Биржа закрыта — выходные. Торги возобновятся в "+time+" "+day
-    : "Биржа закрыта — технический перерыв. Торги возобновятся в "+time;
+    ? "Биржа закрыта — выходные. Торги возобновятся в "+time+" "+day+", "+date
+    : "Биржа закрыта — технический перерыв. Торги возобновятся в "+time+" "+date;
   const sub="Бот не открывает и не закрывает сделки, котировки заморожены, сессии на паузе. "+
     "До открытия "+(hh?hh+" ч ":"")+mm+" мин.";
   return {head,sub};

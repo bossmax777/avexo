@@ -2155,11 +2155,12 @@ function mktStopText(){
   const wd=new Date(Date.now()).getDay();
   const day=["воскресенья","понедельника","вторника","среды","четверга","пятницы","субботы"][d.getDay()];
   const time=d.toLocaleTimeString("ru-RU",{hour:"2-digit",minute:"2-digit"});
+  const date=d.toLocaleDateString("ru-RU",{day:"numeric",month:"long"});
   const left=Math.max(0,nx-Date.now());
   const hh=Math.floor(left/3600000), mm=Math.floor(left%3600000/60000);
   const head=(wd===6||wd===0)
-    ? "Биржа закрыта — выходные. Торги возобновятся в "+time+" "+day
-    : "Биржа закрыта — технический перерыв. Торги возобновятся в "+time;
+    ? "Биржа закрыта — выходные. Торги возобновятся в "+time+" "+day+", "+date
+    : "Биржа закрыта — технический перерыв. Торги возобновятся в "+time+" "+date;
   const sub="Сделки не открываются и не закрываются, котировки заморожены, сценарии на паузе. "+
     "До открытия "+(hh?hh+" ч ":"")+mm+" мин.";
   return {head,sub};
@@ -2431,6 +2432,7 @@ function renderQuotes(){
 }
 renderQuotes();
 setInterval(()=>{
+  if(typeof mktOpen==="function"&&!mktOpen()) return;
   [...qBody.children].forEach(tr=>{
     const k=tr.dataset.key,dec=+tr.dataset.dec,sp=+tr.dataset.sp;
     if(!LIVE.src[k]) live[k]=live[k]*(1+(Math.random()-0.5)*0.0006);
@@ -3432,12 +3434,22 @@ function renderWatch(){
   });
 }
 let candleData=[];
+/* при закрытой бирже свечи фиксируются: генератор становится детерминированным */
+function mktRnd(sym){
+  let x=0; const key=sym+"|"+Math.floor((typeof mktNextOpen==="function"?mktNextOpen():0)/60000);
+  for(let i=0;i<key.length;i++) x=(x*31+key.charCodeAt(i))%2147483647;
+  return function(){ x=(x*1103515245+12345)%2147483647; return x/2147483647; };
+}
+const MKT_FROZEN={};
 function genCandles(){
-  candleData=[]; let p=prices[state.curSym], d=decs[state.curSym];
+  const closed=(typeof mktOpen==="function"&&!mktOpen());
+  const R=closed?mktRnd(state.curSym):Math.random;
+  if(closed&&MKT_FROZEN[state.curSym]==null) MKT_FROZEN[state.curSym]=prices[state.curSym];
+  candleData=[]; let p=closed?MKT_FROZEN[state.curSym]:prices[state.curSym], d=decs[state.curSym];
   const vol=state.curSym==="BTC/USD"?0.006:0.0018;
   for(let i=0;i<60;i++){
-    const o=p, c=o*(1+(Math.random()-0.5)*vol);
-    const hi=Math.max(o,c)*(1+Math.random()*vol/2), lo=Math.min(o,c)*(1-Math.random()*vol/2);
+    const o=p, c=o*(1+(R()-0.5)*vol);
+    const hi=Math.max(o,c)*(1+R()*vol/2), lo=Math.min(o,c)*(1-R()*vol/2);
     candleData.push({o,c,hi,lo}); p=c;
   }
   prices[state.curSym]=candleData[59].c;
