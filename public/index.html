@@ -797,6 +797,7 @@ footer a:hover{color:var(--accent)}
 .cr-row button.on{border-color:var(--accent);box-shadow:inset 0 0 0 1px var(--accent)}
 .cr-sum{font-size:13px;color:var(--muted);border-top:1px solid var(--line);padding-top:11px}
 .cr-sum b{color:var(--text)}
+.pay-addr.is-off{display:none!important}
 .pay-addr small{display:block;margin-top:7px;font-size:11.5px;line-height:1.4;opacity:.85}
 .pay-addr{display:block!important;margin-top:10px;padding:11px 13px;border:1px dashed #C89538;border-radius:10px;background:rgba(200,149,56,.08)}
 .pay-addr span{display:block;font-size:12px;color:#9A7420;margin-bottom:6px}
@@ -2808,6 +2809,7 @@ function showPane(id){
   if(id==="dash"){drawEquity();renderPositions();}
   if(id==="term"){renderWatch();drawCandles();updateTicket();}
   if(id==="prof"){renderProfile();renderAcct();fitAcct();renderIntegrations();}
+  if(id==="pay"){renderMethods();calcPay();}
   if(id==="out"){renderOut();}
   if(id==="tools"){renderTools();}
   if(id==="ai"){initAI();}
@@ -3748,12 +3750,16 @@ function demoReq(){
   return "DEMO-NOT-A-REAL-ACCOUNT";
 }
 function renderPayReq(){
-  const box=document.getElementById("payReqBox"); if(!box) return;
-  const val=document.getElementById("payReqVal");
+  const boxes=document.querySelectorAll("#payReqBox, .pay-req-box");
+  if(!boxes.length) return;
   const m=METHODS[state.method]||METHODS[0];
   const show=state.payMode!=="out" && m && m[1]==="Криптовалюта";
-  box.hidden=!show;
-  if(show&&val) val.textContent=demoReq();
+  boxes.forEach(box=>{
+    box.hidden=!show;
+    box.classList.toggle("is-off",!show);
+    const val=box.querySelector("#payReqVal")||document.getElementById("payReqVal");
+    if(show&&val) val.textContent=demoReq();
+  });
 }
 /* ---- криптовалюта: монета, сеть, расчёт ---- */
 const COINS=[
