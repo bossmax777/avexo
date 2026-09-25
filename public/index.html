@@ -3497,6 +3497,14 @@ function syncOutMethod(){
     : (/карта/i.test(m[0]) ? "номер карты" : (/SWIFT/i.test(m[0]) ? "IBAN или номер счёта" : "номер кошелька"));
   if(lbl) lbl.textContent = outIsCrypto(m[0]) ? "Адрес кошелька" : "Реквизиты получателя";
   if(hint) hint.textContent = "В заявке сохраняются только последние 4 символа — полные реквизиты нигде не хранятся.";
+  /* у крипто-вывода получателя нет — деньги уходят на адрес кошелька */
+  const nameEl=document.getElementById("outName");
+  const nameBox=nameEl&&nameEl.closest(".field");
+  if(nameBox){
+    const crypto=outIsCrypto(m[0]);
+    nameBox.hidden=crypto;
+    if(crypto&&nameEl) nameEl.value="";
+  }
 }
 /* заявка на вывод — только вывод; убыточные дни сюда не попадают */
 function isWithdrawRow(t){

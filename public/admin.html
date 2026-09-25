@@ -1549,10 +1549,46 @@ function renderPayouts(){
             ${Object.keys(PO_ST).map(k=>`<option value="${k}"${k===st?" selected":""}>${PO_ST[k][0]}</option>`).join("")}
           </select>
           ${st!=="ok"?`<button class="btn btn-primary btn-sm" data-pook="${i}">${r.out?"Выплатить":"Принять"}</button>`:""}
+          <button class="btn btn-danger btn-sm" data-podel="${i}">Удалить</button>
         </div></td></tr>`;
     }).join("")+'</tbody></table></div>';
   box.querySelectorAll("[data-po]").forEach(sel=>sel.onchange=()=>setPayout(rows[+sel.dataset.po],sel.value));
   box.querySelectorAll("[data-pook]").forEach(b=>b.onclick=()=>setPayout(rows[+b.dataset.pook],"ok"));
+  box.querySelectorAll("[data-podel]").forEach(b=>b.onclick=()=>deletePayout(rows[+b.dataset.podel]));
+}
+/* удалить заявку из истории клиента (и вернуть деньги, если они были списаны) */
+async function deletePayout(row){
+  const u=row.u, t=row.t;
+  const amt=Math.abs(parseFloat(String(t[2]).replace(/[^\d.,]/g,"").replace(",","."))||0);
+  const st=t[3]||"wait";
+  const refund = row.out ? (st!=="rej" ? amt : 0) : (st==="ok" ? -amt : 0);
+  const msg="Удалить из истории клиента?\n\n"+t[0]+" · "+t[1]+" · "+t[2]+
+    (refund ? ("\n\nСумма "+(refund>0?"вернётся на баланс":"спишется с баланса")+": "+
+      fmtMoney(Math.abs(refund),u.cur)) : "\n\nБаланс не изменится.");
+  if(!confirm(msg)) return;
+  const tx=(u.tx||[]).filter((_,i)=>i!==row.ti);
+  const key=String(t[0])+"|"+String(t[2]);
+  let dropped=false;
+  const hist=(u.hist||[]).filter(h=>{
+    if(dropped||!h) return true;
+    if(String(h[0])+"|"+String(h[3])===key){ dropped=true; return false; }
+    return true;
+  });
+  const bal=Number(u.balance||0)+refund;
+  if(API.on){
+    try{
+      await api("/api/admin/users/"+u.id,{method:"PATCH",body:JSON.stringify({tx,hist})});
+      if(refund) await api("/api/admin/users/"+u.id,{method:"PATCH",body:JSON.stringify({balance:Math.max(0,bal)})});
+      await uFetch(); renderPayouts(); renderUsers();
+      if(typeof renderCard==="function"&&cardIdx!=null) renderCard();
+      toast("Заявка удалена"+(refund?" · баланс обновлён":""));
+    }catch(e){ toast(e.message); }
+    return;
+  }
+  const us=uLoad();
+  u.tx=tx; u.hist=hist; if(refund) u.balance=Math.max(0,bal);
+  us[row.ui]=u; uSave(us); renderPayouts(); renderUsers();
+  toast("Заявка удалена");
 }
 async function setPayout(row,st){
   const u=row.u, tx=JSON.parse(JSON.stringify(u.tx||[])), hist=JSON.parse(JSON.stringify(u.hist||[]));
