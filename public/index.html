@@ -3498,6 +3498,13 @@ function syncOutMethod(){
   if(lbl) lbl.textContent = outIsCrypto(m[0]) ? "Адрес кошелька" : "Реквизиты получателя";
   if(hint) hint.textContent = "В заявке сохраняются только последние 4 символа — полные реквизиты нигде не хранятся.";
 }
+/* заявка на вывод — только вывод; убыточные дни сюда не попадают */
+function isWithdrawRow(t){
+  if(!t) return false;
+  const meth=String(t[1]||""), sum=String(t[2]||"");
+  if(/итог торгового дня|результат дня/i.test(meth)) return false;
+  return /вывод|withdraw/i.test(meth) || (sum.trim().startsWith("\u2212") && !/пополн|криптовалют|карта|перевод|кошел/i.test(meth));
+}
 function renderOut(){
   const sel=document.getElementById("outMethod"); if(!sel) return;
   if(!sel.dataset.ready){
@@ -3512,7 +3519,7 @@ function renderOut(){
     });
     document.getElementById("outGo").onclick=submitOut;
   }
-  const rows=(state.tx||[]).filter(t=>String(t[2]).startsWith("−"));
+  const rows=(state.tx||[]).filter(t=>isWithdrawRow(t));
   const body=document.getElementById("outBody");
   document.getElementById("outEmpty").hidden=rows.length>0;
   document.getElementById("outCount").textContent=rows.length+" шт.";

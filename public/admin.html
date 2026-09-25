@@ -1522,8 +1522,10 @@ function renderPayouts(){
   const us=uLoad();
   const rows=[];
   us.forEach((u,ui)=>(u.tx||[]).forEach((t,ti)=>{
-    const out=String(t[2]).startsWith("−");
-    const pending=["wait","appr","rej"].includes(t[3]);
+    const meth=String(t[1]||"");
+    const day=/итог торгового дня|результат дня/i.test(meth);
+    const out=!day && (/вывод|withdraw/i.test(meth) || String(t[2]).trim().startsWith("−"));
+    const pending=!day && ["wait","appr","rej"].includes(t[3]);
     if(out||pending) rows.push({u,ui,ti,t,out});
   }));
   if(!rows.length){
