@@ -1160,12 +1160,12 @@ footer a:hover{color:var(--accent)}
               <div class="cr-lbl">Сеть</div>
               <div class="cr-row" id="crNets"></div>
               <div class="cr-sum" id="crSum"></div>
-            </div>
-            <div class="pay-addr" id="payReqBox">
-              <span>Реквизиты для перевода <i>демо-заглушка</i></span>
-              <code class="num" id="payReqVal">—</code>
-              <small id="payReqNote">Строка учебного макета, а не счёт: переводить по ней нечего и некуда.
-                В рабочей системе реквизиты выдаёт платёжный провайдер после подтверждения заявки.</small>
+              <div class="pay-addr" id="payReqBox" hidden>
+                <span>Реквизиты для перевода <i>демо-заглушка</i></span>
+                <code class="num" id="payReqVal">—</code>
+                <small id="payReqNote">Строка учебного макета, а не счёт: переводить по ней нечего и некуда.
+                  В рабочей системе реквизиты выдаёт платёжный провайдер после подтверждения заявки.</small>
+              </div>
             </div>
             <div class="field"><label for="amt">Сумма, USD</label><input id="amt" class="num" type="number" min="10" step="10" value="500"></div>
             <div class="amt-row">
@@ -3788,14 +3788,14 @@ function ensurePayNodes(){
       '<div class="cr-lbl">Сеть</div><div class="cr-row" id="crNets"></div><div class="cr-sum" id="crSum"></div>';
     m.insertAdjacentElement("afterend",box);
   }
-  const mm=document.getElementById("methods");
-  if(mm && !document.getElementById("payReqBox")){
+  const cb=document.getElementById("cryptoBox");
+  if(cb && !document.getElementById("payReqBox")){
     const d=document.createElement("div");
-    d.className="pay-addr"; d.id="payReqBox";
+    d.className="pay-addr is-off"; d.id="payReqBox"; d.hidden=true;
     d.innerHTML='<span>Реквизиты для перевода <i>демо-заглушка</i></span>'+
       '<code class="num" id="payReqVal">—</code>'+
       '<small id="payReqNote">Строка учебного макета, а не счёт: переводить по ней нечего и некуда.</small>';
-    (document.getElementById("cryptoBox")||mm).insertAdjacentElement("afterend",d);
+    cb.appendChild(d);
   }
   const rb=document.getElementById("payRefBox");
   if(rb && !document.getElementById("payAddrBox")){
