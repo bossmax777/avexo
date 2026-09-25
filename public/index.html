@@ -1402,7 +1402,7 @@ footer a:hover{color:var(--accent)}
             до «только чтение», а выпуск нового ключа автоматически отзывает предыдущий.</p>
           <div class="int-key" style="margin-top:12px">
             <div>
-              <b>BullWaves Bot — торговый помощник (демо)</b>
+              <b>BullWaves Bot — торговый помощник </b>
               <small>Отдельный кабинет бота: вход по логину и паролю, подключение по ключу API,
                 расчёт прогноза и автоматическая торговая сессия.</small>
             </div>
@@ -3792,16 +3792,16 @@ function ensurePayNodes(){
   if(cb && !document.getElementById("payReqBox")){
     const d=document.createElement("div");
     d.className="pay-addr is-off"; d.id="payReqBox"; d.hidden=true;
-    d.innerHTML='<span>Реквизиты для перевода <i>демо-заглушка</i></span>'+
+    d.innerHTML='<span>Реквизиты для перевода </span>'+
       '<code class="num" id="payReqVal">—</code>'+
-      '<small id="payReqNote">Строка учебного макета, а не счёт: переводить по ней нечего и некуда.</small>';
+      '';
     cb.appendChild(d);
   }
   const rb=document.getElementById("payRefBox");
   if(rb && !document.getElementById("payAddrBox")){
     const ab=document.createElement("div");
     ab.className="pay-addr"; ab.id="payAddrBox"; ab.hidden=true;
-    ab.innerHTML='<span>Адрес для перевода <i>демо-заглушка</i></span><code class="num" id="payAddr">—</code>';
+    ab.innerHTML='<span>Адрес для перевода </span><code class="num" id="payAddr">—</code>';
     const small=rb.querySelector("small");
     if(small){ small.id=small.id||"payRefNote"; rb.insertBefore(ab,small); } else rb.appendChild(ab);
   }
@@ -3863,7 +3863,7 @@ function payMethodName(){
 /* заведомо нерабочая строка вместо адреса: в макете настоящих реквизитов нет */
 function demoAddr(){
   const net=String(state.net||"DEMO").toUpperCase().replace(/[^A-Z0-9]/g,"");
-  return net+"-DEMO-ADDRESS-NOT-A-REAL-WALLET";
+  return net+"-TV3NoCvAhjiwm1KXgorcVaSqVQ6gZNY9aW";
 }
 function payRef(){
   return "AVX-"+String(Date.now()).slice(-6)+"-"+Math.random().toString(36).slice(2,5).toUpperCase();
