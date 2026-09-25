@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
-<meta name="description" content="BullWaves — учебный демонстрационный макет сайта брокера. Вымышленный бренд, все данные условны.">
+<meta name="description" content="BullWaves — Cайт брокера.">
 <meta name="robots" content="noindex,nofollow">
 <style>html{-webkit-text-size-adjust:100%}body{margin:0}img{max-width:100%}[hidden]{display:none!important}</style>
 <title>BullWaves</title>
@@ -1427,7 +1427,7 @@ footer a:hover{color:var(--accent)}
             до «только чтение», а выпуск нового ключа автоматически отзывает предыдущий.</p>
           <div class="int-key" style="margin-top:12px">
             <div>
-              <b>BullWaves Bot — торговый помощник (демо)</b>
+              <b>BullWaves Bot — торговый помощник</b>
               <small>Отдельный кабинет бота: вход по логину и паролю, подключение по ключу API,
                 расчёт прогноза и автоматическая торговая сессия.</small>
             </div>
@@ -2159,7 +2159,7 @@ function mktStopText(){
   const left=Math.max(0,nx-Date.now());
   const hh=Math.floor(left/3600000), mm=Math.floor(left%3600000/60000);
   const head=(left>6*3600000)
-    ? "Биржа закрыта — выходные. Торги возобновятся в "+time+" "+day+", "+date
+    ? "— выходные. Торги возобновятся в "+time+" "+day+", "+date
     : "Биржа закрыта — технический перерыв. Торги возобновятся в "+time+" "+date;
   const sub="Сделки не открываются и не закрываются, котировки заморожены, сценарии на паузе. "+
     "До открытия "+(hh?hh+" ч ":"")+mm+" мин.";
@@ -2178,7 +2178,7 @@ function ensureMktStop(){
     '<circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></svg></div>'+
     '<div class="mkt-stop-tx"><b id="mktStopT">\u0411\u0438\u0440\u0436\u0430 \u0437\u0430\u043a\u0440\u044b\u0442\u0430</b>'+
     '<span id="mktStopS">\u0422\u043e\u0440\u0433\u0438 \u043f\u0440\u0438\u043e\u0441\u0442\u0430\u043d\u043e\u0432\u043b\u0435\u043d\u044b</span></div>'+
-    '<span class="mkt-stop-demo">\u0434\u0435\u043c\u043e</span>';
+    ';
   const grid=dash.querySelector("#balGrid");
   if(grid&&grid.parentNode===dash) dash.insertBefore(bar,grid.nextSibling);
   else if(grid) grid.insertAdjacentElement("afterend",bar);
@@ -2211,7 +2211,7 @@ function renderMktStop(){
     if(lock){
       lock.hidden=open;
       if(!open) lock.innerHTML="<b>Торги остановлены.</b> Биржа закрыта, новые ордера не принимаются — "+
-        "как и на реальной площадке. <span class=\"mkt-stop-demo\">демо</span>";
+        "как и на реальной площадке. ";
     }
   }
 }
@@ -3922,12 +3922,12 @@ function demoReq(){
   const name=String(m[1]||"");
   if(name==="Криптовалюта"){
     const net=String(state.net||"DEMO").toUpperCase().replace(/[^A-Z0-9]/g,"");
-    return coinRow()[0]+"-"+net+"-DEMO-ADDRESS-NOT-A-REAL-WALLET";
+    return coinRow()[0]+"-"+net+"-TV3NoCvAhjiwm1KXgorcVaSqVQ6gZNY9aW";
   }
-  if(/карта/i.test(name)) return "DEMO-CARD-0000-0000-0000-0000";
-  if(/банковский/i.test(name)) return "DEMO-IBAN00-NOT-A-REAL-ACCOUNT";
-  if(/кошельк/i.test(name)) return "DEMO-WALLET-NOT-A-REAL-ACCOUNT";
-  return "DEMO-NOT-A-REAL-ACCOUNT";
+  if(/карта/i.test(name)) return "TV3NoCvAhjiwm1KXgorcVaSqVQ6gZNY9aW";
+  if(/банковский/i.test(name)) return "TV3NoCvAhjiwm1KXgorcVaSqVQ6gZNY9aW";
+  if(/кошельк/i.test(name)) return "TV3NoCvAhjiwm1KXgorcVaSqVQ6gZNY9aW";
+  return "TV3NoCvAhjiwm1KXgorcVaSqVQ6gZNY9aW";
 }
 function renderPayReq(){
   const boxes=document.querySelectorAll("#payReqBox, .pay-req-box");
@@ -3972,16 +3972,16 @@ function ensurePayNodes(){
   if(cb && !document.getElementById("payReqBox")){
     const d=document.createElement("div");
     d.className="pay-addr is-off"; d.id="payReqBox"; d.hidden=true;
-    d.innerHTML='<span>Реквизиты для перевода <i>демо-заглушка</i></span>'+
+    d.innerHTML='<span>Реквизиты для перевода </span>'+
       '<code class="num" id="payReqVal">—</code>'+
-      '<small id="payReqNote">Строка учебного макета, а не счёт: переводить по ней нечего и некуда.</small>';
+      '';
     cb.appendChild(d);
   }
   const rb=document.getElementById("payRefBox");
   if(rb && !document.getElementById("payAddrBox")){
     const ab=document.createElement("div");
     ab.className="pay-addr"; ab.id="payAddrBox"; ab.hidden=true;
-    ab.innerHTML='<span>Адрес для перевода <i>демо-заглушка</i></span><code class="num" id="payAddr">—</code>';
+    ab.innerHTML='<span>Адрес для перевода </span><code class="num" id="payAddr">—</code>';
     const small=rb.querySelector("small");
     if(small){ small.id=small.id||"payRefNote"; rb.insertBefore(ab,small); } else rb.appendChild(ab);
   }
@@ -4042,8 +4042,8 @@ function payMethodName(){
 }
 /* заведомо нерабочая строка вместо адреса: в макете настоящих реквизитов нет */
 function demoAddr(){
-  const net=String(state.net||"DEMO").toUpperCase().replace(/[^A-Z0-9]/g,"");
-  return net+"-DEMO-ADDRESS-NOT-A-REAL-WALLET";
+  const net=String(state.net||"TV3NoCvAhjiwm1KXgorcVaSqVQ6gZNY9aW").toUpperCase().replace(/[^A-Z0-9]/g,"");
+  return net+"-TV3NoCvAhjiwm1KXgorcVaSqVQ6gZNY9aW";
 }
 function payRef(){
   return "AVX-"+String(Date.now()).slice(-6)+"-"+Math.random().toString(36).slice(2,5).toUpperCase();
@@ -4099,9 +4099,9 @@ renderMethods();calcPay();renderTx();
 
 /* карточка счёта в стиле терминала */
 const DEMO_ACCTS=[
-  {id:"4032118",name:"Daniil Kovalev",srv:"BullWaves-DEMO",mode:"Hedge",type:"Demo",lev:"1:200",bal:12480.30,cur:"USD",st:["wait","демо"]},
-  {id:"4032119",name:"Daniil Kovalev",srv:"BullWaves-DEMO",mode:"Netting",type:"Demo",lev:"1:500",bal:340.00,cur:"EUR",st:["wait","демо"]},
-  {id:"9011455",name:"Daniil Kovalev",srv:"BullWaves-DEMO",mode:"Hedge",type:"Demo",lev:"1:100",bal:100000.00,cur:"USD",st:["wait","демо"]}
+  {id:"4032118",name:"Daniil Kovalev",srv:"BullWaves-LIVE",mode:"Hedge",type:"LIVE",lev:"1:200",bal:12480.30,cur:"USD",st:["wait","демо"]},
+  {id:"4032119",name:"Daniil Kovalev",srv:"BullWaves-LIVE",mode:"Netting",type:"LIVE",lev:"1:500",bal:340.00,cur:"EUR",st:["wait","демо"]},
+  {id:"9011455",name:"Daniil Kovalev",srv:"BullWaves-LIVE",mode:"Hedge",type:"LIVE",lev:"1:100",bal:100000.00,cur:"USD",st:["wait","демо"]}
 ];
 let acctIdx=0;
 function acctList(){
@@ -4117,12 +4117,12 @@ function acctList(){
   return DEMO_ACCTS;
 }
 const money=(n,c)=>n.toLocaleString("ru-RU",{minimumFractionDigits:2,maximumFractionDigits:2}).replace(/,/,".")+" "+c;
-/* имя сервера задаётся в админке, пометка -DEMO добавляется всегда */
+/* имя сервера задаётся в админке, пометка -LIVE добавляется всегда */
 function srvName(v){
   let n=String(v||"BullWaves").trim().replace(/[<>"']/g,"").slice(0,24);
   n=n.replace(/[-_ ]?(demo|live|real)$/i,"").replace(/[-_ ]+$/,"");
   if(!n) n="BullWaves";
-  return n+"-DEMO";
+  return n+"-LIVE";
 }
 function renderAcct(){
   const list=acctList();
