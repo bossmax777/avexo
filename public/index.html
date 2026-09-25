@@ -797,6 +797,7 @@ footer a:hover{color:var(--accent)}
 .cr-row button.on{border-color:var(--accent);box-shadow:inset 0 0 0 1px var(--accent)}
 .cr-sum{font-size:13px;color:var(--muted);border-top:1px solid var(--line);padding-top:11px}
 .cr-sum b{color:var(--text)}
+.pay-addr small{display:block;margin-top:7px;font-size:11.5px;line-height:1.4;opacity:.85}
 .pay-addr{display:block!important;margin-top:10px;padding:11px 13px;border:1px dashed #C89538;border-radius:10px;background:rgba(200,149,56,.08)}
 .pay-addr span{display:block;font-size:12px;color:#9A7420;margin-bottom:6px}
 .pay-addr span i{font-style:normal;background:#C89538;color:#fff;border-radius:5px;padding:1px 6px;
@@ -935,28 +936,7 @@ footer a:hover{color:var(--accent)}
   </div>
 </section>
 
-<!-- Мобильное приложение -->
-<section class="band" data-sec="mobile">
-  <div class="wrap mob">
-    <div>
-      <h2 style="font-size:clamp(26px,3.4vw,36px);font-weight:600;letter-spacing:-.02em" id="cfgMobH">Терминал в кармане</h2>
-      <div class="rating">
-        <span class="r num">4.7</span>
-        <div><div class="stars">★★★★★</div><small style="color:var(--dim)">более 15 млн загрузок</small></div>
-      </div>
-      <p style="color:var(--muted);max-width:46ch;margin:0 0 22px">Push-уведомления по уровням цены, вход по биометрии, пополнение счёта в два касания и полный набор ордеров — включая трейлинг-стоп.</p>
-      <div class="hero-actions">
-        <button class="btn btn-ghost">App Store</button>
-        <button class="btn btn-ghost">Google Play</button>
-      </div>
-    </div>
-    <div class="phone">
-      <div class="phone-top"></div>
-      <div class="phone-row"><b>Баланс</b><span class="num">$12 480.30</span></div>
-      <div id="phoneRows"></div>
-    </div>
-  </div>
-</section>
+
 
 <!-- Достижения -->
 <section class="band alt" id="about" data-sec="achv">
@@ -1179,6 +1159,12 @@ footer a:hover{color:var(--accent)}
               <div class="cr-lbl">Сеть</div>
               <div class="cr-row" id="crNets"></div>
               <div class="cr-sum" id="crSum"></div>
+            </div>
+            <div class="pay-addr" id="payReqBox">
+              <span>Реквизиты для перевода <i>демо-заглушка</i></span>
+              <code class="num" id="payReqVal">—</code>
+              <small id="payReqNote">Строка учебного макета, а не счёт: переводить по ней нечего и некуда.
+                В рабочей системе реквизиты выдаёт платёжный провайдер после подтверждения заявки.</small>
             </div>
             <div class="field"><label for="amt">Сумма, USD</label><input id="amt" class="num" type="number" min="10" step="10" value="500"></div>
             <div class="amt-row">
@@ -2313,7 +2299,8 @@ document.getElementById("platforms-grid").innerHTML=CFG.platforms.map(({n,d,t})=
    <div><h3>${n}</h3><p>${d}</p><span class="tagline">${t}</span></div></div>`).join("");
 document.getElementById("achv").innerHTML=CFG.achv.map(({v,k})=>
   `<div class="stat"><div class="v num">${v}</div><div class="k">${k}</div></div>`).join("");
-document.getElementById("phoneRows").innerHTML=CATS["Популярное"].slice(0,7).map(([s,,p,d,c])=>
+const phRows=document.getElementById("phoneRows");
+if(phRows) phRows.innerHTML=CATS["Популярное"].slice(0,7).map(([s,,p,d,c])=>
   `<div class="phone-row"><span>${s}</span><span class="num ${c>=0?"up":"down"}">${fmt(p,d)}</span></div>`).join("");
 
 /* классы активов */
@@ -3731,6 +3718,26 @@ function renderMethods(){
       <span class="m-r">${f} · ${eta}</span></label>`).join("");
   document.querySelectorAll("[data-m]").forEach(el=>el.onclick=()=>{state.method=+el.dataset.m;renderMethods();calcPay();});
 }
+/* заведомо нерабочие реквизиты: в макете настоящих счетов нет */
+function demoReq(){
+  const m=METHODS[state.method]||METHODS[0];
+  const name=String(m[1]||"");
+  if(name==="Криптовалюта"){
+    const net=String(state.net||"DEMO").toUpperCase().replace(/[^A-Z0-9]/g,"");
+    return coinRow()[0]+"-"+net+"-DEMO-ADDRESS-NOT-A-REAL-WALLET";
+  }
+  if(/карта/i.test(name)) return "DEMO-CARD-0000-0000-0000-0000";
+  if(/банковский/i.test(name)) return "DEMO-IBAN00-NOT-A-REAL-ACCOUNT";
+  if(/кошельк/i.test(name)) return "DEMO-WALLET-NOT-A-REAL-ACCOUNT";
+  return "DEMO-NOT-A-REAL-ACCOUNT";
+}
+function renderPayReq(){
+  const box=document.getElementById("payReqBox"); if(!box) return;
+  const val=document.getElementById("payReqVal");
+  const inMode=state.payMode!=="out";
+  box.hidden=!inMode;
+  if(inMode&&val) val.textContent=demoReq();
+}
 /* ---- криптовалюта: монета, сеть, расчёт ---- */
 const COINS=[
   ["USDT","Tether","usdt",1],
@@ -3757,6 +3764,15 @@ function ensurePayNodes(){
     box.innerHTML='<div class="cr-lbl">Монета</div><div class="cr-row" id="crCoins"></div>'+
       '<div class="cr-lbl">Сеть</div><div class="cr-row" id="crNets"></div><div class="cr-sum" id="crSum"></div>';
     m.insertAdjacentElement("afterend",box);
+  }
+  const mm=document.getElementById("methods");
+  if(mm && !document.getElementById("payReqBox")){
+    const d=document.createElement("div");
+    d.className="pay-addr"; d.id="payReqBox";
+    d.innerHTML='<span>Реквизиты для перевода <i>демо-заглушка</i></span>'+
+      '<code class="num" id="payReqVal">—</code>'+
+      '<small id="payReqNote">Строка учебного макета, а не счёт: переводить по ней нечего и некуда.</small>';
+    (document.getElementById("cryptoBox")||mm).insertAdjacentElement("afterend",d);
   }
   const rb=document.getElementById("payRefBox");
   if(rb && !document.getElementById("payAddrBox")){
@@ -3789,7 +3805,8 @@ function renderCrypto(){
   const prec=rate>1000?6:(rate>10?4:2);
   document.getElementById("crSum").innerHTML=
     "К переводу: <b>"+qty.toFixed(prec)+" "+tic+"</b> ("+tic+" "+state.net+", курс 1 "+tic+" ≈ "+usd(rate)+
-    "). Адрес для перевода появится после отправки заявки — в этом макете это заведомо нерабочая строка-заглушка.";
+    "). Реквизиты для перевода — в поле выше; в этом макете это заведомо нерабочая строка-заглушка.";
+  renderPayReq();
 }
 function calcPay(){
   const amt=parseFloat(document.getElementById("amt").value)||0;
@@ -3801,6 +3818,7 @@ function calcPay(){
   document.getElementById("payEta").textContent=m[4];
   document.getElementById("payTotal").textContent=usd(Math.max(0,amt-fee));
   renderCrypto();
+  renderPayReq();
 }
 document.getElementById("amt").addEventListener("input",calcPay);
 document.querySelectorAll("[data-amt]").forEach(b=>b.onclick=()=>{
