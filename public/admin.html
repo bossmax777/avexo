@@ -895,6 +895,7 @@ function renderUsers(){
         <button class="btn btn-ghost btn-sm" data-dyn="${i}">Сценарий${u.dyn&&u.dyn.on?" ●":""}</button>
         <button class="btn btn-ghost btn-sm" data-card="${i}">Карточка</button>
         <button class="btn btn-ghost btn-sm" data-pass="${i}">Новый пароль</button>
+        <button class="btn btn-ghost btn-sm" data-setbal="${i}">Изменить баланс</button>
         <button class="btn btn-ghost btn-sm" data-mail="${i}">Почта</button>
       </div></td>
       <td><button class="btn btn-danger btn-sm" data-udel="${i}">Удалить</button></td>
@@ -1205,6 +1206,7 @@ document.addEventListener("click",e=>{
   const d=e.target.closest("[data-debit]");  if(d) return adjust(+d.dataset.debit,-1);
   const pw=e.target.closest("[data-pass]");  if(pw) return resetPass(+pw.dataset.pass);
   const em=e.target.closest("[data-mail]");  if(em) return changeMail(+em.dataset.mail);
+  const sb=e.target.closest("[data-setbal]");  if(sb) return setBalance(+sb.dataset.setbal);
   const x=e.target.closest("[data-udel]");
   if(x){const us=uLoad(),u=us[+x.dataset.udel];
     if(u&&confirm("Удалить кошелёк "+(u.name||u.email)+"? Историю операций тоже сотрёт.")){
@@ -1311,6 +1313,28 @@ function gnRows(dep,depAt,days,cur){
   };
   gnPreview();
 })();
+/* прямая установка баланса — без записи в историю операций */
+async function setBalance(i){
+  const us=uLoad(), u=us[i]; if(!u) return;
+  const cur=Number(u.balance||0);
+  const raw=prompt("Новый баланс кошелька «"+(u.name||u.email)+"», USD:\n"+
+    "История операций при этом не меняется.", cur.toFixed(2));
+  if(raw===null) return;
+  const v=parseFloat(String(raw).replace(/\s/g,"").replace(",","."));
+  if(!isFinite(v)||v<0) return toast("Введите сумму — число от нуля");
+  if(API.on){
+    try{
+      await api("/api/admin/users/"+u.id,{method:"PATCH",body:JSON.stringify({balance:v})});
+      await uFetch(); renderUsers();
+      if(typeof renderCard==="function"&&cardIdx!=null) renderCard();
+      if(typeof renderDash==="function") renderDash();
+      toast("Баланс кошелька: "+fmtMoney(v,u.cur));
+    }catch(e){ toast(e.message); }
+    return;
+  }
+  u.balance=v; us[i]=u; uSave(us); renderUsers();
+  toast("Баланс кошелька: "+fmtMoney(v,u.cur));
+}
 /* смена email — им клиент входит в кабинет */
 async function changeMail(i){
   const us=uLoad(), u=us[i]; if(!u) return;
