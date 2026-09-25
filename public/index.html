@@ -2158,7 +2158,7 @@ function mktStopText(){
   const date=d.toLocaleDateString("ru-RU",{day:"numeric",month:"long"});
   const left=Math.max(0,nx-Date.now());
   const hh=Math.floor(left/3600000), mm=Math.floor(left%3600000/60000);
-  const head=(wd===6||wd===0)
+  const head=(left>6*3600000)
     ? "Биржа закрыта — выходные. Торги возобновятся в "+time+" "+day+", "+date
     : "Биржа закрыта — технический перерыв. Торги возобновятся в "+time+" "+date;
   const sub="Сделки не открываются и не закрываются, котировки заморожены, сценарии на паузе. "+
