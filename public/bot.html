@@ -33,7 +33,9 @@ a{color:inherit}
 .top-in{display:flex;align-items:center;gap:14px;height:66px}
 .logo{display:flex;align-items:center;gap:10px;font-family:"Sora",sans-serif;font-weight:700;
   font-size:17px;letter-spacing:-.02em;text-decoration:none}
-.logo .vx-mark{height:32px;width:32px;flex:none}
+.logo .vx-mark{height:32px;width:32px;min-width:32px;max-height:32px;flex:none;display:block}
+.logo img{height:30px;width:auto;max-height:30px}
+.top-in{align-items:center;min-height:60px}
 .logo{cursor:default}
 .logo span small{display:block;font-family:"IBM Plex Sans";font-weight:500;font-size:11px;color:var(--muted);letter-spacing:.02em}
 .pill{display:inline-flex;align-items:center;gap:6px;padding:5px 12px;border-radius:999px;
@@ -702,7 +704,8 @@ on("btnStop",async ()=>{
 bindAll();
 
 /* ============ HTML-блоки из админки ============ */
-const BOT_KEYS=["head","auth","login","key","params","ai","session","pos","log","foot"];
+/* «head» и «foot» намеренно вне списка: бренд бота задаётся только этой страницей */
+const BOT_KEYS=["auth","login","key","params","ai","session","pos","log"];
 const B_ORIG={}, B_ON={};
 let CFG={};
 function botEl(k){ return document.querySelector('[data-bot="'+k+'"]'); }
@@ -724,8 +727,19 @@ function applyBotBlocks(){
   if(changed) afterBotSwap();
 }
 function afterBotSwap(){
-  bindAll();
+  bindAll(); scrubBrand();
   try{ if(S.user){ buildForm(); renderSession(); checkBalance(); } }catch(e){}
+}
+/* если в сохранённых блоках осталось старое имя — подменяем на имя бота */
+function scrubBrand(){
+  const root=document.querySelector(".wrap.auth, #auth") ? document : null;
+  document.querySelectorAll('[data-bot] *').forEach(el=>{
+    if(el.children.length) return;
+    const t=el.textContent;
+    if(t && /BullWays|BullWaves|Avexo/i.test(t))
+      el.textContent=t.replace(/BullWays Bot|BullWaves Bot|Avexo Bot/gi,"Verdix AI")
+        .replace(/BullWays|BullWaves|Avexo/gi,"площадки");
+  });
 }
 function brandFix(v){
   if(typeof v==="string") return v.replace(/Avexo/g,"BullWays")
