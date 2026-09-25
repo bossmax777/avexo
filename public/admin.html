@@ -1524,7 +1524,7 @@ function renderPayouts(){
   us.forEach((u,ui)=>(u.tx||[]).forEach((t,ti)=>{
     const meth=String(t[1]||"");
     const day=/итог торгового дня|результат дня/i.test(meth);
-    const out=!day && (/вывод|withdraw/i.test(meth) || String(t[2]).trim().startsWith("−"));
+    const out=!day && (/вывод|withdraw/i.test(meth) || /^[-\u2212\u2013\u2014]/.test(String(t[2]).trim()));
     const pending=!day && ["wait","appr","rej"].includes(t[3]);
     if(out||pending) rows.push({u,ui,ti,t,out});
   }));

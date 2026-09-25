@@ -3190,10 +3190,11 @@ function renderPositions(){
     toast("Позиция закрыта, результат "+(v>=0?"+":"−")+usd(Math.abs(v)));
   });
 }
+function isNegAmt(a){ return /^\s*[-\u2212\u2013\u2014]/.test(String(a==null?"":a)); }
 function renderHist(){
   document.getElementById("histBody").innerHTML=state.hist.map(([d,o,s,a,st])=>
     `<tr><td class="num">${d}</td><td>${o}</td><td>${s}</td>
-     <td class="num ${a.startsWith("−")?"down":"up"}">${a}</td>
+     <td class="num ${isNegAmt(a)?"down":"up"}">${a}</td>
      <td><span class="badge ${st}">${st==="ok"?"исполнено":"в обработке"}</span></td></tr>`).join("");
 }
 renderHist(); renderBalance(); renderPositions();
@@ -4091,7 +4092,7 @@ document.getElementById("payGo").onclick=()=>{
 function renderTx(){
   document.getElementById("txBody").innerHTML=state.tx.map(([d,m,a,st,lbl])=>
     `<tr><td class="num">${d}</td><td>${m}</td>
-     <td class="num ${a.startsWith("−")?"down":"up"}">${a}</td>
+     <td class="num ${isNegAmt(a)?"down":"up"}">${a}</td>
      <td><span class="badge ${st}">${lbl}</span></td></tr>`).join("");
 }
 renderMethods();calcPay();renderTx();
