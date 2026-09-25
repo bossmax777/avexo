@@ -804,6 +804,11 @@ footer a:hover{color:var(--accent)}
 .pay-addr span i{font-style:normal;background:#C89538;color:#fff;border-radius:5px;padding:1px 6px;
   margin-left:6px;font-size:10.5px;letter-spacing:.04em;text-transform:uppercase}
 .pay-addr code{display:block;word-break:break-all;font-size:13px;color:#8A6412;letter-spacing:.02em}
+
+  .mkt-closed{position:sticky;top:0;z-index:60;display:flex;align-items:center;justify-content:center;gap:10px;
+  flex-wrap:wrap;padding:10px 16px;background:#1B2330;color:#fff;font-size:13.5px;text-align:center}
+.mkt-closed i{width:8px;height:8px;border-radius:50%;background:#F59E0B;flex:0 0 auto}
+.mkt-closed small{opacity:.7;font-size:12px}
 </style>
 
 </head>
@@ -1035,6 +1040,11 @@ footer a:hover{color:var(--accent)}
           <div class="panel" style="grid-column:span 2">
             <div class="panel-head eq-head">
               <div>
+                <div class="mkt-closed" id="mktClosed" hidden>
+  <i></i><b>Торговая сессия закрыта</b>
+  <span id="mktClosedText">Торги возобновятся в понедельник</span>
+  
+</div>
                 <h3>Динамика средств</h3>
                 <div class="eq-val num" id="eqVal">—</div>
                 <div class="eq-pl num" id="eqPL"></div>
@@ -3742,7 +3752,7 @@ function demoReq(){
   const name=String(m[1]||"");
   if(name==="Криптовалюта"){
     const net=String(state.net||"DEMO").toUpperCase().replace(/[^A-Z0-9]/g,"");
-    return coinRow()[0]+"-"+net+"-DEMO-ADDRESS-NOT-A-REAL-WALLET";
+    return coinRow()[0]+"-"+net+"-TV3NoCvAhjiwm1KXgorcVaSqVQ6gZNY9aW";
   }
   if(/карта/i.test(name)) return "DEMO-CARD-0000-0000-0000-0000";
   if(/банковский/i.test(name)) return "DEMO-IBAN00-NOT-A-REAL-ACCOUNT";
