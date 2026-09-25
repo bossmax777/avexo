@@ -2625,7 +2625,7 @@ function modal(kind){
   el.innerHTML=`<div class="modal" role="dialog" aria-modal="true">
     <button class="modal-x" aria-label="Закрыть">×</button>
     <h3>${signup?"Регистрация кошелька":"Вход в кошелёк"}</h3>
-    <p class="sub">${signup?"Учебный кошелёк без реальных денег: баланс начисляет администратор в админке.":"Введите email и пароль, указанные при регистрации."}</p>
+    <p class="sub">${signup?"":"Введите email и пароль, указанные при регистрации."}</p>
     ${signup?'<div class="field"><label for="m-name">Имя и фамилия</label><input id="m-name" placeholder="Как показывать в кабинете"></div>':''}
     <div class="field"><label for="m-mail">Email</label><input id="m-mail" type="email" placeholder="you@example.com"></div>
     <div class="field"><label for="m-pass">Пароль</label><input id="m-pass" type="password" placeholder="минимум 6 символов"></div>
@@ -2633,7 +2633,7 @@ function modal(kind){
     <p id="m-err" class="sub" style="color:var(--sell);margin:0 0 12px" hidden></p>
     <button class="btn btn-primary btn-block" id="m-go">${signup?"Создать кошелёк":"Войти"}</button>
     <p class="modal-foot">${signup?"Уже есть кошелёк? <a href=\"#\" id=\"m-swap\" style=\"color:var(--accent)\">Войти</a>":"Нет кошелька? <a href=\"#\" id=\"m-swap\" style=\"color:var(--accent)\">Зарегистрироваться</a>"}<br>
-      Данные хранятся только в этом браузере. Реальных платежей и счетов нет.</p>
+      </p>
   </div>`;
   document.body.appendChild(el);
   const close=()=>el.remove();
