@@ -1170,7 +1170,6 @@ footer a:hover{color:var(--accent)}
               <h3 id="payTitle">Пополнение счёта</h3>
               <div class="tabs" style="margin:0">
                 <button class="tab on" data-pay="in">Пополнить</button>
-                <button class="tab" data-pay="out">Вывести</button>
               </div>
             </div>
             <div class="methods" id="methods"></div>
@@ -1238,6 +1237,9 @@ footer a:hover{color:var(--accent)}
             <div class="field"><label for="outReq" id="outReqLabel">Реквизиты получателя</label>
               <input id="outReq" class="num" type="text" placeholder="номер карты или кошелька" autocomplete="off">
               <span class="hint" id="outReqHint">В заявке сохраняются только последние 4 символа — полные реквизиты нигде не хранятся.</span></div>
+            <div class="field" id="outNetBox" hidden><label for="outNet">Сеть</label>
+              <select id="outNet" class="sel"></select>
+              <span class="hint">Сеть должна совпадать с сетью вашего кошелька — иначе перевод потеряется.</span></div>
             <div class="field"><label for="outName">Получатель</label>
               <input id="outName" type="text" placeholder="имя владельца счёта" autocomplete="off"></div>
             <div class="amt-row">
@@ -1651,7 +1653,7 @@ function afterBlockSwap(k){
     safe(()=>{ renderWatch(); drawCandles(); updateTicket(); });
   if(k==="view:prof") safe(()=>{ renderProfile(); renderAcct(); fitAcct(); renderIntegrations(); });
   if(k==="view:pay") safe(()=>{ ensurePayNodes(); renderMethods(); calcPay(); renderTx(); });
-  if(k==="view:out") safe(renderOut);
+  if(k==="view:out") safe(()=>{ ensureOutNodes(); renderOut(); });
   if(k==="view:tools") safe(renderTools);
   if(k==="apphead") safe(syncHeader);
 }
@@ -2783,7 +2785,7 @@ function syncHeader(){
   if(label) label.textContent=u? ("Демо-кошелёк · "+u.name) : "Демо-счёт (гость)";
   const sub=document.getElementById("dashSub");
   if(sub) sub.innerHTML= u
-    ? 'Кошелёк <span class="num">#'+u.acct+'</span> · '+u.cur+' · сервер '+srvName(u.card&&u.card.srv)
+    ? 'Кошелёк <span class="num">'+u.acct+'</span> · '+u.cur+' · сервер '+srvName(u.card&&u.card.srv)
     : 'Гостевой счёт · зарегистрируйтесь, чтобы завести свой кошелёк';
   /* баланс одинаковый в шапке, на карточке счёта и в разделе вывода */
   const hb=document.getElementById("hdrBal"); if(hb) hb.textContent=usd(state.balance);
@@ -3455,12 +3457,66 @@ function calcOut(){
   if(lab) lab.textContent=hints[idx][0];
   if(inp) inp.placeholder=hints[idx][1];
 }
+/* если в админке сохранён свой HTML страницы вывода — дорисовываем поля */
+function ensureOutNodes(){
+  const box=document.querySelector('[data-view="out"] .panel'); if(!box) return;
+  const amt=document.getElementById("outAmt");
+  const mk=(html,after)=>{
+    const d=document.createElement("div"); d.className="field"; d.innerHTML=html;
+    (after&&after.closest(".field")||box).insertAdjacentElement("afterend",d);
+    return d;
+  };
+  let req=document.getElementById("outReq");
+  if(!req&&amt){
+    mk('<label for="outReq" id="outReqLabel">Реквизиты получателя</label>'+
+       '<input id="outReq" class="num" type="text" placeholder="номер карты или кошелька" autocomplete="off">'+
+       '<span class="hint" id="outReqHint">В заявке сохраняются только последние 4 символа — полные реквизиты нигде не хранятся.</span>',amt);
+    req=document.getElementById("outReq");
+  }
+  if(!document.getElementById("outNetBox")&&req){
+    const d=mk('<label for="outNet">Сеть</label><select id="outNet" class="sel"></select>'+
+      '<span class="hint">Сеть должна совпадать с сетью вашего кошелька — иначе перевод потеряется.</span>',req);
+    d.id="outNetBox"; d.hidden=true;
+  }
+  if(!document.getElementById("outName")&&req){
+    mk('<label for="outName">Получатель</label>'+
+       '<input id="outName" type="text" placeholder="имя владельца счёта" autocomplete="off">',
+       document.getElementById("outNetBox")||req);
+  }
+}
+/* сети под выбранный способ вывода */
+const OUT_NETS={
+  "USDT TRC-20":[["TRC-20","Tron"],["ERC-20","Ethereum"],["BEP-20","BNB Smart Chain"],["TON","TON"]],
+  "Электронный кошелёк":[["Skrill","Skrill"],["Neteller","Neteller"],["Perfect Money","Perfect Money"]]
+};
+function outIsCrypto(name){ return /USDT|крипто|BTC|ETH/i.test(String(name||"")); }
+function syncOutMethod(){
+  ensureOutNodes();
+  const sel=document.getElementById("outMethod"); if(!sel) return;
+  const m=OUT_METHODS[+sel.value||0]||OUT_METHODS[0];
+  const nets=OUT_NETS[m[0]]||null;
+  const box=document.getElementById("outNetBox"), net=document.getElementById("outNet");
+  if(box&&net){
+    box.hidden=!nets;
+    if(nets){
+      const cur=net.value;
+      net.innerHTML=nets.map(([v,t])=>`<option value="${v}">${v} · ${t}</option>`).join("");
+      if(nets.some(([v])=>v===cur)) net.value=cur;
+    }
+  }
+  const req=document.getElementById("outReq"), lbl=document.getElementById("outReqLabel"),
+        hint=document.getElementById("outReqHint");
+  if(req) req.placeholder = outIsCrypto(m[0]) ? "адрес кошелька, например T… или 0x…"
+    : (/карта/i.test(m[0]) ? "номер карты" : (/SWIFT/i.test(m[0]) ? "IBAN или номер счёта" : "номер кошелька"));
+  if(lbl) lbl.textContent = outIsCrypto(m[0]) ? "Адрес кошелька" : "Реквизиты получателя";
+  if(hint) hint.textContent = "В заявке сохраняются только последние 4 символа — полные реквизиты нигде не хранятся.";
+}
 function renderOut(){
   const sel=document.getElementById("outMethod"); if(!sel) return;
   if(!sel.dataset.ready){
     sel.dataset.ready="1";
     sel.innerHTML=OUT_METHODS.map((m,i)=>`<option value="${i}">${m[0]} · ${m[1]} · ${m[2]}</option>`).join("");
-    sel.addEventListener("change",calcOut);
+    sel.addEventListener("change",()=>{ syncOutMethod(); calcOut(); });
     document.getElementById("outAmt").addEventListener("input",calcOut);
     document.querySelectorAll("[data-out-amt]").forEach(b=>b.onclick=()=>{
       const v=b.dataset.outAmt;
@@ -3477,6 +3533,7 @@ function renderOut(){
     `<tr><td class="num">${d}</td><td>${m}</td>
      <td class="num down">${a}</td>
      <td><span class="badge ${st}">${lbl||OUT_ST[st]||"на рассмотрении"}</span></td></tr>`).join("");
+  syncOutMethod();
   calcOut();
 }
 function maskReq(v){
@@ -3497,7 +3554,9 @@ function submitOut(){
   const m=OUT_METHODS[+document.getElementById("outMethod").value||0];
   const date=new Date().toLocaleDateString("ru-RU");
   state.balance-=amt;
-  state.tx.unshift([date,m[0]+" · "+mask+(who?" · "+who:""),"−"+usd(amt),"wait","На рассмотрении"]);
+  const netEl=document.getElementById("outNet"), netBox=document.getElementById("outNetBox");
+  const net=(netBox&&!netBox.hidden&&netEl&&netEl.value)?(" · "+netEl.value):"";
+  state.tx.unshift([date,m[0]+net+" · "+mask+(who?" · "+who:""),"−"+usd(amt),"wait","На рассмотрении"]);
   state.hist.unshift([date,"Заявка на вывод",mask,"−"+usd(amt),"wait"]);
   if(reqEl) reqEl.value="";
   saveSession(); renderOut(); renderTx(); renderHist(); renderBalance(); syncHeader();
