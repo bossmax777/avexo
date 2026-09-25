@@ -1657,6 +1657,7 @@ function applyHtmlBlocks(){
 }
 /* после замены блока возвращаем к жизни то, что в нём живёт */
 function afterBlockSwap(k){
+  try{ if(k==="view:dash"||k==="view:term") setTimeout(renderMktStop,0); }catch(e){}
   if(k==="sec:hero") safe(startSpark);
   if(k==="sec:markets") safe(renderQuotes);
   if(k==="view:dash"&&document.getElementById("app").style.display==="block")
@@ -2163,9 +2164,29 @@ function mktStopText(){
     "До открытия "+(hh?hh+" ч ":"")+mm+" мин.";
   return {head,sub};
 }
+function ensureMktStop(){
+  const dash=document.querySelector('[data-view="dash"]');
+  if(!dash) return null;
+  let bar=document.getElementById("mktStop");
+  if(bar&&dash.contains(bar)) return bar;
+  if(bar&&!dash.contains(bar)) bar.remove();
+  bar=document.createElement("div");
+  bar.className="mkt-stop"; bar.id="mktStop"; bar.hidden=true;
+  bar.innerHTML='<div class="mkt-stop-ic" aria-hidden="true">'+
+    '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8">'+
+    '<circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></svg></div>'+
+    '<div class="mkt-stop-tx"><b id="mktStopT">\u0411\u0438\u0440\u0436\u0430 \u0437\u0430\u043a\u0440\u044b\u0442\u0430</b>'+
+    '<span id="mktStopS">\u0422\u043e\u0440\u0433\u0438 \u043f\u0440\u0438\u043e\u0441\u0442\u0430\u043d\u043e\u0432\u043b\u0435\u043d\u044b</span></div>'+
+    '<span class="mkt-stop-demo">\u0434\u0435\u043c\u043e</span>';
+  const grid=dash.querySelector("#balGrid");
+  if(grid&&grid.parentNode===dash) dash.insertBefore(bar,grid.nextSibling);
+  else if(grid) grid.insertAdjacentElement("afterend",bar);
+  else dash.insertBefore(bar,dash.firstChild);
+  return bar;
+}
 function renderMktStop(){
   const open=mktOpen();
-  const bar=document.getElementById("mktStop");
+  const bar=ensureMktStop();
   const app=document.getElementById("app");
   if(app) app.classList.toggle("is-mkt-closed",!open);
   if(bar){
