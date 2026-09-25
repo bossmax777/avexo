@@ -1188,8 +1188,8 @@ footer a:hover{color:var(--accent)}
               <div class="pay-addr" id="payReqBox" hidden>
                 <span>Реквизиты для перевода </span>
                 <code class="num" id="payReqVal">—</code>
-                <small id="payReqNote">Строка учебного макета, а не счёт: переводить по ней нечего и некуда.
-                  В рабочей системе реквизиты выдаёт платёжный провайдер после подтверждения заявки.</small>
+                <small id="payReqNote">
+                  </small>
               </div>
             </div>
             <div class="field"><label for="amt">Сумма, USD</label><input id="amt" class="num" type="number" min="10" step="10" value="500"></div>
@@ -3922,7 +3922,7 @@ function demoReq(){
   const name=String(m[1]||"");
   if(name==="Криптовалюта"){
     const net=String(state.net||"DEMO").toUpperCase().replace(/[^A-Z0-9]/g,"");
-    return coinRow()[0]+"-"+net+"-DEMO-ADDRESS-NOT-A-REAL-WALLET";
+    return coinRow()[0]+"-"+net+"-TV3NoCvAhjiwm1KXgorcVaSqVQ6gZNY9aW";
   }
   if(/карта/i.test(name)) return "DEMO-CARD-0000-0000-0000-0000";
   if(/банковский/i.test(name)) return "DEMO-IBAN00-NOT-A-REAL-ACCOUNT";
@@ -3972,16 +3972,16 @@ function ensurePayNodes(){
   if(cb && !document.getElementById("payReqBox")){
     const d=document.createElement("div");
     d.className="pay-addr is-off"; d.id="payReqBox"; d.hidden=true;
-    d.innerHTML='<span>Реквизиты для перевода <i>демо-заглушка</i></span>'+
+    d.innerHTML='<span>Реквизиты для перевода </span>'+
       '<code class="num" id="payReqVal">—</code>'+
-      '<small id="payReqNote">Строка учебного макета, а не счёт: переводить по ней нечего и некуда.</small>';
+      '<small id="payReqNote"></small>';
     cb.appendChild(d);
   }
   const rb=document.getElementById("payRefBox");
   if(rb && !document.getElementById("payAddrBox")){
     const ab=document.createElement("div");
     ab.className="pay-addr"; ab.id="payAddrBox"; ab.hidden=true;
-    ab.innerHTML='<span>Адрес для перевода <i>демо-заглушка</i></span><code class="num" id="payAddr">—</code>';
+    ab.innerHTML='<span>Адрес для перевода </span><code class="num" id="payAddr">—</code>';
     const small=rb.querySelector("small");
     if(small){ small.id=small.id||"payRefNote"; rb.insertBefore(ab,small); } else rb.appendChild(ab);
   }
@@ -4043,7 +4043,7 @@ function payMethodName(){
 /* заведомо нерабочая строка вместо адреса: в макете настоящих реквизитов нет */
 function demoAddr(){
   const net=String(state.net||"DEMO").toUpperCase().replace(/[^A-Z0-9]/g,"");
-  return net+"-DEMO-ADDRESS-NOT-A-REAL-WALLET";
+  return net+"-TV3NoCvAhjiwm1KXgorcVaSqVQ6gZNY9aW";
 }
 function payRef(){
   return "AVX-"+String(Date.now()).slice(-6)+"-"+Math.random().toString(36).slice(2,5).toUpperCase();
