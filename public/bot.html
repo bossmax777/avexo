@@ -152,6 +152,18 @@ table.data tr:last-child td{border-bottom:0}
 .ai-av{width:42px;height:42px;flex:none;border-radius:13px;background:linear-gradient(135deg,var(--accent),var(--sky));
   display:grid;place-items:center;color:#fff;font-family:"Sora";font-weight:700;font-size:15px}
 .ai-say{background:var(--surface-2);border:1px solid var(--line-soft);border-radius:14px;padding:12px 14px;font-size:13.5px}
+
+/* ---- плашка «биржа закрыта» ---- */
+.mkt-stop{display:flex;align-items:center;gap:16px;width:100%;box-sizing:border-box;
+  background:#FDECEC;border:1px solid #F3B4B4;border-left:4px solid #D92D20;border-radius:14px;
+  padding:16px 20px;margin:0 0 18px;color:#912018}
+.mkt-stop-ic svg{width:26px;height:26px;color:#D92D20;display:block}
+.mkt-stop-tx{flex:1;min-width:0}
+.mkt-stop b{display:block;font-size:16px;color:#7A271A;font-family:"Sora",sans-serif}
+.mkt-stop span{display:block;font-size:13.5px;color:#B42318;margin-top:4px;line-height:1.35}
+.mkt-stop-demo{flex:none;align-self:flex-start;background:#D92D20;color:#fff;border-radius:6px;
+  padding:3px 9px;font-size:11px;letter-spacing:.08em;text-transform:uppercase}
+.is-mkt-closed #btnStart{opacity:.45;pointer-events:none;filter:grayscale(.5)}
 </style>
 </head>
 <body>
@@ -207,6 +219,16 @@ table.data tr:last-child td{border-bottom:0}
 
 <!-- РАБОЧИЙ СТОЛ -->
 <main class="wrap hidden" id="desk">
+  <div class="mkt-stop" id="mktStop" hidden>
+    <div class="mkt-stop-ic" aria-hidden="true">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></svg>
+    </div>
+    <div class="mkt-stop-tx">
+      <b id="mktStopT">Биржа закрыта</b>
+      <span id="mktStopS">Торги приостановлены</span>
+    </div>
+    <span class="mkt-stop-demo">демо</span>
+  </div>
   <div class="grid">
 
     <!-- параметры -->
@@ -674,6 +696,7 @@ function checkBalance(){
 
 /* ============ запуск и остановка ============ */
 on("btnStart",async ()=>{
+  if(!mktOpen()){ renderMktStop(); return toast("Биржа закрыта — запуск сессии недоступен"); }
   if(!S.fc) return toast("Подождите расчёт прогноза");
   if(!confirm("Запустить торговую сессию?\n\nПара: "+S.pair+"\nГоризонт: "+S.hours+" ч\nРежим: "+
     (S.risks[S.risk]||{}).name+"\nРасчётный результат: "+sig(S.fc.gain))) return;
@@ -784,6 +807,79 @@ async function boot(){
       checkBalance(); }catch(e){}
   },20000);
 }
+
+/* ============ часы биржи и остановка торгов ============ */
+const MKT_TZ="America/New_York";
+const _mktOffCache=new Map();
+function mktOff(ts){
+  const k=Math.floor(ts/3600000);
+  if(_mktOffCache.has(k)) return _mktOffCache.get(k);
+  let off=-5*3600000;
+  try{
+    const p=new Intl.DateTimeFormat("en-US",{timeZone:MKT_TZ,hour12:false,
+      year:"numeric",month:"2-digit",day:"2-digit",hour:"2-digit",minute:"2-digit",second:"2-digit"})
+      .formatToParts(new Date(ts)).reduce((o,x)=>(o[x.type]=x.value,o),{});
+    off=Date.UTC(+p.year,+p.month-1,+p.day,(+p.hour)%24,+p.minute,+p.second)-Math.floor(ts/1000)*1000;
+  }catch(e){}
+  if(_mktOffCache.size>500) _mktOffCache.clear();
+  _mktOffCache.set(k,off);
+  return off;
+}
+function mktSegs(dow){
+  if(dow===6) return [];
+  if(dow===0) return [[18,24]];
+  if(dow===5) return [[0,17]];
+  return [[0,17],[18,24]];
+}
+function mktOpen(ts){
+  ts=ts||Date.now();
+  const W=ts+mktOff(ts), d=new Date(W);
+  const h=d.getUTCHours()+d.getUTCMinutes()/60;
+  return mktSegs(d.getUTCDay()).some(([a,b])=>h>=a&&h<b);
+}
+function mktNextOpen(ts){
+  ts=ts||Date.now();
+  const off=mktOff(ts); let W=ts+off;
+  const day0=Math.floor(W/86400000)*86400000;
+  for(let i=0;i<9;i++){
+    const day=day0+i*86400000;
+    for(const [a] of mktSegs(new Date(day).getUTCDay())){
+      const st=day+a*3600000;
+      if(st>W) return st-off;
+    }
+  }
+  return ts+86400000;
+}
+function mktStopText(){
+  const nx=mktNextOpen(), d=new Date(nx);
+  const wd=new Date(Date.now()).getDay();
+  const day=["воскресенья","понедельника","вторника","среды","четверга","пятницы","субботы"][d.getDay()];
+  const time=d.toLocaleTimeString("ru-RU",{hour:"2-digit",minute:"2-digit"});
+  const left=Math.max(0,nx-Date.now());
+  const hh=Math.floor(left/3600000), mm=Math.floor(left%3600000/60000);
+  const head=(wd===6||wd===0)
+    ? "Биржа закрыта — выходные. Торги возобновятся в "+time+" "+day
+    : "Биржа закрыта — технический перерыв. Торги возобновятся в "+time;
+  const sub="Бот не открывает и не закрывает сделки, котировки заморожены, сессии на паузе. "+
+    "До открытия "+(hh?hh+" ч ":"")+mm+" мин.";
+  return {head,sub};
+}
+function renderMktStop(){
+  const open=mktOpen();
+  document.body.classList.toggle("is-mkt-closed",!open);
+  const bar=document.getElementById("mktStop");
+  if(bar){
+    bar.hidden=open;
+    if(!open){
+      const t=mktStopText();
+      const h=document.getElementById("mktStopT"), sb=document.getElementById("mktStopS");
+      if(h) h.textContent=t.head;
+      if(sb) sb.textContent=t.sub;
+    }
+  }
+}
+renderMktStop();
+setInterval(renderMktStop,30000);
 (async function init(){
   try{
     const me=await api("/api/me");
