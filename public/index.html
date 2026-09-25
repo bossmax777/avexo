@@ -1378,8 +1378,6 @@ footer a:hover{color:var(--accent)}
             <div class="kv"><span>Имя</span><b id="pfName">—</b></div>
             <div class="kv"><span>Email</span><b id="pfEmail">—</b></div>
             <div class="kv"><span>Телефон</span><b class="num" id="pfPhone">—</b></div>
-            <div class="kv"><span>Страна</span><b id="pfCountry">—</b></div>
-            <div class="kv"><span>Клиент с</span><b id="pfSince">—</b></div>
             <div class="kv"><span>Двухфакторная защита</span><span class="badge ok">включена</span></div>
           </div>
           <div class="panel">
@@ -2109,7 +2107,6 @@ function renderProfile(){
   }
   const set=(id,v)=>{const e=document.getElementById(id); if(e) e.textContent=v;};
   set("pfName",d.name); set("pfEmail",d.email); set("pfPhone",d.phone);
-  set("pfCountry",d.country); set("pfSince",d.since);
   if(typeof applyTextBlocks==="function") applyTextBlocks();
 }
 function editProfile(){
@@ -2123,7 +2120,6 @@ function editProfile(){
     <div class="field"><label for="p-name">Имя и фамилия</label><input id="p-name"></div>
     <div class="field"><label for="p-mail">Email</label><input id="p-mail" type="email"></div>
     <div class="field"><label for="p-phone">Телефон</label><input id="p-phone" placeholder="+84 ..."></div>
-    <div class="field"><label for="p-country">Страна</label><input id="p-country"></div>
     <div class="field"><label for="p-pass">Новый пароль</label><input id="p-pass" type="password" placeholder="оставьте пустым, чтобы не менять"></div>
     <p id="p-err" class="sub" style="color:var(--sell);margin:0 0 12px" hidden></p>
     <button class="btn btn-primary btn-block" id="p-go">Сохранить</button>
@@ -2134,7 +2130,6 @@ function editProfile(){
   el.querySelector("#p-name").value=u.name||"";
   el.querySelector("#p-mail").value=u.email||"";
   el.querySelector("#p-phone").value=u.phone||"";
-  el.querySelector("#p-country").value=u.country||"";
   el.querySelector(".modal-x").onclick=close;
   el.onclick=e=>{if(e.target===el)close();};
   el.querySelector("#p-go").onclick=async ()=>{
@@ -2149,7 +2144,6 @@ function editProfile(){
         const r=await api("/api/me",{method:"PATCH",body:JSON.stringify({
           name, email:mail,
           phone:el.querySelector("#p-phone").value.trim(),
-          country:el.querySelector("#p-country").value.trim(),
           pass:pass||undefined})});
         ME=r.user;
         close(); renderProfile(); renderAcct(); syncHeader();
@@ -2161,7 +2155,6 @@ function editProfile(){
        us.some(x=>x.email.toLowerCase()===mail.toLowerCase())) return err("Этот email уже занят");
     const old=u.email;
     u.name=name; u.phone=el.querySelector("#p-phone").value.trim();
-    u.country=el.querySelector("#p-country").value.trim();
     if(pass) u.pass=pass;
     u.email=mail;
     const i=us.findIndex(x=>x.email===old);
