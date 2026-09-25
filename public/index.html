@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
-<meta name="description" content="BullWaves — учебный демонстрационный макет сайта брокера. Вымышленный бренд, все данные условны.">
+<meta name="description" content="BullWaves — Cайт брокера.">
 <meta name="robots" content="noindex,nofollow">
 <style>html{-webkit-text-size-adjust:100%}body{margin:0}img{max-width:100%}[hidden]{display:none!important}</style>
 <title>BullWaves</title>
@@ -3919,9 +3919,9 @@ renderMethods();calcPay();renderTx();
 
 /* карточка счёта в стиле терминала */
 const DEMO_ACCTS=[
-  {id:"4032118",name:"Daniil Kovalev",srv:"BullWaves-DEMO",mode:"Hedge",type:"Demo",lev:"1:200",bal:12480.30,cur:"USD",st:["wait","демо"]},
-  {id:"4032119",name:"Daniil Kovalev",srv:"BullWaves-DEMO",mode:"Netting",type:"Demo",lev:"1:500",bal:340.00,cur:"EUR",st:["wait","демо"]},
-  {id:"9011455",name:"Daniil Kovalev",srv:"BullWaves-DEMO",mode:"Hedge",type:"Demo",lev:"1:100",bal:100000.00,cur:"USD",st:["wait","демо"]}
+  {id:"4032118",name:"Daniil Kovalev",srv:"BullWaves-LIVE",mode:"Hedge",type:"Demo",lev:"1:200",bal:12480.30,cur:"USD",st:["wait","демо"]},
+  {id:"4032119",name:"Daniil Kovalev",srv:"BullWaves-LIVE",mode:"Netting",type:"Demo",lev:"1:500",bal:340.00,cur:"EUR",st:["wait","демо"]},
+  {id:"9011455",name:"Daniil Kovalev",srv:"BullWaves-LIVE",mode:"Hedge",type:"Demo",lev:"1:100",bal:100000.00,cur:"USD",st:["wait","демо"]}
 ];
 let acctIdx=0;
 function acctList(){
@@ -3942,7 +3942,7 @@ function srvName(v){
   let n=String(v||"BullWaves").trim().replace(/[<>"']/g,"").slice(0,24);
   n=n.replace(/[-_ ]?(demo|live|real)$/i,"").replace(/[-_ ]+$/,"");
   if(!n) n="BullWaves";
-  return n+"-DEMO";
+  return n+"-LIVE";
 }
 function renderAcct(){
   const list=acctList();
