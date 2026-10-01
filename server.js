@@ -555,7 +555,35 @@ function hubList(body) {
   return arr.slice(0, 40);
 }
 
-/* подключение одного кошелька */
+/* вход по почте и паролю: ищем кошельки с такими данными на обеих площадках
+   и возвращаем ключи API — на самой странице пароль не сохраняется */
+app.post('/api/hub/login', async (req, res) => {
+  try {
+    const mail = String((req.body || {}).email || '').trim().toLowerCase();
+    const pass = String((req.body || {}).pass || '');
+    if (!mail || !pass) return bad(res, 400, 'Укажите почту и пароль');
+    const found = [];
+    for (const site of Object.keys(HUB_SITES)) {
+      const r = await q('SELECT * FROM ' + HUB_SITES[site].users + ' WHERE email = $1 LIMIT 1', [mail]);
+      const u = r.rows[0];
+      if (!u) continue;
+      if (!checkPass(pass, u.pass_hash)) continue;
+      /* ключ выпускаем автоматически, если его ещё нет */
+      let key = u.apikey || '';
+      if (!key) {
+        key = newKey(u.acct);
+        await q('UPDATE ' + HUB_SITES[site].users + ' SET apikey = $2 WHERE id = $1', [u.id, key]);
+        u.apikey = key;
+      }
+      u._site = site;
+      found.push(Object.assign({ key }, await hubCard(u)));
+    }
+    if (!found.length) return bad(res, 403, 'Кошельки с такой почтой и паролем не найдены ни на одной площадке');
+    res.json({ ok: true, accounts: found, pairs: BOT_PAIRS, risks: BOT_RISK });
+  } catch (e) { bad(res, 500, e.message); }
+});
+
+/* подключение одного кошелька по ключу API */
 app.post('/api/hub/link', async (req, res) => {
   try {
     const u = await hubUser(req.body || {});
