@@ -126,6 +126,9 @@ button,input,select{font:inherit;color:inherit}
 .acc-row{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:12px;margin-bottom:14px}
 .acc-row>div small{display:block;color:var(--dim);font-size:11px;text-transform:uppercase;letter-spacing:.04em}
 .acc-row>div b{font-family:"IBM Plex Mono",monospace;font-size:14.5px}
+.fix-row{display:flex;align-items:flex-start;gap:9px;margin:0 0 14px;font-size:12.5px;
+  color:var(--muted);cursor:pointer;line-height:1.4}
+.fix-row input{margin:2px 0 0;accent-color:var(--accent);flex:none}
 .bar{height:6px;border-radius:4px;background:var(--surface);overflow:hidden;margin:10px 0 14px}
 .bar i{display:block;height:100%;background:linear-gradient(90deg,var(--accent),var(--sky))}
 
@@ -292,9 +295,13 @@ input[type=range]{width:100%;accent-color:var(--accent)}
           <button class="btn btn-primary btn-full" id="btnRun">Запустить на выбранных</button>
           <button class="btn btn-danger" id="btnHalt">Остановить</button>
         </div>
+        <button class="btn btn-full" id="btnFix" style="margin-top:9px">Зафиксировать результат дня</button>
         <p class="note" style="margin-top:12px">Сценарий записывается в кошелёк на самой площадке —
           прогресс виден и в её личном кабинете. Отдельный кошелёк можно настроить своими
           параметрами: раскройте его карточку справа.</p>
+        <p class="note" style="margin-top:8px">Итог дня пишется в историю операций кабинета
+          автоматически в 21:00 по Китаю (UTC+8), по будням, пока сценарий включён.
+          Кнопка выше делает то же самое вручную, не дожидаясь вечера.</p>
       </div>
     </div>
 
@@ -696,9 +703,14 @@ function renderAccs(){
             Object.keys(S.risks).map(x=>'<option value="'+x+'"'+(x===p.risk?" selected":"")+'>'+S.risks[x].name+'</option>').join("")+'</select></div>'+
           '<div><small>Доля депозита</small><input class="num" data-f="share" data-k="'+k+'" type="number" min="10" max="100" step="5" value="'+Math.round(p.share*100)+'"></div>'+
         '</div>'+
+        '<label class="fix-row"><input type="checkbox" data-fix="'+k+'"'+
+          (((a.dyn||{}).fixDaily!==false)?" checked":"")+'>'+
+          '<span>Писать итог дня в историю кабинета — 21:00 по Китаю, по будням'+
+          (((a.dyn||{}).fix||{}).last?' · последняя запись '+a.dyn.fix.last:'')+'</span></label>'+
         '<div style="display:flex;gap:8px;flex-wrap:wrap">'+
           '<button class="btn btn-sm btn-primary acc-run" data-run="'+k+'">'+(w?"Перезапустить":"Запустить этот кошелёк")+'</button>'+
           (w?'<button class="btn btn-sm btn-danger" data-stop="'+k+'">Остановить</button>':'')+
+          '<button class="btn btn-sm" data-fixnow="'+k+'">Зафиксировать день</button>'+
           '<button class="btn btn-sm" data-del="'+k+'">Отключить кошелёк</button>'+
         '</div>'+
       '</div></div>';
@@ -721,6 +733,11 @@ function renderAccs(){
       S.per[k]=p; renderAll();
     };
   });
+  box.querySelectorAll("[data-fix]").forEach(el=>{
+    el.onclick=e=>e.stopPropagation();
+    el.onchange=()=>fixMode(el.dataset.fix,el.checked);
+  });
+  box.querySelectorAll("[data-fixnow]").forEach(el=>el.onclick=e=>{e.stopPropagation();fixNow([el.dataset.fixnow]);});
   box.querySelectorAll("[data-run]").forEach(el=>el.onclick=e=>{e.stopPropagation();runOne(el.dataset.run);});
   box.querySelectorAll("[data-stop]").forEach(el=>el.onclick=e=>{e.stopPropagation();stopOne(el.dataset.stop);});
   box.querySelectorAll("[data-del]").forEach(el=>el.onclick=e=>{e.stopPropagation();unlink(el.dataset.del);});
@@ -887,6 +904,28 @@ async function stopKeys(keys){
     await refresh();
   }catch(e){ toast(e.message); }
 }
+/* итог торгового дня: ручная запись и переключатель автофиксации */
+async function fixNow(keys){
+  const list=credsOf(keys);
+  if(!list.length) return toast("Не выбрано ни одного кошелька");
+  try{
+    const j=await api("/api/hub/fix",{method:"POST",body:JSON.stringify({accounts:list})});
+    const ok=(j.items||[]).filter(x=>x.ok);
+    const no=(j.items||[]).filter(x=>!x.ok);
+    if(ok.length) toast("Записано в историю: "+ok.map(x=>"#"+x.acct+" "+x.sum).join(", "));
+    else toast(no.length?("#"+no[0].acct+": "+no[0].error):"Нечего фиксировать");
+    await refresh();
+  }catch(e){ toast(e.message); }
+}
+async function fixMode(k,on){
+  const list=credsOf([k]);
+  if(!list.length) return;
+  try{
+    await api("/api/hub/fixmode",{method:"POST",body:JSON.stringify({accounts:list,on})});
+    toast(on?"Автофиксация итога дня включена":"Автофиксация итога дня выключена");
+    await refresh();
+  }catch(e){ toast(e.message); }
+}
 function runOne(k){ runKeys([k]); }
 function stopOne(k){ stopKeys([k]); }
 function unlink(k){
@@ -996,6 +1035,7 @@ on("btnAll",()=>{ S.accounts.filter(a=>!a.error).forEach(a=>S.sel.add(keyOf(a)))
 on("btnNone",()=>{ S.sel.clear(); renderAll(); });
 on("btnRun",()=>runKeys([...S.sel],S.params));
 on("btnHalt",()=>stopKeys([...S.sel]));
+on("btnFix",()=>fixNow([...S.sel]));
 
 /* ============ старт ============ */
 loadCreds();
