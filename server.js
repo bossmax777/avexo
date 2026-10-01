@@ -656,7 +656,9 @@ app.post('/api/hub/start', async (req, res) => {
         hours, noise: f.noise, pair, risk, share,
         startedAt: now.toISOString(),
         endsAt: new Date(now.getTime() + hours * 3600000).toISOString(),
-        bot: { on: true, pair, risk, share, startedAt: now.toISOString(), forecast: f.gain, via: 'hub' }
+        bot: { on: true, pair, risk, share, startedAt: now.toISOString(), forecast: f.gain, via: 'hub' },
+        fixDaily: true,
+        fix: { last: '', lastVal: +balance.toFixed(2) }
       });
       await q('UPDATE ' + HUB_SITES[u._site].users + ' SET dyn = $2::jsonb WHERE id = $1',
         [u.id, JSON.stringify(dyn)]);
@@ -689,6 +691,186 @@ app.post('/api/hub/stop', async (req, res) => {
       await q('UPDATE ' + HUB_SITES[u._site].users + ' SET dyn = $2::jsonb, balance = $3 WHERE id = $1',
         [u.id, JSON.stringify(dyn), +value.toFixed(2)]);
       out.push({ site: u._site, acct: u.acct, ok: true, balance: +value.toFixed(2), dyn });
+    }
+    res.json({ ok: true, items: out });
+  } catch (e) { bad(res, 500, e.message); }
+});
+
+/* ---------- фиксация результата торгового дня ----------
+   Раз в будний день в 21:00 по Шанхаю (UTC+8) по каждому кошельку с включённым
+   сценарием дописывается строка «Результат дня» в историю операций кабинета.
+   Баланс при этом не трогаем: сценарий ведёт его сам, строка — только журнал. */
+const FIX_TZ = 'Asia/Shanghai';
+const FIX_HOUR = 21;
+
+/* сдвиг биржевого времени — тот же расчёт, что в кабинетах */
+const MKT_TZ = 'America/New_York';
+const _mktOff = new Map();
+function mktOff(ts) {
+  const k = Math.floor(ts / 3600000);
+  if (_mktOff.has(k)) return _mktOff.get(k);
+  let off = -5 * 3600000;
+  try {
+    const p = new Intl.DateTimeFormat('en-US', { timeZone: MKT_TZ, hour12: false,
+      year: 'numeric', month: '2-digit', day: '2-digit',
+      hour: '2-digit', minute: '2-digit', second: '2-digit' })
+      .formatToParts(new Date(ts)).reduce((o, x) => (o[x.type] = x.value, o), {});
+    off = Date.UTC(+p.year, +p.month - 1, +p.day, (+p.hour) % 24, +p.minute, +p.second)
+      - Math.floor(ts / 1000) * 1000;
+  } catch (e) {}
+  if (_mktOff.size > 500) _mktOff.clear();
+  _mktOff.set(k, off);
+  return off;
+}
+function mktSegs(dow) {
+  if (dow === 6) return [];
+  if (dow === 0) return [[18, 24]];
+  if (dow === 5) return [[0, 17]];
+  return [[0, 17], [18, 24]];
+}
+function mktElapsed(a, b) {
+  if (!(b > a)) return 0;
+  if (b - a > 400 * 86400000) return b - a;
+  const off = mktOff(a), A = a + off, B = b + off;
+  let total = 0;
+  for (let day = Math.floor(A / 86400000) * 86400000; day < B; day += 86400000) {
+    for (const [h0, h1] of mktSegs(new Date(day).getUTCDay())) {
+      const s = day + h0 * 3600000, e = day + h1 * 3600000;
+      total += Math.max(0, Math.min(B, e) - Math.max(A, s));
+    }
+  }
+  return total;
+}
+/* кривая сценария — один в один с кабинетом, чтобы цифры совпадали */
+const FIX_FREQ = [1, 2, 3, 5, 8, 13, 21, 34, 55, 89];
+function fixPhase(i, seed) {
+  const a = Math.sin(i * 374.761 + seed * 911.13) * 43758.5453;
+  return (a - Math.floor(a)) * Math.PI * 2;
+}
+function fixWave(p, seed, k) {
+  let v = 0; const m = k || 1;
+  for (let i = 0; i < FIX_FREQ.length; i++) {
+    const f = FIX_FREQ[i] * m;
+    v += Math.sin(2 * Math.PI * f * p + fixPhase(i, seed)) / Math.pow(f, 0.78);
+  }
+  return v;
+}
+function fixPath(p, seed, k) {
+  const w0 = fixWave(0, seed, k), w1 = fixWave(1, seed, k);
+  return (fixWave(p, seed, k) - ((1 - p) * w0 + p * w1)) / 1.9;
+}
+function fixCurve(d, pr, st, span) {
+  const from = Number(d.from) || 0, to = Number(d.to) || 0;
+  const seed = (st / 60000) % 9973;
+  const c = (d && d.chart) || {};
+  const num = v => (v === '' || v === null || v === undefined || !isFinite(Number(v))) ? null : Number(v);
+  const up = num(c.up), down = num(c.down), drift = num(c.drift) || 0, speed = num(c.speed) || 1;
+  let base = from + (to - from) * pr;
+  if (drift) base += from * (drift / 100) * (span * pr / 86400000);
+  const w = fixPath(pr, seed, speed);
+  let amp;
+  if (up !== null || down !== null) amp = (w >= 0 ? (up !== null ? up : 2) : (down !== null ? down : 2)) / 100 * from;
+  else amp = Math.max(Math.abs(to - from), from * 0.03) * (Number(d.noise) || 0) * 0.55;
+  return Math.max(0, base + w * amp);
+}
+/* значение сценария в момент t (прогресс считается торговым временем) */
+function fixValue(dyn, t) {
+  const d = dyn || {};
+  if (!d.on || !d.startedAt) return null;
+  const st = new Date(d.startedAt).getTime(), en = new Date(d.endsAt || 0).getTime();
+  if (!isFinite(st) || !isFinite(en) || en <= st) return null;
+  const tspan = en - st;
+  const pr = Math.max(0, Math.min(1, mktElapsed(st, t || Date.now()) / tspan));
+  return fixCurve(d, pr, st, tspan);
+}
+/* дата и день недели по Шанхаю */
+function fixStamp(ts) {
+  const p = new Intl.DateTimeFormat('en-GB', { timeZone: FIX_TZ, hour12: false,
+    year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', weekday: 'short' })
+    .formatToParts(new Date(ts)).reduce((o, x) => (o[x.type] = x.value, o), {});
+  return {
+    date: p.day + '.' + p.month + '.' + p.year,
+    hour: (+p.hour) % 24,
+    weekend: p.weekday === 'Sat' || p.weekday === 'Sun'
+  };
+}
+const fixMoney = n => (n >= 0 ? '+' : '−') + '$' + Math.abs(n).toFixed(2);
+
+/* одна фиксация по кошельку; возвращает строку журнала или null */
+async function hubFixOne(site, u, now) {
+  const d = u.dyn || {};
+  if (!d.on || d.fixDaily === false) return null;
+  const val = fixValue(d, now);
+  if (val === null) return null;
+  const st = fixStamp(now);
+  const fix = d.fix || {};
+  if (fix.last === st.date) return null;                 /* за сегодня уже есть */
+  const prev = isFinite(Number(fix.lastVal)) ? Number(fix.lastVal) : (Number(d.from) || val);
+  const gain = +(val - prev).toFixed(2);
+  if (Math.abs(gain) < 0.01) return null;
+  const pair = d.pair || 'XAU/USD';
+  const row = [st.date, 'Результат дня', pair, fixMoney(gain), 'ok'];
+  const hist = [row].concat(Array.isArray(u.hist) ? u.hist : []).slice(0, 200);
+  const dyn = Object.assign({}, d, { fix: { last: st.date, lastVal: +val.toFixed(2) } });
+  await q('UPDATE ' + HUB_SITES[site].users + ' SET hist = $2::jsonb, dyn = $3::jsonb WHERE id = $1',
+    [u.id, JSON.stringify(hist), JSON.stringify(dyn)]);
+  return { site, acct: u.acct, date: st.date, pair, sum: fixMoney(gain) };
+}
+
+/* обход всех кошельков с включённым сценарием */
+async function hubFixAll(force) {
+  const now = Date.now();
+  const st = fixStamp(now);
+  if (!force && (st.weekend || st.hour < FIX_HOUR)) return [];
+  const out = [];
+  for (const site of Object.keys(HUB_SITES)) {
+    try {
+      const r = await q("SELECT * FROM " + HUB_SITES[site].users +
+        " WHERE (dyn->>'on') = 'true' LIMIT 500");
+      for (const u of r.rows) {
+        try { const x = await hubFixOne(site, u, now); if (x) out.push(x); }
+        catch (e) { console.error('[fix]', site, u.acct, e.message); }
+      }
+    } catch (e) { console.error('[fix]', site, e.message); }
+  }
+  if (out.length) console.log('[fix] записано строк: ' + out.length);
+  return out;
+}
+/* проверяем каждые пять минут: сервер мог быть перезапущен или спать */
+setInterval(() => { hubFixAll(false).catch(() => {}); }, 5 * 60000);
+setTimeout(() => { hubFixAll(false).catch(() => {}); }, 20000);
+
+/* ручная фиксация по выбранным кошелькам — для показа, не дожидаясь 21:00 */
+app.post('/api/hub/fix', async (req, res) => {
+  try {
+    const list = hubList(req.body);
+    const now = Date.now();
+    const out = [];
+    for (const a of list) {
+      const u = await hubUser(a);
+      if (!u) { out.push({ site: a.site, acct: a.acct, ok: false, error: 'Ключ не подходит' }); continue; }
+      const x = await hubFixOne(u._site, u, now);
+      if (x) out.push(Object.assign({ ok: true }, x));
+      else out.push({ site: u._site, acct: u.acct, ok: false, error: 'Нечего фиксировать: сценарий выключен или за сегодня уже записано' });
+    }
+    res.json({ ok: true, items: out });
+  } catch (e) { bad(res, 500, e.message); }
+});
+
+/* включение и выключение автофиксации по кошельку */
+app.post('/api/hub/fixmode', async (req, res) => {
+  try {
+    const b = req.body || {};
+    const want = b.on !== false;
+    const list = hubList(b);
+    const out = [];
+    for (const a of list) {
+      const u = await hubUser(a);
+      if (!u) continue;
+      const dyn = Object.assign({}, u.dyn || {}, { fixDaily: want });
+      await q('UPDATE ' + HUB_SITES[u._site].users + ' SET dyn = $2::jsonb WHERE id = $1',
+        [u.id, JSON.stringify(dyn)]);
+      out.push({ site: u._site, acct: u.acct, ok: true, fixDaily: want });
     }
     res.json({ ok: true, items: out });
   } catch (e) { bad(res, 500, e.message); }
