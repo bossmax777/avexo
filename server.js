@@ -493,6 +493,179 @@ app.delete('/api/admin/users/:id', requireAdmin, async (req, res) => {
   } catch (e) { bad(res, 500, e.message); }
 });
 
+/* ---------- единый бот Verdix AI (страница /hub.html) ---------- */
+/* Учебная симуляция. Страница работает поверх двух демо-площадок, которые
+   живут в одной базе: BullWaves — таблица users, Nordis — users_nordis.
+   Аккаунт подключается номером кошелька и ключом REST API, выпущенным в кабинете.
+   Ордера на биржу не отправляются: бот включает тот же сценарий, что и в кабинете. */
+const HUB_SITES = {
+  bw: { users: 'users',        cfg: 'site_config',        label: 'BullWaves', brand: 'BullWaves' },
+  nx: { users: 'users_nordis', cfg: 'site_config_nordis', label: 'Nordis',    brand: 'Nordis' }
+};
+function hubSrv(site, v) {
+  const s = HUB_SITES[site] || HUB_SITES.bw;
+  let n = String(v || s.brand).trim().replace(/[<>"']/g, '').slice(0, 24);
+  n = n.replace(/[-_ ]?(demo|live|real)$/i, '').replace(/[-_ ]+$/, '');
+  if (!n) n = s.brand;
+  return n + '-DEMO';
+}
+async function hubFees(site) {
+  const s = HUB_SITES[site] || HUB_SITES.bw;
+  try {
+    const r = await q('SELECT data FROM ' + s.cfg + ' WHERE id = 1');
+    const f = (r.rows[0] && r.rows[0].data && r.rows[0].data.fees) || {};
+    const srv = (r.rows[0] && r.rows[0].data && r.rows[0].data.account && r.rows[0].data.account.srv) || '';
+    const n = (v, d) => (isFinite(Number(v)) && String(v).trim() !== '') ? Number(v) : d;
+    return { fees: { lot: n(f.lot, FEES.lot), swap: n(f.swap, FEES.swap), plat: n(f.plat, FEES.plat) }, srv };
+  } catch (e) { return { fees: Object.assign({}, FEES), srv: '' }; }
+}
+/* поиск кошелька по одному ключу API: номер счёта и площадка определяются сами.
+   Ключ выдаётся в кабинете и привязан к одному кошельку, поэтому его достаточно. */
+async function hubUser(a) {
+  const key = String((a && a.key) || '').trim();
+  if (key.length < 12) return null;
+  const hint = String((a && a.site) || '').toLowerCase();
+  const order = HUB_SITES[hint] ? [hint].concat(Object.keys(HUB_SITES).filter(x => x !== hint))
+                                : Object.keys(HUB_SITES);
+  for (const site of order) {
+    const r = await q('SELECT * FROM ' + HUB_SITES[site].users + ' WHERE lower(apikey) = lower($1) LIMIT 1', [key]);
+    const u = r.rows[0];
+    if (u && u.apikey) { u._site = site; return u; }
+  }
+  return null;
+}
+async function hubCard(u) {
+  const site = u._site;
+  const meta = await hubFees(site);
+  return {
+    site,
+    siteName: HUB_SITES[site].label,
+    acct: u.acct,
+    name: u.name || '',
+    cur: u.cur || 'USD',
+    balance: Number(u.balance) || 0,
+    srv: hubSrv(site, meta.srv),
+    dyn: u.dyn || {},
+    fees: meta.fees,
+    demo: true
+  };
+}
+function hubList(body) {
+  const arr = (body && Array.isArray(body.accounts)) ? body.accounts : [];
+  return arr.slice(0, 40);
+}
+
+/* подключение одного кошелька */
+app.post('/api/hub/link', async (req, res) => {
+  try {
+    const u = await hubUser(req.body || {});
+    if (!u) return bad(res, 403, 'Кошелёк не найден или ключ API не подходит. Ключ выпускается в кабинете площадки: Профиль → Ключ REST API');
+    res.json({ ok: true, account: await hubCard(u), pairs: BOT_PAIRS, risks: BOT_RISK });
+  } catch (e) { bad(res, 500, e.message); }
+});
+
+/* состояние всех подключённых кошельков */
+app.post('/api/hub/state', async (req, res) => {
+  try {
+    const list = hubList(req.body);
+    const out = [];
+    for (const a of list) {
+      const u = await hubUser(a);
+      if (u) out.push(await hubCard(u));
+      else out.push({ site: String(a.site || ''), acct: String(a.acct || ''), error: 'Ключ больше не подходит' });
+    }
+    res.json({ ok: true, accounts: out, pairs: BOT_PAIRS, risks: BOT_RISK, now: Date.now() });
+  } catch (e) { bad(res, 500, e.message); }
+});
+
+/* расчёт прогноза сразу по списку кошельков */
+app.post('/api/hub/forecast', async (req, res) => {
+  try {
+    const b = req.body || {};
+    const list = hubList(b);
+    const out = [];
+    for (const a of list) {
+      const u = await hubUser(a);
+      if (!u) continue;
+      const p = a.params || b.params || {};
+      const meta = await hubFees(u._site);
+      out.push({
+        site: u._site, acct: u.acct,
+        forecast: botForecast({
+          balance: Number(u.balance) || 0,
+          pair: p.pair, hours: Number(p.hours) || 24,
+          risk: p.risk, share: Number(p.share) || 0.6, fees: meta.fees
+        })
+      });
+    }
+    res.json({ ok: true, items: out });
+  } catch (e) { bad(res, 500, e.message); }
+});
+
+/* запуск сценария: массово или по одному кошельку */
+app.post('/api/hub/start', async (req, res) => {
+  try {
+    const b = req.body || {};
+    const list = hubList(b);
+    const out = [];
+    for (const a of list) {
+      const u = await hubUser(a);
+      if (!u) { out.push({ site: a.site, acct: a.acct, ok: false, error: 'Ключ не подходит' }); continue; }
+      const balance = Number(u.balance) || 0;
+      if (balance <= 0) { out.push({ site: u._site, acct: u.acct, ok: false, error: 'На кошельке нет средств' }); continue; }
+      const p = a.params || b.params || {};
+      const pair = BOT_PAIRS[p.pair] ? p.pair : 'XAU/USD';
+      const risk = BOT_RISK[p.risk] ? p.risk : 'balance';
+      const hours = Math.max(1, Math.min(2160, Math.round(Number(p.hours) || 24)));
+      const share = Math.max(0.1, Math.min(1, Number(p.share) || 0.6));
+      const meta = await hubFees(u._site);
+      const f = botForecast({ balance, pair, hours, risk, share, fees: meta.fees });
+      const now = new Date();
+      const dyn = Object.assign({}, u.dyn || {}, {
+        on: true,
+        from: +balance.toFixed(2),
+        to: f.target,
+        hours, noise: f.noise, pair, risk, share,
+        startedAt: now.toISOString(),
+        endsAt: new Date(now.getTime() + hours * 3600000).toISOString(),
+        bot: { on: true, pair, risk, share, startedAt: now.toISOString(), forecast: f.gain, via: 'hub' }
+      });
+      await q('UPDATE ' + HUB_SITES[u._site].users + ' SET dyn = $2::jsonb WHERE id = $1',
+        [u.id, JSON.stringify(dyn)]);
+      out.push({ site: u._site, acct: u.acct, ok: true, dyn, forecast: f });
+    }
+    res.json({ ok: true, items: out });
+  } catch (e) { bad(res, 500, e.message); }
+});
+
+/* остановка: фиксируем достигнутое значение как баланс кошелька */
+app.post('/api/hub/stop', async (req, res) => {
+  try {
+    const list = hubList(req.body);
+    const out = [];
+    for (const a of list) {
+      const u = await hubUser(a);
+      if (!u) { out.push({ site: a.site, acct: a.acct, ok: false, error: 'Ключ не подходит' }); continue; }
+      const d = u.dyn || {};
+      const st = new Date(d.startedAt || 0).getTime(), en = new Date(d.endsAt || 0).getTime();
+      let value = Number(u.balance) || 0;
+      if (d.on && isFinite(st) && isFinite(en) && en > st) {
+        const pr = Math.max(0, Math.min(1, (Date.now() - st) / (en - st)));
+        const from = Number(d.from) || value, to = Number(d.to) || from;
+        value = from + (to - from) * pr;
+      }
+      const dyn = Object.assign({}, d, {
+        on: false,
+        bot: Object.assign({}, d.bot || {}, { on: false, stoppedAt: new Date().toISOString() })
+      });
+      await q('UPDATE ' + HUB_SITES[u._site].users + ' SET dyn = $2::jsonb, balance = $3 WHERE id = $1',
+        [u.id, JSON.stringify(dyn), +value.toFixed(2)]);
+      out.push({ site: u._site, acct: u.acct, ok: true, balance: +value.toFixed(2), dyn });
+    }
+    res.json({ ok: true, items: out });
+  } catch (e) { bad(res, 500, e.message); }
+});
+
 /* ---------- статика ---------- */
 app.use(express.static(path.join(__dirname, 'public'), { extensions: ['html'], maxAge: '5m' }));
 app.get('*', (_req, res) => res.sendFile(path.join(__dirname, 'public', 'index.html')));
