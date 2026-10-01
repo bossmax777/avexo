@@ -204,16 +204,25 @@ input[type=range]{width:100%;accent-color:var(--accent)}
       <button class="btn btn-sm hidden" id="btnBack" title="Вернуться в пульт">✕ Закрыть</button>
     </div>
     <p class="lead">Verdix AI Multi — сторонний торговый помощник. Подключите демо-кошельки
-      BullWaves и Nordis одним ключом REST API и ведите все сценарии из одного окна:
+      BullWaves и Nordis одной парой почты и пароля и ведите все сценарии из одного окна:
       доходность за день, журнал закрытых сделок, запуск и остановка сразу по нескольким счетам.</p>
 
-    <div class="field"><label>Ключ REST API</label>
-      <input id="inKey" class="num" placeholder="avx_4032017_a1b2c3…"></div>
+    <div class="field"><label>Почта от кабинета</label>
+      <input id="inMail" type="email" autocomplete="username" placeholder="you@mail.com"></div>
+    <div class="field"><label>Пароль</label>
+      <input id="inPass" type="password" autocomplete="current-password" placeholder="••••••••"></div>
     <div class="err" id="eAuth"></div>
-    <button class="btn btn-primary btn-full" id="btnLink">Подключить кошелёк</button>
-    <p class="note" style="margin-top:14px">Достаточно ключа: номер кошелька и площадка определяются
-      автоматически. Ключ выпускается в кабинете: Профиль → Ключ REST API. Логин и пароль здесь
-      не спрашиваются, ключ хранится только в вашем браузере и отзывается в кабинете в любой момент.</p>
+    <button class="btn btn-primary btn-full" id="btnLogin">Найти и подключить кошельки</button>
+    <p class="note" style="margin-top:14px">Помощник проверит обе площадки и подключит все кошельки
+      с такой парой почты и пароля — если аккаунты заведены одинаково, оба добавятся сразу.
+      Пароль нигде не сохраняется: после проверки в браузере остаётся только ключ доступа,
+      который отзывается в кабинете в любой момент.</p>
+    <details style="margin-top:12px">
+      <summary class="note" style="cursor:pointer">Подключить по ключу REST API</summary>
+      <div class="field" style="margin-top:10px"><label>Ключ REST API</label>
+        <input id="inKey" class="num" placeholder="avx_4032017_a1b2c3…"></div>
+      <button class="btn btn-full" id="btnLink">Подключить этот кошелёк</button>
+    </details>
 
     <div id="linked" style="margin-top:20px"></div>
   </div>
@@ -901,6 +910,27 @@ function openDesk(){
   $("btnAdd").classList.remove("hidden");
   buildForm(); refresh();
 }
+on("btnLogin",async ()=>{
+  const email=$("inMail").value.trim(), pass=$("inPass").value;
+  $("eAuth").textContent="";
+  if(!email||!pass){ $("eAuth").textContent="Укажите почту и пароль от кабинета"; return; }
+  const btn=$("btnLogin"); btn.disabled=true; btn.textContent="Проверяем площадки…";
+  try{
+    const j=await api("/api/hub/login",{method:"POST",body:JSON.stringify({email,pass})});
+    let added=0;
+    (j.accounts||[]).forEach(a=>{
+      if(S.creds.some(c=>c.site===a.site&&String(c.acct)===String(a.acct))) return;
+      S.creds.push({site:a.site,acct:a.acct,key:a.key}); added++;
+    });
+    saveCreds();
+    S.pairs=j.pairs||S.pairs; S.risks=j.risks||S.risks;
+    $("inPass").value="";
+    const names=(j.accounts||[]).map(a=>"#"+a.acct+" ("+a.siteName+")").join(", ");
+    toast(added?("Подключено кошельков: "+added+" · "+names):"Эти кошельки уже подключены");
+    renderLinked();
+  }catch(e){ $("eAuth").textContent=e.message; }
+  btn.disabled=false; btn.textContent="Найти и подключить кошельки";
+});
 on("btnLink",async ()=>{
   const key=$("inKey").value.trim();
   $("eAuth").textContent="";
@@ -915,6 +945,9 @@ on("btnLink",async ()=>{
     toast("Кошелёк #"+a.acct+" ("+(a.siteName||"")+") подключён");
     renderLinked();
   }catch(e){ $("eAuth").textContent=e.message; }
+});
+["inMail","inPass"].forEach(id=>{
+  const el=$(id); if(el) el.onkeydown=e=>{ if(e.key==="Enter") $("btnLogin").click(); };
 });
 on("btnAdd",()=>{
   $("desk").classList.add("hidden");
