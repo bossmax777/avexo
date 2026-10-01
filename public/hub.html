@@ -193,6 +193,7 @@ input[type=range]{width:100%;accent-color:var(--accent)}
     <span class="pill live hidden" id="pillLive"><i class="dot"></i><b id="pillCnt">0</b>&nbsp;активных сессий</span>
     <div class="who hidden" id="who"><b id="whoSum">—</b><small id="whoCnt">—</small></div>
     <button class="btn btn-ghost btn-sm hidden" id="btnAdd">Добавить кошелёк</button>
+    <button class="btn btn-sm hidden" id="btnOut" title="Отключить все кошельки">Выйти</button>
   </div>
 </header>
 
@@ -886,8 +887,8 @@ function unlink(k){
   S.creds=S.creds.filter(c=>!(c.site===a.site&&String(c.acct)===String(a.acct)));
   S.sel.delete(k); S.open.delete(k); delete S.per[k];
   saveCreds();
-  if(!S.creds.length){ $("desk").classList.add("hidden"); $("auth").classList.remove("hidden");
-    $("who").classList.add("hidden"); $("btnAdd").classList.add("hidden"); renderLinked(); }
+  if(!S.creds.length){ $("who").classList.add("hidden");
+    $("btnAdd").classList.add("hidden"); $("btnOut").classList.add("hidden"); showAuth(); }
   refresh();
 }
 
@@ -899,15 +900,47 @@ function renderLinked(){
   if(!S.creds.length){ box.innerHTML=""; return; }
   box.innerHTML='<div class="muted" style="font-size:12.5px;margin-bottom:8px">Подключено кошельков: '+S.creds.length+'</div>'+
     S.creds.map(c=>'<div class="acc"><div class="acc-top"><div class="acc-name">'+
-      '<b>#'+c.acct+' '+siteBadge(c.site)+'</b></div></div></div>').join("")+
-    '<button class="btn btn-primary btn-full" id="btnGo" style="margin-top:12px">← Вернуться в пульт</button>';
+      '<b>#'+c.acct+' '+siteBadge(c.site)+'</b></div>'+
+      '<button class="btn btn-sm" data-off="'+c.site+":"+c.acct+'" title="Отключить этот кошелёк">✕</button>'+
+      '</div></div>').join("")+
+    '<button class="btn btn-primary btn-full" id="btnGo" style="margin-top:12px">← Вернуться в пульт</button>'+
+    '<button class="btn btn-full" id="btnOut2" style="margin-top:8px">Отключить все кошельки</button>';
   $("btnGo").onclick=openDesk;
+  $("btnOut2").onclick=logoutAll;
+  box.querySelectorAll("[data-off]").forEach(el=>el.onclick=()=>{
+    const [site,acct]=el.dataset.off.split(":");
+    if(!confirm("Отключить кошелёк #"+acct+" от пульта? Сценарий на площадке продолжит работу.")) return;
+    S.creds=S.creds.filter(c=>!(c.site===site&&String(c.acct)===acct));
+    S.sel.delete(site+":"+acct); S.open.delete(site+":"+acct); delete S.per[site+":"+acct];
+    saveCreds(); renderLinked();
+    if(!S.creds.length){ $("who").classList.add("hidden");
+      $("btnAdd").classList.add("hidden"); $("btnOut").classList.add("hidden"); }
+    toast("Кошелёк #"+acct+" отключён");
+  });
+}
+/* возврат на экран подключения: показываем форму, прячем пульт */
+function showAuth(){
+  $("desk").classList.add("hidden");
+  $("auth").classList.remove("hidden");
+  renderLinked();
+}
+function logoutAll(){
+  if(S.creds.length && !confirm("Отключить все кошельки от пульта ("+S.creds.length+" шт.)?\n\n"+
+    "Сценарии на площадках продолжат работу — пульт просто забудет доступы.")) return;
+  S.creds=[]; S.accounts=[]; S.sel.clear(); S.open.clear(); S.per={};
+  saveCreds();
+  $("who").classList.add("hidden");
+  $("btnAdd").classList.add("hidden");
+  $("btnOut").classList.add("hidden");
+  showAuth();
+  toast("Кошельки отключены");
 }
 function openDesk(){
   $("auth").classList.add("hidden");
   $("desk").classList.remove("hidden");
   $("who").classList.remove("hidden");
   $("btnAdd").classList.remove("hidden");
+  $("btnOut").classList.remove("hidden");
   buildForm(); refresh();
 }
 on("btnLogin",async ()=>{
@@ -949,11 +982,8 @@ on("btnLink",async ()=>{
 ["inMail","inPass"].forEach(id=>{
   const el=$(id); if(el) el.onkeydown=e=>{ if(e.key==="Enter") $("btnLogin").click(); };
 });
-on("btnAdd",()=>{
-  $("desk").classList.add("hidden");
-  $("auth").classList.remove("hidden");
-  renderLinked();
-});
+on("btnAdd",showAuth);
+on("btnOut",logoutAll);
 on("btnAll",()=>{ S.accounts.filter(a=>!a.error).forEach(a=>S.sel.add(keyOf(a))); renderAll(); });
 on("btnNone",()=>{ S.sel.clear(); renderAll(); });
 on("btnRun",()=>runKeys([...S.sel],S.params));
