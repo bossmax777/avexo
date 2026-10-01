@@ -75,6 +75,7 @@ button,input,select{font:inherit;color:inherit}
 
 /* ---- вход ---- */
 .auth{max-width:520px;margin:48px auto 60px}
+.auth-head{display:flex;align-items:flex-start;justify-content:space-between;gap:14px}
 .auth h1{font-size:26px;margin-bottom:8px}
 .auth .lead{color:var(--muted);font-size:14.5px;margin-bottom:22px}
 .field{margin-bottom:13px}
@@ -198,7 +199,10 @@ input[type=range]{width:100%;accent-color:var(--accent)}
 <!-- ЭКРАН ПОДКЛЮЧЕНИЯ -->
 <section class="auth" id="auth">
   <div class="panel">
-    <h1>Один пульт для двух площадок</h1>
+    <div class="auth-head">
+      <h1>Один пульт для двух площадок</h1>
+      <button class="btn btn-sm hidden" id="btnBack" title="Вернуться в пульт">✕ Закрыть</button>
+    </div>
     <p class="lead">Verdix AI Multi — сторонний торговый помощник. Подключите демо-кошельки
       BullWaves и Nordis одним ключом REST API и ведите все сценарии из одного окна:
       доходность за день, журнал закрытых сделок, запуск и остановка сразу по нескольким счетам.</p>
@@ -881,11 +885,13 @@ function unlink(k){
 /* ============ экран подключения ============ */
 function renderLinked(){
   const box=$("linked");
+  const back=$("btnBack");
+  if(back){ back.classList.toggle("hidden",!S.creds.length); back.onclick=openDesk; }
   if(!S.creds.length){ box.innerHTML=""; return; }
   box.innerHTML='<div class="muted" style="font-size:12.5px;margin-bottom:8px">Подключено кошельков: '+S.creds.length+'</div>'+
     S.creds.map(c=>'<div class="acc"><div class="acc-top"><div class="acc-name">'+
       '<b>#'+c.acct+' '+siteBadge(c.site)+'</b></div></div></div>').join("")+
-    '<button class="btn btn-primary btn-full" id="btnGo" style="margin-top:10px">Перейти в пульт</button>';
+    '<button class="btn btn-primary btn-full" id="btnGo" style="margin-top:12px">← Вернуться в пульт</button>';
   $("btnGo").onclick=openDesk;
 }
 function openDesk(){
