@@ -36,9 +36,9 @@ function siteUrl(req) {
    при отдаче страницы, в письмах и в названиях площадок. Когда имя поправят в
    самом HTML, замена просто перестанет что-либо находить. */
 const RENAME = {
-  bw: [['BullWaves', 'Aveho'], ['BULLWAVES', 'AVEHO'], ['bullwaves', 'aveho']],
-  nx: [['FxPro', 'Тюльпан'], ['FXPRO', 'ТЮЛЬПАН'], ['fxpro', 'тюльпан'],
-       ['Nordis', 'Тюльпан'], ['NORDIS', 'ТЮЛЬПАН'], ['nordis', 'тюльпан']]
+  bw: [['BullWaves', 'BullWaves'], ['BULLWAVES', 'BULLWAVES'], ['bullwaves', 'bullwaves']],
+  nx: [['FxPro', 'FxPro'], ['FXPRO', 'FXPRO'], ['fxpro', 'fxpro'],
+       ['Nordis', 'FxPro'], ['NORDIS', 'FXPRO'], ['nordis', 'fxpro]]
 };
 function rename(text) {
   const map = RENAME[SITE_TAG] || [];
@@ -135,8 +135,7 @@ function tView(r) {
 }
 
 /* ---------- вывод средств со страницы единого бота ---------- */
-/* Учебный макет: настоящих платежей нет. Реквизиты получателя сервер
-   не хранит целиком — только последние цифры, как и в кабинете площадки. */
+/*  */
 const HUB_OUT = {
   card:   { name: 'Банковская карта',           fee: 0.015, min: 10,  eta: '1–3 рабочих дня' },
   sbp:    { name: 'СБП по номеру телефона',     fee: 0.010, min: 10,  eta: 'до 24 часов' },
