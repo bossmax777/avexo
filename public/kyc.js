@@ -48,7 +48,12 @@
     ".kyc-list li{list-style:disc}" +
     ".kyc-doc{display:flex;justify-content:space-between;gap:10px;font-size:12px;padding:7px 0;" +
     "border-bottom:1px solid var(--line)}" +
-    ".kyc-doc:last-child{border-bottom:0}.kyc-doc span{color:var(--muted)}";
+    ".kyc-doc:last-child{border-bottom:0}.kyc-doc span{color:var(--muted)}" +
+    ".kyc-done{text-align:center;padding:26px 18px}" +
+    ".kyc-done svg{width:62px;height:62px;margin-bottom:12px}" +
+    ".kyc-done b{display:block;font-size:19px;margin-bottom:7px}" +
+    ".kyc-done p{margin:0 auto;max-width:46ch;font-size:13.5px;color:var(--muted);line-height:1.6}" +
+    ".kyc-done.wait svg circle{stroke:#C9962F}.kyc-done.wait b{color:var(--text)}";
 
   var VIEW =
     '<h2>Верификация профиля</h2>' +
@@ -56,14 +61,17 @@
     'Снимки видит только администратор площадки.</p>' +
     '<div id="kycState" class="kyc-state"><i></i><b>Статус: загрузка…</b></div>' +
     '<div class="kyc-wrap">' +
-      '<div class="panel"><div class="panel-head"><h3>Документы</h3></div>' +
-        '<div id="kycSlots"></div>' +
-        '<button class="btn btn-primary" id="kycSend">Отправить на проверку</button>' +
-        '<p class="kyc-note">Принимаются JPG, PNG и WEBP. Снимок уменьшается прямо в браузере, ' +
-        'на сервер уходит сжатая копия. Документы хранятся только для проверки и не передаются ' +
-        'третьим лицам. Это учебный стенд — не загружайте настоящие документы.</p>' +
+      '<div class="panel"><div class="panel-head"><h3 id="kycH3">Документы</h3></div>' +
+        '<div id="kycForm">' +
+          '<div id="kycSlots"></div>' +
+          '<button class="btn btn-primary" id="kycSend">Отправить на проверку</button>' +
+          '<p class="kyc-note">Принимаются JPG, PNG и WEBP. Снимок уменьшается прямо в браузере, ' +
+          'на сервер уходит сжатая копия. Документы хранятся только для проверки и не передаются ' +
+          'третьим лицам. Это учебный стенд — не загружайте настоящие документы.</p>' +
+        '</div>' +
+        '<div id="kycDone" hidden></div>' +
       '</div>' +
-      '<div class="panel"><div class="panel-head"><h3>Как пройти проверку</h3></div>' +
+      '<div class="panel" id="kycHelp"><div class="panel-head"><h3>Как пройти проверку</h3></div>' +
         '<ul class="kyc-list">' +
           '<li>Снимайте при дневном свете, без вспышки и бликов.</li>' +
           '<li>Документ целиком, все углы в кадре.</li>' +
@@ -196,13 +204,35 @@
     box.innerHTML = txt;
     var send = document.getElementById("kycSend");
     if (send) {
-      var block = k.status === "pending" || k.status === "approved";
-      send.disabled = block;
-      send.style.opacity = block ? ".5" : "";
-      send.textContent = k.status === "rejected" ? "Отправить заново"
-        : k.status === "approved" ? "Профиль подтверждён"
-        : k.status === "pending" ? "Заявка на проверке" : "Отправить на проверку";
+      send.disabled = false;
+      send.style.opacity = "";
+      send.textContent = k.status === "rejected" ? "Отправить заново" : "Отправить на проверку";
     }
+    /* проверка пройдена или идёт — поля загрузки убираем совсем */
+    var form = document.getElementById("kycForm");
+    var done = document.getElementById("kycDone");
+    var help = document.getElementById("kycHelp");
+    var h3 = document.getElementById("kycH3");
+    var hide = k.status === "approved" || k.status === "pending";
+    if (form) form.hidden = hide;
+    if (done) {
+      done.hidden = !hide;
+      done.className = "kyc-done" + (k.status === "pending" ? " wait" : "");
+      done.innerHTML = hide
+        ? (k.status === "approved"
+            ? '<svg viewBox="0 0 64 64" fill="none" stroke="#2BA87A" stroke-width="3.4" ' +
+              'stroke-linecap="round"><circle cx="32" cy="32" r="27"/><path d="M20 33l8.5 8.5L45 25"/></svg>' +
+              "<b>Верификация пройдена</b><p>Личность подтверждена, ограничения на вывод сняты. " +
+              "Загружать документы больше не нужно." + (k.comment ? " " + esc(k.comment) : "") + "</p>"
+            : '<svg viewBox="0 0 64 64" fill="none" stroke="#C9962F" stroke-width="3.4" ' +
+              'stroke-linecap="round"><circle cx="32" cy="32" r="27"/><path d="M32 18v15l9 6"/></svg>' +
+              "<b>Документы на проверке</b><p>Заявка принята, решение придёт в кабинет и на почту — " +
+              "обычно в течение рабочего дня.</p>")
+        : "";
+    }
+    if (help) help.hidden = k.status === "approved";
+    if (h3) h3.textContent = k.status === "approved" ? "Статус проверки"
+      : k.status === "pending" ? "Заявка" : "Документы";
     var sent = document.getElementById("kycSent");
     if (sent) {
       sent.innerHTML = (k.docs && k.docs.length)
