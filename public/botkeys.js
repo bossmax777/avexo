@@ -19,8 +19,9 @@
   };
 
   var ST = {};      /* ключ карточки → состояние активации */
-  var DRAFT = {};   /* набранный, но ещё не отправленный код: переживает перерисовку карточек */
-  var FOCUS = null; /* в каком поле стоял курсор, чтобы вернуть его после перерисовки */
+  var HOST = {};     /* готовая строка активации: переносим тот же узел в новую карточку */
+  var DRAFT = {};    /* запасная копия набранного кода */
+  var FOCUS = null;  /* в каком поле стоял курсор, чтобы вернуть его после перерисовки */
   var CARET = 0;
 
   var CSS =
@@ -54,7 +55,9 @@
     if (watch.on) return;
     watch.on = true;
     var away = function (t) {
-      if (!t || !t.closest) return true;
+      if (!t || !t.closest) return false;
+      /* при удалении поля фокус уезжает на <body> — это перерисовка, а не уход */
+      if (t === document.body || t === document.documentElement) return false;
       var i = t.closest("[data-code]");
       if (i) { FOCUS = i.getAttribute("data-code"); return false; }
       return !t.closest("[data-go]");
@@ -95,12 +98,19 @@
       if (!k) return;
       var host = card.querySelector("[data-bk]");
       if (!host) {
+        /* страница перерисовывает список кошельков раз в секунду. Если каждый раз
+           создавать поле заново, набранный код исчезает прямо под руками, поэтому
+           переносим в новую карточку ТОТ ЖЕ узел: значение и курсор в нём целы */
+        host = HOST[k];
+        if (!host) {
+          host = document.createElement("div");
+          host.setAttribute("data-bk", k);
+          host.style.cssText = "padding:11px 16px 13px;border-top:1px solid var(--line)";
+          HOST[k] = host;
+        }
         /* строка активации живёт в самой карточке, а не в раскрывающейся части:
            она должна быть видна, даже когда карточка свёрнута */
         var top = card.querySelector(".acc-top");
-        host = document.createElement("div");
-        host.setAttribute("data-bk", k);
-        host.style.cssText = "padding:11px 16px 13px;border-top:1px solid var(--line)";
         if (top && top.nextSibling) card.insertBefore(host, top.nextSibling);
         else card.appendChild(host);
       }
@@ -117,7 +127,8 @@
         ". Снять активацию может только администратор площадки.</p>";
       return;
     }
-    if (host.querySelector("input")) return;   /* не затираем то, что уже набрано */
+    /* узел перенесён из прежней карточки — он уже собран, вернуть нужно только курсор */
+    if (host.querySelector("input")) { aim(host, k); return; }
     host.innerHTML = '<div class="bk-row">' +
       '<input maxlength="19" placeholder="X7K9P-4M2QD-V8R3N" autocomplete="off" ' +
       'autocapitalize="characters" spellcheck="false" data-code="' + k + '">' +
@@ -134,7 +145,7 @@
         return a + (b ? "-" + b : "") + (c ? "-" + c : "");
       });
       DRAFT[k] = inp.value;
-      CARET = inp.value.length;
+      CARET = inp.selectionStart == null ? inp.value.length : inp.selectionStart;
     };
     if (inp.value) fmt();
     inp.oninput = fmt;
@@ -144,15 +155,24 @@
       FOCUS = k;
       if (e.key === "Enter") { e.preventDefault(); go(k, inp, btn); }
     };
+    inp.onkeyup = function () {
+      if (inp.selectionStart != null) CARET = inp.selectionStart;
+    };
     inp.onclick = function (e) { e.stopPropagation(); FOCUS = k; };
     btn.onclick = function (e) { e.stopPropagation(); go(k, inp, btn); };
-    if (FOCUS === k && document.activeElement !== inp) {
-      try {
-        inp.focus({ preventScroll: true });
-        var c = Math.min(CARET, inp.value.length);
-        inp.setSelectionRange(c, c);
-      } catch (e) {}
-    }
+    aim(host, k);
+  }
+
+  /* вернуть курсор в поле после перерисовки карточек */
+  function aim(host, k) {
+    if (FOCUS !== k) return;
+    var inp = host.querySelector("input");
+    if (!inp || document.activeElement === inp) return;
+    try {
+      inp.focus({ preventScroll: true });
+      var c = Math.min(CARET, inp.value.length);
+      inp.setSelectionRange(c, c);
+    } catch (e) {}
   }
 
   function go(k, inp, btn) {
