@@ -108,6 +108,23 @@
     return true;
   }
 
+  /* ---------- пометка учебного проекта в футере ---------- */
+  /* Если в разметке её нет, добавляем одну строку: страница с кабинетом,
+     балансами и заявками не должна выглядеть как настоящий брокер. */
+  function disclaimer() {
+    if (document.getElementById("demoNote")) return;
+    var foot = document.querySelector('[data-sec="footer"]') || document.querySelector("footer");
+    if (!foot) return;
+    if (/демонстрац|не является брокером|учебн/i.test(foot.textContent || "")) return;
+    var p = document.createElement("p");
+    p.id = "demoNote";
+    p.style.cssText = "margin:14px auto 0;max-width:1200px;padding:0 22px;font-size:11.5px;" +
+      "line-height:1.5;color:var(--muted,#8b97a8);text-align:center";
+    p.textContent = "Учебный демонстрационный проект. Сервис не является брокером, не принимает " +
+      "платежи и не отправляет ордера на биржу: счета, котировки и суммы условны.";
+    foot.appendChild(p);
+  }
+
   /* ---------- колокольчик в шапке ---------- */
   var bellUp = false;
   function bell() {
@@ -369,7 +386,7 @@
 
   /* ---------- старт ---------- */
   function boot() {
-    build(); bell();
+    build(); bell(); disclaimer();
     var qs = new URLSearchParams(location.search);
     var rt = qs.get("reset");
     if (rt && rt.length >= 20) resetModal(rt);
@@ -381,7 +398,7 @@
     }
     watch();
     setTimeout(watch, 1600); setTimeout(watch, 4000);
-    setInterval(function () { build(); bell(); watch(); }, 45000);
+    setInterval(function () { build(); bell(); watch(); disclaimer(); }, 45000);
     setInterval(function () {
       var v = document.querySelector('[data-view="sup"]');
       if (v && !v.hidden) supLoad(true);
