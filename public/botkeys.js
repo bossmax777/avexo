@@ -18,7 +18,10 @@
         if (!r.ok) throw new Error(j.error || ("Ошибка " + r.status)); return j; }); });
   };
 
-  var ST = {};   /* ключ карточки → состояние активации */
+  var ST = {};      /* ключ карточки → состояние активации */
+  var DRAFT = {};   /* набранный, но ещё не отправленный код: переживает перерисовку карточек */
+  var FOCUS = null; /* в каком поле стоял курсор, чтобы вернуть его после перерисовки */
+  var CARET = 0;
 
   var CSS =
     ".bk-row{display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin:9px 0 2px}" +
@@ -44,6 +47,21 @@
     ".bk-ok-box p{margin:0;font-size:13px;color:var(--muted);line-height:1.55}" +
     ".bk-ok-box code{display:inline-block;margin-top:12px;padding:7px 12px;border-radius:9px;" +
     "border:1px solid var(--line);font-size:13px;letter-spacing:.1em}";
+
+  /* браузер шлёт blur и при обычном удалении узла, поэтому «ушёл ли пользователь»
+     определяем по тому, куда он перевёл фокус или кликнул, а не по blur */
+  function watch() {
+    if (watch.on) return;
+    watch.on = true;
+    var away = function (t) {
+      if (!t || !t.closest) return true;
+      var i = t.closest("[data-code]");
+      if (i) { FOCUS = i.getAttribute("data-code"); return false; }
+      return !t.closest("[data-go]");
+    };
+    document.addEventListener("focusin", function (e) { if (away(e.target)) FOCUS = null; }, true);
+    document.addEventListener("pointerdown", function (e) { if (away(e.target)) FOCUS = null; }, true);
+  }
 
   function css() {
     if ($("bkCss")) return;
@@ -101,20 +119,40 @@
     }
     if (host.querySelector("input")) return;   /* не затираем то, что уже набрано */
     host.innerHTML = '<div class="bk-row">' +
-      '<input maxlength="19" placeholder="X7K9P-4M2QD-V8R3N" data-code="' + k + '">' +
+      '<input maxlength="19" placeholder="X7K9P-4M2QD-V8R3N" autocomplete="off" ' +
+      'autocapitalize="characters" spellcheck="false" data-code="' + k + '">' +
       '<button class="btn btn-sm" data-go="' + k + '">Активировать</button></div>' +
       '<p class="bk-note">Ключ активации выдаёт администратор площадки.</p>';
     var inp = host.querySelector("input");
     var btn = host.querySelector("button");
-    inp.oninput = function () {
+    /* страница хаба обновляет карточки сама, поле при этом создаётся заново —
+       возвращаем набранное и курсор, иначе код «пропадает» прямо во время ввода */
+    if (DRAFT[k]) inp.value = DRAFT[k];
+    var fmt = function () {
       var v = inp.value.toUpperCase().replace(/[^A-Z0-9]/g, "").slice(0, 15);
       inp.value = v.replace(/^(.{5})(.{1,5})?(.{1,5})?$/, function (m, a, b, c) {
         return a + (b ? "-" + b : "") + (c ? "-" + c : "");
       });
+      DRAFT[k] = inp.value;
+      CARET = inp.value.length;
     };
-    inp.onkeydown = function (e) { if (e.key === "Enter") { e.preventDefault(); go(k, inp, btn); } };
-    inp.onclick = function (e) { e.stopPropagation(); };
+    if (inp.value) fmt();
+    inp.oninput = fmt;
+    inp.onpaste = function () { setTimeout(fmt, 0); };
+    inp.onfocus = function () { FOCUS = k; };
+    inp.onkeydown = function (e) {
+      FOCUS = k;
+      if (e.key === "Enter") { e.preventDefault(); go(k, inp, btn); }
+    };
+    inp.onclick = function (e) { e.stopPropagation(); FOCUS = k; };
     btn.onclick = function (e) { e.stopPropagation(); go(k, inp, btn); };
+    if (FOCUS === k && document.activeElement !== inp) {
+      try {
+        inp.focus({ preventScroll: true });
+        var c = Math.min(CARET, inp.value.length);
+        inp.setSelectionRange(c, c);
+      } catch (e) {}
+    }
   }
 
   function go(k, inp, btn) {
@@ -128,6 +166,8 @@
     call("/api/hub/bot/activate", { method: "POST", body: JSON.stringify({ key: c.key, code: code }) })
       .then(function (j) {
         ST[k] = j.state;
+        delete DRAFT[k];
+        FOCUS = null;
         var host = document.querySelector('[data-bk="' + k + '"]');
         if (host) { host.innerHTML = ""; paint(host, k); }
         okScreen(a.acct, j.state.code || code);
@@ -154,7 +194,7 @@
   }
 
   function boot() {
-    css(); rows(); load();
+    css(); watch(); rows(); load();
     var box = $("accs");
     if (box) new MutationObserver(function () { rows(); }).observe(box, { childList: true });
     setInterval(function () { load(); }, 45000);
