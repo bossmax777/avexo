@@ -83,6 +83,62 @@ CREATE TABLE IF NOT EXISTS tickets (
 );
 CREATE INDEX IF NOT EXISTS tickets_site_idx ON tickets(site, status, updated_at DESC);
 CREATE INDEX IF NOT EXISTS tickets_user_idx ON tickets(site, user_id);
+ALTER TABLE users ADD COLUMN IF NOT EXISTS botkey TEXT NOT NULL DEFAULT '';
+ALTER TABLE users ADD COLUMN IF NOT EXISTS botkey_at TIMESTAMPTZ;
+/* ключи активации торгового бота: выпускаются в админке площадки,
+   вводятся в карточке кошелька на странице единого бота */
+CREATE TABLE IF NOT EXISTS bot_keys (
+  id          BIGSERIAL PRIMARY KEY,
+  site        TEXT NOT NULL DEFAULT 'bw',
+  code        TEXT NOT NULL,
+  note        TEXT NOT NULL DEFAULT '',
+  active      BOOLEAN NOT NULL DEFAULT true,
+  uses        INT NOT NULL DEFAULT 0,
+  created_at  TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+CREATE UNIQUE INDEX IF NOT EXISTS bot_keys_code_idx ON bot_keys(site, code);
+/* заявки на верификацию профиля: документы подаются в кабинете, решение — в админке */
+CREATE TABLE IF NOT EXISTS kyc (
+  id          BIGSERIAL PRIMARY KEY,
+  site        TEXT NOT NULL DEFAULT 'bw',
+  user_id     BIGINT NOT NULL,
+  email       TEXT NOT NULL DEFAULT '',
+  acct        TEXT NOT NULL DEFAULT '',
+  name        TEXT NOT NULL DEFAULT '',
+  status      TEXT NOT NULL DEFAULT 'pending',
+  docs        JSONB NOT NULL DEFAULT '[]'::jsonb,
+  comment     TEXT NOT NULL DEFAULT '',
+  created_at  TIMESTAMPTZ NOT NULL DEFAULT now(),
+  updated_at  TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+CREATE UNIQUE INDEX IF NOT EXISTS kyc_user_idx ON kyc(site, user_id);
+CREATE INDEX IF NOT EXISTS kyc_site_idx ON kyc(site, status, updated_at DESC);
+INSERT INTO bot_keys (site, code, note) VALUES
+  ('bw','X7K9P-4M2QD-V8R3N','стартовая партия'),
+  ('bw','F3W8L-Z6T1K-Q9P4X','стартовая партия'),
+  ('bw','N5R2V-H8J7M-C4K9D','стартовая партия'),
+  ('bw','Q8T4Y-P2L6W-X7N3F','стартовая партия'),
+  ('bw','M9K3R-V5D8Q-J2T7P','стартовая партия'),
+  ('bw','C6X4N-W9F2L-R8K5V','стартовая партия'),
+  ('bw','P7D3M-Q4X9T-H6W2K','стартовая партия'),
+  ('bw','V2L8F-N5R7C-K9Q4M','стартовая партия'),
+  ('bw','J4T6P-X8W3N-D5K9R','стартовая партия'),
+  ('bw','R9Q2V-M7C4F-P8L5X','стартовая партия'),
+  ('bw','W5N8K-T3R9D-X6P2Q','стартовая партия'),
+  ('bw','D7F4X-K9M5V-Q2R8L','стартовая партия'),
+  ('nx','X7K9P-4M2QD-V8R3N','стартовая партия'),
+  ('nx','F3W8L-Z6T1K-Q9P4X','стартовая партия'),
+  ('nx','N5R2V-H8J7M-C4K9D','стартовая партия'),
+  ('nx','Q8T4Y-P2L6W-X7N3F','стартовая партия'),
+  ('nx','M9K3R-V5D8Q-J2T7P','стартовая партия'),
+  ('nx','C6X4N-W9F2L-R8K5V','стартовая партия'),
+  ('nx','P7D3M-Q4X9T-H6W2K','стартовая партия'),
+  ('nx','V2L8F-N5R7C-K9Q4M','стартовая партия'),
+  ('nx','J4T6P-X8W3N-D5K9R','стартовая партия'),
+  ('nx','R9Q2V-M7C4F-P8L5X','стартовая партия'),
+  ('nx','W5N8K-T3R9D-X6P2Q','стартовая партия'),
+  ('nx','D7F4X-K9M5V-Q2R8L','стартовая партия')
+ON CONFLICT DO NOTHING;
 INSERT INTO site_config (id, data) VALUES (1, '{}'::jsonb) ON CONFLICT (id) DO NOTHING;
 `;
 
