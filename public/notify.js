@@ -34,6 +34,7 @@
     var seen = {}, all = [];
     S.list.concat(S.local).forEach(function (n) {
       if (!n || !n.at) return;
+      if (n.kind === "mkt") return;   /* события биржи в уведомлениях не показываем */
       var k = n.key || n.id || (n.kind + n.title + n.at);
       if (seen[k]) return;
       seen[k] = 1; all.push(n);
@@ -112,7 +113,7 @@
           '<p class="ntf-w">' + (KINDS[x.kind] || KINDS.acc).name + " · " + when(x.at) + "</p>" +
           "</div></div>";
       }).join("") : '<div class="ntf-empty">Пока пусто. Здесь появятся итоги торгового дня, ' +
-        "события рынка, предупреждения о рисках, заявки на вывод и пополнение, ответы поддержки.</div>") +
+        "предупреждения о рисках, заявки на вывод и пополнение, ответы поддержки.</div>") +
       '<div class="ntf-foot">Учебный демонстрационный стенд: события относятся к демо-кошелькам.</div>';
     var all = S.panel.querySelector(".ntf-all");
     if (all) all.onclick = function () { readAll(); };
@@ -203,14 +204,10 @@
     return wrap;
   }
 
-  /* события рынка: страница сообщает текущее состояние, повторы отсекаются ключом */
-  function market(isOpen, info) {
-    var day = new Date().toISOString().slice(0, 10);
-    if (isOpen) add({ kind: "mkt", key: "mkt-open-" + day, title: "Биржа открыта — торги идут",
-      text: info || "Сценарии продолжают работу, котировки обновляются." });
-    else add({ kind: "mkt", key: "mkt-close-" + day, title: "Биржа закрыта — торги приостановлены",
-      text: info || "Сделки не открываются, сценарии стоят до открытия." });
-  }
+  /* события рынка больше не попадают в уведомления: биржа на стенде работает
+     круглосуточно, сообщать об открытии и закрытии торгов не о чем. Функция
+     оставлена заглушкой, чтобы вызовы со страниц не падали. */
+  function market() {}
   function risk(title, text, key) {
     add({ kind: "risk", key: key || ("risk-" + new Date().toISOString().slice(0, 10)), title: title, text: text });
   }
