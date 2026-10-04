@@ -30,6 +30,22 @@ function siteUrl(req) {
   return host ? 'https://' + host : '';
 }
 
+/* ---------- название площадки ---------- */
+/* Сайт переименован, а в больших HTML-файлах осталось прежнее имя: подменяем его
+   при отдаче страницы, в письмах и в названиях площадок. Когда имя поправят в
+   самом HTML, замена просто перестанет что-либо находить. */
+const RENAME = {
+  bw: [['BullWaves', 'Aveho'], ['BULLWAVES', 'AVEHO'], ['bullwaves', 'aveho']],
+  nx: [['FxPro', 'Тюльпан'], ['FXPRO', 'ТЮЛЬПАН'], ['fxpro', 'тюльпан'],
+       ['Nordis', 'Тюльпан'], ['NORDIS', 'ТЮЛЬПАН'], ['nordis', 'тюльпан']]
+};
+function rename(text) {
+  const map = RENAME[SITE_TAG] || [];
+  let s = String(text == null ? '' : text);
+  for (const pair of map) s = s.split(pair[0]).join(pair[1]);
+  return s;
+}
+
 /* ---------- подключение клиентских файлов к готовым страницам ---------- */
 /* HTML-файлы площадки не трогаем: нужные скрипты добавляются при отдаче страницы. */
 const INJECT = {
@@ -52,6 +68,7 @@ function readPage(name) {
   if (tags) {
     html = html.indexOf('</body>') >= 0 ? html.replace('</body>', tags + '\n</body>') : html + tags;
   }
+  html = rename(html);
   _page.set(name, { mtime: st.mtimeMs, html });
   return html;
 }
@@ -218,7 +235,17 @@ function install(app, ctx) {
   T_USERS = ctx.users;
   T_SESS = ctx.sessions;
   SITE_TAG = ctx.tag;
-  SITE_BRAND = process.env.BRAND_NAME || ctx.brand;
+  SITE_BRAND = process.env.BRAND_NAME || rename(ctx.brand);
+  /* те же названия в карточках единого бота и в отчётах Telegram */
+  if (ctx.sites) {
+    Object.keys(ctx.sites).forEach(k => {
+      const prev = SITE_TAG;
+      SITE_TAG = k;
+      ctx.sites[k].label = rename(ctx.sites[k].label);
+      ctx.sites[k].brand = rename(ctx.sites[k].brand);
+      SITE_TAG = prev;
+    });
+  }
   const sessionUser = ctx.sessionUser;
   const openSession = ctx.openSession;
   const hashPass = ctx.hashPass;
