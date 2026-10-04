@@ -134,6 +134,53 @@ function install(app, ctx, helpers) {
     } catch (e) { bad(res, 500, e.message); }
   });
 
+  /* отметка вручную: статус можно выставить без заявки, по номеру кошелька или почте.
+     Маршрут идёт до /:id, иначе express примет слово mark за номер заявки. */
+  app.post('/api/admin/kyc/mark', requireAdmin, async (req, res) => {
+    try {
+      const b = req.body || {};
+      const who = clean(b.who, 120);
+      if (!who) return bad(res, 400, 'Укажите номер кошелька или почту клиента');
+      const st = b.status === 'rejected' ? 'rejected'
+        : b.status === 'pending' ? 'pending'
+        : b.status === 'none' ? 'none' : 'approved';
+      const comment = clean(b.comment, 400);
+      const u = await q('SELECT id, email, acct, name FROM ' + T_USERS
+        + ' WHERE acct = $1 OR lower(email) = lower($1) LIMIT 1', [who]);
+      const me = u.rows[0];
+      if (!me) return bad(res, 404, 'Кошелёк с таким номером или почтой на этой площадке не найден');
+      if (st === 'none') {
+        await q('DELETE FROM kyc WHERE site = $1 AND user_id = $2', [SITE, me.id]);
+        return res.json({ ok: true, removed: true, acct: me.acct });
+      }
+      const r = await q(
+        'INSERT INTO kyc (site, user_id, email, acct, name, status, docs, comment, updated_at)'
+        + " VALUES ($1,$2,$3,$4,$5,$6,'[]'::jsonb,$7,now())"
+        + ' ON CONFLICT (site, user_id) DO UPDATE SET'
+        + ' status = EXCLUDED.status, comment = EXCLUDED.comment, updated_at = now()'
+        + ' RETURNING *',
+        [SITE, me.id, me.email, me.acct, me.name || '', st, comment]);
+      const row = r.rows[0];
+      if (H.pushNote && st !== 'pending') {
+        H.pushNote(T_USERS, me.id, st === 'approved'
+          ? { kind: 'acc', title: 'Профиль подтверждён',
+              text: 'Верификация пройдена.' + (comment ? ' ' + comment : '') }
+          : { kind: 'acc', title: 'Верификация отклонена',
+              text: comment || 'Обратитесь в службу поддержки из кабинета.' }).catch(() => {});
+      }
+      if (me.email && H.sendMail && H.layout && st === 'approved') {
+        H.sendMail({
+          to: me.email, subject: H.brand() + ': профиль подтверждён',
+          html: H.layout(H.brand(), 'Профиль подтверждён', [
+            'Кошелёк №' + (me.acct || ''),
+            'Верификация пройдена, ограничения на вывод сняты.' + (comment ? '<br>' + comment : '')
+          ])
+        }).catch(() => {});
+      }
+      res.json({ ok: true, kyc: kycView(row) });
+    } catch (e) { bad(res, 500, e.message); }
+  });
+
   app.get('/api/admin/kyc/:id', requireAdmin, async (req, res) => {
     try {
       const r = await q('SELECT * FROM kyc WHERE id = $1 AND site = $2', [Number(req.params.id), SITE]);
