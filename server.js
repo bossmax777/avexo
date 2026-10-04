@@ -9,6 +9,7 @@ const crypto = require('crypto');
 const express = require('express');
 const cookieParser = require('cookie-parser');
 const { q, init } = require('./db');
+const X = require('./extra');
 
 const app = express();
 const PORT = process.env.PORT || 3000;
@@ -101,6 +102,7 @@ app.post('/api/register', async (req, res) => {
       [mail, hashPass(pass), String(name).trim() || mail.split('@')[0], newAcct(), cur === 'EUR' ? 'EUR' : 'USD']);
     const user = toUser(r.rows[0]);
     await openSession(res, user.id);
+    X.onRegister(user, req);
     res.json({ user });
   } catch (e) {
     if (e.code === '23505') return bad(res, 409, 'Такой email уже зарегистрирован');
@@ -443,6 +445,7 @@ app.patch('/api/admin/users/:id', requireAdmin, async (req, res) => {
       const hist = [[when, amt > 0 ? 'Пополнение' : 'Вывод', ref, sum, 'ok'], ...u.hist];
       await q('UPDATE users SET balance = balance + $2, tx = $3::jsonb, hist = $4::jsonb WHERE id = $1',
         [id, amt, JSON.stringify(tx.slice(0, 200)), JSON.stringify(hist.slice(0, 200))]);
+      X.onAdminDelta(id, amt, ref);
     }
     if (mailSet !== undefined) {
       const m = String(mailSet).trim().toLowerCase();
@@ -814,7 +817,8 @@ async function hubFixOne(site, u, now) {
   const dyn = Object.assign({}, d, { fix: { last: st.date, lastVal: +val.toFixed(2) } });
   await q('UPDATE ' + HUB_SITES[site].users + ' SET hist = $2::jsonb, dyn = $3::jsonb WHERE id = $1',
     [u.id, JSON.stringify(hist), JSON.stringify(dyn)]);
-  return { site, acct: u.acct, date: st.date, pair, sum: fixMoney(gain) };
+  X.onFix(HUB_SITES[site].users, u.id, st.date, pair, fixMoney(gain));
+  return { site, acct: u.acct, date: st.date, pair, sum: fixMoney(gain), gain: gain, val: +val.toFixed(2) };
 }
 
 /* обход всех кошельков с включённым сценарием */
@@ -833,7 +837,14 @@ async function hubFixAll(force) {
       }
     } catch (e) { console.error('[fix]', site, e.message); }
   }
-  if (out.length) console.log('[fix] записано строк: ' + out.length);
+  if (out.length) {
+    console.log('[fix] записано строк: ' + out.length);
+    /* отчёт за сутки одним сообщением в общий чат */
+    await X.onDayReport(out.map(x => ({
+      site: x.site, siteName: HUB_SITES[x.site].label, acct: x.acct,
+      pair: x.pair, gain: Number(x.gain) || 0, val: x.val
+    })), st.date);
+  }
   return out;
 }
 /* проверяем каждые пять минут: сервер мог быть перезапущен или спать */
@@ -876,9 +887,17 @@ app.post('/api/hub/fixmode', async (req, res) => {
   } catch (e) { bad(res, 500, e.message); }
 });
 
+/* ---------- дополнения: письма, уведомления, поддержка, вывод и отчёты ---------- */
+X.install(app, {
+  q, bad, crypto, pub: path.join(__dirname, 'public'),
+  users: 'users', sessions: 'sessions', tag: 'bw', brand: 'BullWaves',
+  sessionUser, openSession, hashPass, toUser, requireAdmin,
+  hub: true, sites: HUB_SITES, hubUser, hubList, fixValue, fixStamp
+});
+
 /* ---------- статика ---------- */
 app.use(express.static(path.join(__dirname, 'public'), { extensions: ['html'], maxAge: '5m' }));
-app.get('*', (_req, res) => res.sendFile(path.join(__dirname, 'public', 'index.html')));
+app.get('*', (_req, res) => X.sendPage(res, 'index.html'));
 
 /* ---------- старт ---------- */
 (async () => {
