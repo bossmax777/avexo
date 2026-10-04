@@ -508,9 +508,9 @@ const HUB_SITES = {
 function hubSrv(site, v) {
   const s = HUB_SITES[site] || HUB_SITES.bw;
   let n = String(v || s.brand).trim().replace(/[<>"']/g, '').slice(0, 24);
-  n = n.replace(/[-_ ]?(demo|live|real)$/i, '').replace(/[-_ ]+$/, '');
+  n = n.replace(/[-_ ]?(live|live|real)$/i, '').replace(/[-_ ]+$/, '');
   if (!n) n = s.brand;
-  return n + '-DEMO';
+  return n + '-LIVE';
 }
 async function hubFees(site) {
   const s = HUB_SITES[site] || HUB_SITES.bw;
