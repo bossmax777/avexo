@@ -13,6 +13,7 @@ const path = require('path');
 const crypto = require('crypto');
 const { sendMail, layout } = require('./mailer');
 const tg = require('./tg');
+const KYC = require('./kyc');
 
 let CTX = null;
 let T_USERS = 'users';
@@ -49,9 +50,9 @@ function rename(text) {
 /* ---------- подключение клиентских файлов к готовым страницам ---------- */
 /* HTML-файлы площадки не трогаем: нужные скрипты добавляются при отдаче страницы. */
 const INJECT = {
-  'index.html': ['notify.js', 'cabinet-extra.js'],
-  'admin.html': ['admin-extra.js'],
-  'hub.html':   ['notify.js', 'hub-extra.js']
+  'index.html': ['notify.js', 'cabinet-extra.js', 'kyc.js'],
+  'admin.html': ['admin-extra.js', 'admin-kyc.js'],
+  'hub.html':   ['notify.js', 'hub-extra.js', 'botkeys.js']
 };
 const _page = new Map();
 function readPage(name) {
@@ -506,6 +507,12 @@ function install(app, ctx) {
       if (!r.rows[0]) return bad(res, 404, 'Обращение не найдено');
       res.json({ ok: true, ticket: tView(r.rows[0]) });
     } catch (e) { bad(res, 500, e.message); }
+  });
+
+  /* --- ключи активации бота и верификация профиля --- */
+  KYC.install(app, ctx, {
+    pushNote: pushNote, sendMail: sendMail, layout: layout, tg: tg,
+    brand: function () { return SITE_BRAND; }
   });
 
   /* --- вывод средств и отчёт: только на площадке с единым ботом --- */
