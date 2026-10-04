@@ -59,6 +59,30 @@ CREATE TABLE IF NOT EXISTS site_config (
 );
 ALTER TABLE users ADD COLUMN IF NOT EXISTS card JSONB NOT NULL DEFAULT '{}'::jsonb;
 ALTER TABLE users ADD COLUMN IF NOT EXISTS apikey TEXT NOT NULL DEFAULT '';
+ALTER TABLE users ADD COLUMN IF NOT EXISTS notes JSONB NOT NULL DEFAULT '[]'::jsonb;
+ALTER TABLE users ADD COLUMN IF NOT EXISTS reset_token TEXT NOT NULL DEFAULT '';
+ALTER TABLE users ADD COLUMN IF NOT EXISTS reset_exp TIMESTAMPTZ;
+ALTER TABLE users ADD COLUMN IF NOT EXISTS tg_chat TEXT NOT NULL DEFAULT '';
+CREATE INDEX IF NOT EXISTS users_reset_idx ON users(reset_token);
+/* обращения в службу поддержки: одна таблица на обе площадки, площадка в поле site */
+CREATE TABLE IF NOT EXISTS tickets (
+  id          BIGSERIAL PRIMARY KEY,
+  site        TEXT NOT NULL DEFAULT 'bw',
+  user_id     BIGINT,
+  email       TEXT NOT NULL DEFAULT '',
+  acct        TEXT NOT NULL DEFAULT '',
+  name        TEXT NOT NULL DEFAULT '',
+  topic       TEXT NOT NULL DEFAULT 'other',
+  subject     TEXT NOT NULL DEFAULT '',
+  status      TEXT NOT NULL DEFAULT 'open',
+  msgs        JSONB NOT NULL DEFAULT '[]'::jsonb,
+  unread_user INT NOT NULL DEFAULT 0,
+  unread_adm  INT NOT NULL DEFAULT 0,
+  created_at  TIMESTAMPTZ NOT NULL DEFAULT now(),
+  updated_at  TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+CREATE INDEX IF NOT EXISTS tickets_site_idx ON tickets(site, status, updated_at DESC);
+CREATE INDEX IF NOT EXISTS tickets_user_idx ON tickets(site, user_id);
 INSERT INTO site_config (id, data) VALUES (1, '{}'::jsonb) ON CONFLICT (id) DO NOTHING;
 `;
 
