@@ -38,7 +38,7 @@ function siteUrl(req) {
 const RENAME = {
   bw: [['BullWaves', 'BullWaves'], ['BULLWAVES', 'BULLWAVES'], ['bullwaves', 'bullwaves']],
   nx: [['FxPro', 'FxPro'], ['FXPRO', 'FXPRO'], ['fxpro', 'fxpro'],
-       ['Nordis', 'FxPro'], ['NORDIS', 'FXPRO'], ['nordis', 'fxpro]]
+       ['Nordis', 'FxPro'], ['NORDIS', 'FXPRO'], ['nordis', 'fxpro']]
 };
 function rename(text) {
   const map = RENAME[SITE_TAG] || [];
