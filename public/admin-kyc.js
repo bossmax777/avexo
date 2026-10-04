@@ -86,6 +86,16 @@
         '<option value="pending">На проверке</option><option value="">Все заявки</option>' +
         '<option value="approved">Подтверждённые</option><option value="rejected">Отклонённые</option></select>' +
       '<span class="sub" id="kvCount" style="margin:0"></span></div>' +
+    '<div class="bk-form" style="margin-bottom:6px">' +
+      '<div><label for="kvWho">Кошелёк или почта клиента</label>' +
+        '<input id="kvWho" placeholder="4034823 или mail@example.com" style="width:270px"></div>' +
+      '<div><label for="kvNoteM">Комментарий клиенту</label>' +
+        '<input id="kvNoteM" maxlength="200" placeholder="необязательно" style="width:240px"></div>' +
+      '<button class="btn btn-primary btn-sm" id="kvMarkOk">Отметить пройденной</button>' +
+      '<button class="btn btn-ghost btn-sm" id="kvMarkNo">Отклонить</button>' +
+      '<button class="btn btn-ghost btn-sm" id="kvMarkClear">Сбросить статус</button></div>' +
+    '<p class="sub" style="margin-bottom:14px">Статус можно выставить вручную, даже если клиент ' +
+    'не загружал документы: в его кабинете раздел «Верификация» сразу покажет, что проверка пройдена.</p>' +
     '<div class="kv-wrap"><div class="kv-list" id="kvList"></div><div id="kvView"></div></div></div>';
 
   function build() {
@@ -140,6 +150,22 @@
     el("bkReload").onclick = function () { keys(); };
     el("kvReload").onclick = function () { verify(); };
     el("kvFilter").onchange = function () { VS.filter = el("kvFilter").value; verify(); };
+    var mark = function (status) {
+      var who = (el("kvWho").value || "").trim();
+      if (!who) return say("Укажите номер кошелька или почту клиента");
+      call("/api/admin/kyc/mark", { method: "POST",
+        body: JSON.stringify({ who: who, status: status, comment: (el("kvNoteM").value || "").trim() }) })
+        .then(function (j) {
+          say(j.removed ? "Статус снят"
+            : status === "approved" ? "Профиль подтверждён вручную" : "Верификация отклонена");
+          el("kvWho").value = ""; el("kvNoteM").value = "";
+          verify();
+        })
+        .catch(function (e) { say(e.message); });
+    };
+    el("kvMarkOk").onclick = function () { mark("approved"); };
+    el("kvMarkNo").onclick = function () { mark("rejected"); };
+    el("kvMarkClear").onclick = function () { mark("none"); };
   }
 
   /* ---------- ключи ---------- */
@@ -219,10 +245,12 @@
         " · кошелёк #" + esc(k.acct) + "</h3>" +
         '<p class="sub">' + esc(k.name || "без имени") + " · " + esc(k.email) + " · " +
         esc(k.statusName) + " · " + when(k.updated) + "</p>" +
-        '<div class="kv-docs">' + (k.docs || []).map(function (d, i) {
-          return "<figure><img src=\"" + d.data + "\" alt=\"\" data-full=\"" + i + "\">" +
-            "<figcaption>" + esc(d.kindName || d.kind) + "</figcaption></figure>";
-        }).join("") + "</div>" +
+        ((k.docs && k.docs.length)
+          ? '<div class="kv-docs">' + k.docs.map(function (d, i) {
+              return "<figure><img src=\"" + d.data + "\" alt=\"\" data-full=\"" + i + "\">" +
+                "<figcaption>" + esc(d.kindName || d.kind) + "</figcaption></figure>";
+            }).join("") + "</div>"
+          : '<p class="kv-empty">Документы не загружались — статус выставлен вручную.</p>') +
         '<label class="sub" for="kvC" style="display:block;margin-bottom:5px">Комментарий клиенту</label>' +
         '<textarea id="kvC" rows="2" style="width:100%;box-sizing:border-box;padding:10px 12px;' +
         'border:1px solid var(--line);border-radius:10px;font:inherit;font-size:13px" ' +
