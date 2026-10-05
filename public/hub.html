@@ -183,8 +183,14 @@ table{max-width:100%}
   padding:6px 12px;font-size:12.5px;color:var(--muted);cursor:pointer}
 .chips button.on{border-color:var(--accent);background:var(--accent-soft);color:var(--text)}
 input[type=range]{width:100%;accent-color:var(--accent)}
-/* ---- касса: пополнение и вывод ---- */
-#cash{margin-bottom:16px}
+/* ---- касса: окно пополнения и вывода ---- */
+.cs-modal{position:fixed;inset:0;z-index:95;background:rgba(6,9,14,.72);backdrop-filter:blur(4px);
+  display:flex;align-items:flex-start;justify-content:center;padding:28px 16px;overflow:auto}
+.cs-win{width:100%;max-width:940px;background:var(--surface);border:1px solid var(--line);
+  border-radius:var(--radius-lg);padding:20px;animation:csIn .16s ease-out}
+@keyframes csIn{from{transform:translateY(-8px);opacity:0}to{transform:none;opacity:1}}
+.cs-win .panel-head h3{display:flex;align-items:center;gap:9px}
+@media (max-width:620px){.cs-modal{padding:0}.cs-win{border-radius:0;min-height:100%}}
 .cs-top{display:grid;grid-template-columns:minmax(0,260px) minmax(0,1fr) auto;gap:14px;
   align-items:end;margin-bottom:16px}
 .cs-tabs{grid-template-columns:repeat(2,minmax(0,1fr));max-width:320px}
@@ -235,6 +241,8 @@ input[type=range]{width:100%;accent-color:var(--accent)}
     <span class="sp"></span>
     <span class="pill live hidden" id="pillLive"><i class="dot"></i><b id="pillCnt">0</b>&nbsp;активных сессий</span>
     <div class="who hidden" id="who"><b id="whoSum">—</b><small id="whoCnt">—</small></div>
+    <button class="btn btn-sm hidden" id="btnCashIn" title="Пополнить кошелёк">Пополнить</button>
+    <button class="btn btn-sm hidden" id="btnCashOut" title="Вывести средства">Вывести</button>
     <button class="btn btn-ghost btn-sm hidden" id="btnAdd">Добавить кошелёк</button>
     <button class="btn btn-sm hidden" id="btnOut" title="Отключить все кошельки">Выйти</button>
   </div>
@@ -287,88 +295,6 @@ input[type=range]{width:100%;accent-color:var(--accent)}
   </div>
 
   <div class="kpis" id="kpis"></div>
-
-  <!-- КАССА: пополнение и вывод по выбранному кошельку -->
-  <div class="panel" id="cash">
-    <div class="panel-head">
-      <h3>Касса — пополнение и вывод</h3>
-      <span class="badge demo">демо</span>
-    </div>
-
-    <div class="cs-top">
-      <div class="field" style="margin:0">
-        <label for="csAcct">Кошелёк</label>
-        <select id="csAcct"></select>
-      </div>
-      <div class="seg cs-tabs" id="csTabs">
-        <button data-t="in" class="on">Пополнить</button>
-        <button data-t="out">Вывести</button>
-      </div>
-      <div class="cs-bal"><small>Доступно</small><b class="num" id="csBal">—</b></div>
-    </div>
-
-    <!-- пополнение -->
-    <div id="csIn">
-      <div class="cs-grid">
-        <div>
-          <div class="field"><label>Сеть — пополнение только криптовалютой</label>
-            <div class="chips" id="csNets"></div></div>
-          <div class="field"><label for="csAmt">Сумма пополнения, USD</label>
-            <input id="csAmt" class="num" type="number" min="10" step="10" placeholder="100"></div>
-          <div class="err" id="csInErr"></div>
-          <div id="csInDone"></div>
-          <button class="btn btn-primary btn-full" id="csInGo">Я перевёл — создать заявку</button>
-          <p class="note" style="margin-top:11px">Учебный демонстрационный стенд: ни сеть, ни адрес
-            не настоящие, переводить по ним нечего и некуда. Заявка создаётся по кнопке и ждёт
-            подтверждения администратора площадки.</p>
-        </div>
-
-        <div class="cs-req">
-          <div class="cs-req-h">Реквизиты для перевода <span class="badge demo">демо</span></div>
-          <div class="cs-qr" aria-hidden="true">ДЕМО<s>QR-код не настоящий</s></div>
-          <div class="cs-kv"><span>Сеть</span><b id="csNetName">—</b></div>
-          <div class="cs-kv"><span>Актив</span><b>USDT</b></div>
-          <div class="cs-kv"><span>Минимальная сумма</span><b class="num" id="csMin">—</b></div>
-          <div class="cs-kv"><span>Комиссия сети</span><b class="num" id="csNetFee">—</b></div>
-          <div class="cs-kv"><span>Зачисление</span><b id="csEta">—</b></div>
-          <label class="cs-addr-l">Адрес пополнения <span class="badge demo">демо</span></label>
-          <div class="cs-addr"><code id="csAddr">—</code>
-            <button class="btn btn-sm" id="csCopy">Копировать</button></div>
-          <p class="note" style="margin-top:10px">Адрес показан для демонстрации и помечен словом
-            DEMO. Настоящие реквизиты получателя на учебном стенде не публикуются.</p>
-        </div>
-      </div>
-    </div>
-
-    <!-- вывод -->
-    <div id="csOut" hidden>
-      <div class="cs-grid">
-        <div>
-          <div class="field"><label for="csMeth">Способ вывода</label><select id="csMeth"></select></div>
-          <div class="field"><label for="csOutAmt">Сумма вывода, USD</label>
-            <input id="csOutAmt" class="num" type="number" min="10" step="10" placeholder="100"></div>
-          <div class="field"><label for="csReq">Реквизиты получателя — хватит последних цифр</label>
-            <input id="csReq" placeholder="•••• 4417"></div>
-          <div class="field"><label for="csName">Получатель, как в документе</label>
-            <input id="csName" placeholder="необязательно"></div>
-          <div class="err" id="csOutErr"></div>
-          <div id="csOutDone"></div>
-          <button class="btn btn-primary btn-full" id="csOutGo">Создать заявку на вывод</button>
-        </div>
-
-        <div class="cs-req">
-          <div class="cs-req-h">Расчёт заявки <span class="badge demo">демо</span></div>
-          <div class="cs-kv"><span>Способ</span><b id="csOutM">—</b></div>
-          <div class="cs-kv"><span>Сумма</span><b class="num" id="csOutS">—</b></div>
-          <div class="cs-kv"><span>Сбор площадки</span><b class="num down" id="csOutF">—</b></div>
-          <div class="cs-kv"><span>К зачислению</span><b class="num" id="csOutN">—</b></div>
-          <div class="cs-kv"><span>Срок</span><b id="csOutE">—</b></div>
-          <p class="note" style="margin-top:12px">Реквизиты сервер целиком не хранит: в заявке
-            и в истории остаются только последние четыре знака. Настоящих переводов стенд не делает.</p>
-        </div>
-      </div>
-    </div>
-  </div>
 
   <div class="grid">
 
@@ -471,6 +397,90 @@ input[type=range]{width:100%;accent-color:var(--accent)}
     демо-кошельков на демонстрационных площадках. Все цифры на странице условны.
   </div>
 </main>
+
+<!-- КАССА: окно пополнения и вывода, открывается из шапки -->
+<div class="cs-modal" id="csModal" hidden>
+  <div class="cs-win" id="cash" role="dialog" aria-modal="true" aria-label="Касса">
+    <div class="panel-head">
+      <h3>Касса — пополнение и вывод <span class="badge demo">демо</span></h3>
+      <button class="btn btn-sm" id="csClose" title="Закрыть">✕</button>
+    </div>
+
+    <div class="cs-top">
+      <div class="field" style="margin:0">
+        <label for="csAcct">Кошелёк</label>
+        <select id="csAcct"></select>
+      </div>
+      <div class="seg cs-tabs" id="csTabs">
+        <button data-t="in" class="on">Пополнить</button>
+        <button data-t="out">Вывести</button>
+      </div>
+      <div class="cs-bal"><small>Доступно</small><b class="num" id="csBal">—</b></div>
+    </div>
+
+    <!-- пополнение -->
+    <div id="csIn">
+      <div class="cs-grid">
+        <div>
+          <div class="field"><label>Сеть — пополнение только криптовалютой</label>
+            <div class="chips" id="csNets"></div></div>
+          <div class="field"><label for="csAmt">Сумма пополнения, USD</label>
+            <input id="csAmt" class="num" type="number" min="10" step="10" placeholder="100"></div>
+          <div class="err" id="csInErr"></div>
+          <div id="csInDone"></div>
+          <button class="btn btn-primary btn-full" id="csInGo">Я перевёл — создать заявку</button>
+          <p class="note" style="margin-top:11px">Учебный демонстрационный стенд: ни сеть, ни адрес
+            не настоящие, переводить по ним нечего и некуда. Заявка создаётся по кнопке и ждёт
+            подтверждения администратора площадки.</p>
+        </div>
+
+        <div class="cs-req">
+          <div class="cs-req-h">Реквизиты для перевода <span class="badge demo">демо</span></div>
+          <div class="cs-qr" aria-hidden="true">ДЕМО<s>QR-код не настоящий</s></div>
+          <div class="cs-kv"><span>Сеть</span><b id="csNetName">—</b></div>
+          <div class="cs-kv"><span>Актив</span><b>USDT</b></div>
+          <div class="cs-kv"><span>Минимальная сумма</span><b class="num" id="csMin">—</b></div>
+          <div class="cs-kv"><span>Комиссия сети</span><b class="num" id="csNetFee">—</b></div>
+          <div class="cs-kv"><span>Зачисление</span><b id="csEta">—</b></div>
+          <label class="cs-addr-l">Адрес пополнения <span class="badge demo">демо</span></label>
+          <div class="cs-addr"><code id="csAddr">—</code>
+            <button class="btn btn-sm" id="csCopy">Копировать</button></div>
+          <p class="note" style="margin-top:10px">Адрес показан для демонстрации и помечен словом
+            DEMO. Настоящие реквизиты получателя на учебном стенде не публикуются.</p>
+        </div>
+      </div>
+    </div>
+
+    <!-- вывод -->
+    <div id="csOut" hidden>
+      <div class="cs-grid">
+        <div>
+          <div class="field"><label for="csMeth">Способ вывода</label><select id="csMeth"></select></div>
+          <div class="field"><label for="csOutAmt">Сумма вывода, USD</label>
+            <input id="csOutAmt" class="num" type="number" min="10" step="10" placeholder="100"></div>
+          <div class="field"><label for="csReq">Реквизиты получателя — хватит последних цифр</label>
+            <input id="csReq" placeholder="•••• 4417"></div>
+          <div class="field"><label for="csName">Получатель, как в документе</label>
+            <input id="csName" placeholder="необязательно"></div>
+          <div class="err" id="csOutErr"></div>
+          <div id="csOutDone"></div>
+          <button class="btn btn-primary btn-full" id="csOutGo">Создать заявку на вывод</button>
+        </div>
+
+        <div class="cs-req">
+          <div class="cs-req-h">Расчёт заявки <span class="badge demo">демо</span></div>
+          <div class="cs-kv"><span>Способ</span><b id="csOutM">—</b></div>
+          <div class="cs-kv"><span>Сумма</span><b class="num" id="csOutS">—</b></div>
+          <div class="cs-kv"><span>Сбор площадки</span><b class="num down" id="csOutF">—</b></div>
+          <div class="cs-kv"><span>К зачислению</span><b class="num" id="csOutN">—</b></div>
+          <div class="cs-kv"><span>Срок</span><b id="csOutE">—</b></div>
+          <p class="note" style="margin-top:12px">Реквизиты сервер целиком не хранит: в заявке
+            и в истории остаются только последние четыре знака. Настоящих переводов стенд не делает.</p>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
 
 <div class="toast" id="toast"></div>
 
@@ -1075,6 +1085,19 @@ function csWithdraw(){
     .then(()=>{ go.disabled=false; go.style.opacity=""; });
 }
 
+/* окно кассы: открывается кнопками в шапке */
+function csOpen(tab){
+  if(!$("csModal")) return;
+  cashSync(); csTab(tab||"in");
+  $("csModal").hidden=false;
+  document.body.style.overflow="hidden";
+}
+function csClose(){
+  if(!$("csModal")) return;
+  $("csModal").hidden=true;
+  document.body.style.overflow="";
+}
+
 function cashBuild(){
   if(!$("cash")) return;
   csNets(); csTab("in"); cashSync();
@@ -1090,6 +1113,11 @@ function cashBuild(){
   $("csOutAmt").oninput=()=>{ $("csOutErr").textContent=""; csOutCalc(); };
   $("csReq").oninput=()=>{ $("csOutErr").textContent=""; };
   $("csOutGo").onclick=csWithdraw;
+  $("csClose").onclick=csClose;
+  $("csModal").onclick=e=>{ if(e.target===$("csModal")) csClose(); };
+  document.addEventListener("keydown",e=>{ if(e.key==="Escape") csClose(); });
+  on("btnCashIn",()=>csOpen("in"));
+  on("btnCashOut",()=>csOpen("out"));
   api("/api/hub/methods").then(j=>{
     CS.meth=j.methods||{};
     $("csMeth").innerHTML=Object.keys(CS.meth).map(k=>
@@ -1258,7 +1286,9 @@ function logoutAll(){
   $("who").classList.add("hidden");
   $("btnAdd").classList.add("hidden");
   $("btnOut").classList.add("hidden");
-  showAuth();
+  $("btnCashIn").classList.add("hidden");
+  $("btnCashOut").classList.add("hidden");
+  csClose(); showAuth();
   toast("Кошельки отключены");
 }
 function openDesk(){
@@ -1267,6 +1297,8 @@ function openDesk(){
   $("who").classList.remove("hidden");
   $("btnAdd").classList.remove("hidden");
   $("btnOut").classList.remove("hidden");
+  $("btnCashIn").classList.remove("hidden");
+  $("btnCashOut").classList.remove("hidden");
   buildForm(); cashBuild(); refresh();
 }
 on("btnLogin",async ()=>{
