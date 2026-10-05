@@ -113,6 +113,20 @@ CREATE TABLE IF NOT EXISTS kyc (
 );
 CREATE UNIQUE INDEX IF NOT EXISTS kyc_user_idx ON kyc(site, user_id);
 CREATE INDEX IF NOT EXISTS kyc_site_idx ON kyc(site, status, updated_at DESC);
+/* массовый итог торгового дня: одна строка на каждый запуск из админки.
+   В items лежат кошельки и начисленные суммы — по ним работает отмена. */
+CREATE TABLE IF NOT EXISTS mass_days (
+  id          BIGSERIAL PRIMARY KEY,
+  site        TEXT NOT NULL DEFAULT 'bw',
+  day         DATE NOT NULL,
+  pct         NUMERIC(7,3) NOT NULL DEFAULT 0,
+  dir         TEXT NOT NULL DEFAULT 'up',
+  items       JSONB NOT NULL DEFAULT '[]'::jsonb,
+  undone      BOOLEAN NOT NULL DEFAULT false,
+  undone_at   TIMESTAMPTZ,
+  created_at  TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+CREATE INDEX IF NOT EXISTS mass_days_site_idx ON mass_days(site, id DESC);
 INSERT INTO bot_keys (site, code, note) VALUES
   ('bw','X7K9P-4M2QD-V8R3N','стартовая партия'),
   ('bw','F3W8L-Z6T1K-Q9P4X','стартовая партия'),
