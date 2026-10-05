@@ -496,6 +496,103 @@ app.delete('/api/admin/users/:id', requireAdmin, async (req, res) => {
   } catch (e) { bad(res, 500, e.message); }
 });
 
+/* ---------- массовый итог торгового дня по всем кошелькам ---------- */
+/* Учебная функция админки: одной кнопкой записать всем клиентам результат за
+   выбранную дату. Процент считается от баланса предыдущего дня — то есть от
+   того, что на кошельке сейчас, до записи за эту дату. Каждый запуск
+   сохраняется пачкой в таблице mass_days, поэтому его можно отменить целиком:
+   балансы вернутся, а строки из истории операций уберутся. */
+const MASS_TITLE = 'Итог торгового дня · XAU/USD';
+const MASS_SITE = 'bw';
+const massRu = iso => String(iso).slice(0, 10).split('-').reverse().join('.');
+const massSum = v => (v < 0 ? '−' : '+') + '$' + Math.abs(v).toFixed(2);
+/* из истории убираем ровно одну строку — ту, что добавил этот запуск */
+function massDrop(rows, hit) {
+  const out = (rows || []).slice();
+  for (let i = 0; i < out.length; i++) if (hit(out[i])) { out.splice(i, 1); break; }
+  return out;
+}
+
+app.get('/api/admin/mass-day', requireAdmin, async (_req, res) => {
+  try {
+    const r = await q(
+      `SELECT id, to_char(day, 'YYYY-MM-DD') AS day, pct, dir, undone, created_at,
+              jsonb_array_length(items) AS wallets
+         FROM mass_days WHERE site = $1 ORDER BY id DESC LIMIT 20`, [MASS_SITE]);
+    res.json({ batches: r.rows.map(b => ({
+      id: Number(b.id), day: b.day, pct: Number(b.pct), dir: b.dir,
+      undone: !!b.undone, wallets: Number(b.wallets), at: b.created_at
+    })) });
+  } catch (e) { bad(res, 500, e.message); }
+});
+
+app.post('/api/admin/mass-day', requireAdmin, async (req, res) => {
+  const { date, pct, dir } = req.body || {};
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(String(date || ''))) return bad(res, 400, 'Укажите дату в виде ГГГГ-ММ-ДД');
+  const p = Number(pct);
+  if (!Number.isFinite(p) || p <= 0 || p > 50) return bad(res, 400, 'Процент — число больше нуля и не больше 50');
+  const down = String(dir || 'up').toLowerCase() === 'down';
+  const when = massRu(date);
+  try {
+    const r = await q('SELECT * FROM users ORDER BY id');
+    const items = [];
+    let skipped = 0;
+    for (const row of r.rows) {
+      const u = toUser(row);
+      /* повторный запуск за ту же дату ничего не задваивает */
+      if ((u.tx || []).some(t => t && t[0] === when && String(t[1]) === MASS_TITLE)) { skipped++; continue; }
+      const before = Number(u.balance) || 0;
+      let amt = +(before * p / 100).toFixed(2);
+      if (down) amt = -Math.min(amt, before);     /* в минус, но не ниже нуля */
+      if (!amt) { skipped++; continue; }
+      const sum = massSum(amt);
+      const tx = [[when, MASS_TITLE, sum, 'ok', amt >= 0 ? 'Прибыль' : 'Убыток'], ...(u.tx || [])];
+      const hist = [[when, 'Результат дня', 'XAU/USD', sum, 'ok'], ...(u.hist || [])];
+      await q('UPDATE users SET balance = $2, tx = $3::jsonb, hist = $4::jsonb WHERE id = $1',
+        [u.id, (before + amt).toFixed(2), JSON.stringify(tx.slice(0, 200)), JSON.stringify(hist.slice(0, 200))]);
+      items.push({ id: u.id, acct: u.acct, name: u.name || '', amount: amt, before });
+    }
+    /* если записывать было нечего — пустой запуск в список не добавляем */
+    if (!items.length) return res.json({ ok: true, batch: 0, applied: 0, skipped, total: 0, items: [] });
+    const b = await q(
+      'INSERT INTO mass_days (site, day, pct, dir, items) VALUES ($1,$2,$3,$4,$5::jsonb) RETURNING id',
+      [MASS_SITE, date, p, down ? 'down' : 'up', JSON.stringify(items)]);
+    res.json({
+      ok: true, batch: Number(b.rows[0].id), applied: items.length, skipped,
+      total: +items.reduce((s, x) => s + x.amount, 0).toFixed(2),
+      items: items.map(x => ({ acct: x.acct, name: x.name, amount: x.amount }))
+    });
+  } catch (e) { bad(res, 500, e.message); }
+});
+
+app.post('/api/admin/mass-day/undo', requireAdmin, async (req, res) => {
+  const id = Number((req.body || {}).batch);
+  try {
+    const b = await q(`SELECT id, to_char(day, 'YYYY-MM-DD') AS day, items, undone
+                         FROM mass_days WHERE id = $1 AND site = $2`, [id || 0, MASS_SITE]);
+    const row = b.rows[0];
+    if (!row) return bad(res, 404, 'Такого запуска нет');
+    if (row.undone) return bad(res, 400, 'Этот запуск уже отменён');
+    const when = massRu(row.day);
+    let back = 0;
+    for (const it of (row.items || [])) {
+      const cur = await q('SELECT * FROM users WHERE id = $1', [Number(it.id)]);
+      if (!cur.rows[0]) continue;
+      const u = toUser(cur.rows[0]);
+      const amt = Number(it.amount) || 0;
+      const sum = massSum(amt);
+      const tx = massDrop(u.tx, t => t && t[0] === when && String(t[1]) === MASS_TITLE && String(t[2]) === sum);
+      const hist = massDrop(u.hist, t => t && t[0] === when && String(t[1]) === 'Результат дня' && String(t[3]) === sum);
+      const bal = Math.max(0, (Number(u.balance) || 0) - amt);
+      await q('UPDATE users SET balance = $2, tx = $3::jsonb, hist = $4::jsonb WHERE id = $1',
+        [u.id, bal.toFixed(2), JSON.stringify(tx), JSON.stringify(hist)]);
+      back++;
+    }
+    await q('UPDATE mass_days SET undone = true, undone_at = now() WHERE id = $1', [Number(row.id)]);
+    res.json({ ok: true, restored: back });
+  } catch (e) { bad(res, 500, e.message); }
+});
+
 /* ---------- единый бот Verdix AI (страница /hub.html) ---------- */
 /* Учебная симуляция. Страница работает поверх двух демо-площадок, которые
    живут в одной базе: BullWaves — таблица users, Nordis — users_nordis.
