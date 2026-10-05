@@ -508,9 +508,9 @@ const HUB_SITES = {
 function hubSrv(site, v) {
   const s = HUB_SITES[site] || HUB_SITES.bw;
   let n = String(v || s.brand).trim().replace(/[<>"']/g, '').slice(0, 24);
-  n = n.replace(/[-_ ]?(live|live|real)$/i, '').replace(/[-_ ]+$/, '');
+  n = n.replace(/[-_ ]?(demo|live|real)$/i, '').replace(/[-_ ]+$/, '');
   if (!n) n = s.brand;
-  return n + '-LIVE';
+  return n + '-DEMO';
 }
 async function hubFees(site) {
   const s = HUB_SITES[site] || HUB_SITES.bw;
@@ -649,23 +649,28 @@ app.post('/api/hub/start', async (req, res) => {
       const risk = BOT_RISK[p.risk] ? p.risk : 'balance';
       const hours = Math.max(1, Math.min(2160, Math.round(Number(p.hours) || 24)));
       const share = Math.max(0.1, Math.min(1, Number(p.share) || 0.6));
+      /* направление сценария: 'down' — демонстрация убыточной сессии */
+      const dir = String(p.dir || '').toLowerCase() === 'down' ? 'down' : 'up';
       const meta = await hubFees(u._site);
       const f = botForecast({ balance, pair, hours, risk, share, fees: meta.fees });
+      /* в минус уходит и рыночный результат, и сборы площадки */
+      const gain = dir === 'down' ? -(f.gross + f.fee) : f.gain;
+      const target = Math.max(0, +(balance + gain).toFixed(2));
       const now = new Date();
       const dyn = Object.assign({}, u.dyn || {}, {
         on: true,
         from: +balance.toFixed(2),
-        to: f.target,
-        hours, noise: f.noise, pair, risk, share,
+        to: target,
+        hours, noise: f.noise, pair, risk, share, dir,
         startedAt: now.toISOString(),
         endsAt: new Date(now.getTime() + hours * 3600000).toISOString(),
-        bot: { on: true, pair, risk, share, startedAt: now.toISOString(), forecast: f.gain, via: 'hub' },
+        bot: { on: true, pair, risk, share, dir, startedAt: now.toISOString(), forecast: +gain.toFixed(2), via: 'hub' },
         fixDaily: true,
         fix: { last: '', lastVal: +balance.toFixed(2) }
       });
       await q('UPDATE ' + HUB_SITES[u._site].users + ' SET dyn = $2::jsonb WHERE id = $1',
         [u.id, JSON.stringify(dyn)]);
-      out.push({ site: u._site, acct: u.acct, ok: true, dyn, forecast: f });
+      out.push({ site: u._site, acct: u.acct, ok: true, dyn, dir, forecast: Object.assign({}, f, { gain: +gain.toFixed(2), target }) });
     }
     res.json({ ok: true, items: out });
   } catch (e) { bad(res, 500, e.message); }
