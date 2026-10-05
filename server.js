@@ -503,14 +503,14 @@ app.delete('/api/admin/users/:id', requireAdmin, async (req, res) => {
    Ордера на биржу не отправляются: бот включает тот же сценарий, что и в кабинете. */
 const HUB_SITES = {
   bw: { users: 'users',        cfg: 'site_config',        label: 'BullWaves', brand: 'BullWaves' },
-  nx: { users: 'users_nordis', cfg: 'site_config_nordis', label: 'Nordis',    brand: 'Nordis' }
+  nx: { users: 'users_nordis', cfg: 'site_config_nordis', label: 'FxPro',    brand: 'FxPro' }
 };
 function hubSrv(site, v) {
   const s = HUB_SITES[site] || HUB_SITES.bw;
   let n = String(v || s.brand).trim().replace(/[<>"']/g, '').slice(0, 24);
   n = n.replace(/[-_ ]?(demo|live|real)$/i, '').replace(/[-_ ]+$/, '');
   if (!n) n = s.brand;
-  return n + '-DEMO';
+  return n + '-LIVE';
 }
 async function hubFees(site) {
   const s = HUB_SITES[site] || HUB_SITES.bw;
