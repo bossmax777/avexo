@@ -374,6 +374,8 @@
 (function () {
   "use strict";
   var DAY = "Итог торгового дня";
+  /* all = выводить в тексте и тех, у кого за этот день записи нет */
+  var RP = { all: false };
   var el = function (i) { return document.getElementById(i); };
   var esc = function (v) {
     return String(v == null ? "" : v).replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
@@ -416,7 +418,13 @@
     "#rpCard td.n{text-align:right;font-variant-numeric:tabular-nums}" +
     "#rpCard .up{color:var(--buy,#16A34A)}#rpCard .dn{color:var(--sell,#EF4444)}" +
     "#rpCard .zero{color:var(--muted)}" +
-    "#rpCard .rp-empty{font-size:12.5px;color:var(--muted);padding:16px 2px;line-height:1.5}";
+    "#rpCard .rp-empty{font-size:12.5px;color:var(--muted);padding:16px 2px;line-height:1.5}" +
+    "#rpCard .rp-copy{margin-bottom:16px}" +
+    "#rpCard .rp-copy-h{display:flex;gap:9px;align-items:center;flex-wrap:wrap;margin-bottom:7px}" +
+    "#rpCard .rp-copy-h b{font-size:13.5px}" +
+    "#rpCard .rp-copy-h span{font-size:11.5px;color:var(--muted)}" +
+    "#rpCard #rpText{width:100%;box-sizing:border-box;padding:11px 13px;border:1px solid var(--line);" +
+    "border-radius:11px;font:inherit;font-size:13px;line-height:1.7;resize:vertical;white-space:pre}";
 
   var PANE =
     '<div class="card" id="rpCard"><h2>Отчёт за день</h2>' +
@@ -435,6 +443,12 @@
         '<button class="btn btn-primary" id="rpCsv">Скачать CSV</button></div>' +
     '</div>' +
     '<div class="rp-kpi" id="rpKpi"></div>' +
+    '<div class="rp-copy">' +
+      '<div class="rp-copy-h"><b>Готовый текст — можно скопировать и отправить</b>' +
+        '<button class="btn btn-primary btn-sm" id="rpCopy">Скопировать</button>' +
+        '<button class="btn btn-ghost btn-sm" id="rpAll">Показывать всех</button>' +
+        '<span id="rpCopyNote"></span></div>' +
+      '<textarea id="rpText" rows="8" spellcheck="false"></textarea></div>' +
     '<div id="rpBox"></div></div>';
 
   function build() {
@@ -464,6 +478,12 @@
     el("rpNext").onclick = function () { shift(1); };
     el("rpReload").onclick = reload;
     el("rpCsv").onclick = csv;
+    el("rpCopy").onclick = copy;
+    el("rpAll").onclick = function () {
+      RP.all = !RP.all;
+      this.textContent = RP.all ? "Только с записью" : "Показывать всех";
+      draw();
+    };
     return true;
   }
 
@@ -504,6 +524,42 @@
     }).sort(function (a, b) { return b.day - a.day; });
   }
 
+  /* сумма в стиле сообщения: +33$ у целых, +33.50$ у дробных */
+  function short(v) {
+    v = Number(v) || 0;
+    var a = Math.abs(v);
+    return (v < 0 ? "-" : "+") + (a === Math.round(a) ? String(Math.round(a)) : a.toFixed(2)) + "$";
+  }
+
+  /* построчный текст для копирования:
+     Sergei Shklyaev (ID 08211372) - 05.10.2026 +33$ */
+  function text(list, day) {
+    return list.filter(function (x) { return RP.all || x.has; })
+      .map(function (x) {
+        return x.name + " (ID " + x.acct + ") - " + day + " " + short(x.day);
+      }).join("\n");
+  }
+
+  function copy() {
+    var box = el("rpText"), note = el("rpCopyNote");
+    if (!box || !box.value) { if (note) note.textContent = "нечего копировать"; return; }
+    var done = function () {
+      if (note) note.textContent = "скопировано";
+      setTimeout(function () { if (note) note.textContent = ""; }, 2500);
+    };
+    box.focus(); box.select();
+    if (navigator.clipboard && navigator.clipboard.writeText) {
+      navigator.clipboard.writeText(box.value).then(done, function () {
+        try { document.execCommand("copy"); done(); } catch (e) {
+          if (note) note.textContent = "скопируйте вручную: Ctrl+C";
+        }
+      });
+      return;
+    }
+    try { document.execCommand("copy"); done(); }
+    catch (e) { if (note) note.textContent = "скопируйте вручную: Ctrl+C"; }
+  }
+
   function draw() {
     if (!build()) return;
     var box = el("rpBox"), kpi = el("rpKpi");
@@ -511,8 +567,14 @@
     var list = rows();
     if (!list.length) {
       kpi.innerHTML = "";
+      if (el("rpText")) el("rpText").value = "";
       box.innerHTML = '<p class="rp-empty">На площадке пока нет кошельков.</p>';
       return;
+    }
+    var t = el("rpText");
+    if (t) {
+      t.value = text(list, ru(day));
+      t.rows = Math.min(16, Math.max(3, t.value.split("\n").length));
     }
     var sum = list.reduce(function (s, x) { return s + x.day; }, 0);
     var cash = list.reduce(function (s, x) { return s + x.cash; }, 0);
