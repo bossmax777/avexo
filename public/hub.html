@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
-<meta name="description" content="Verdix AI Multi — учебный Liveнстрационный пульт торгового помощника над Live-кошельками двух площадок. Вымышленный продукт, все данные условны.">
+<meta name="description" content="Verdix AI Multi — учебный демонстрационный пульт торгового помощника над демо-кошельками двух площадок. Вымышленный продукт, все данные условны.">
 <meta name="robots" content="noindex,nofollow">
 <title>Verdix AI Multi</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -47,7 +47,7 @@ button,input,select{font:inherit;color:inherit}
 .sp{flex:1}
 .pill{display:inline-flex;align-items:center;gap:7px;border:1px solid var(--line);border-radius:999px;
   padding:5px 12px;font-size:12.5px;color:var(--muted);background:var(--surface)}
-.pill.Live{border-color:#4A3A12;background:#2A2210;color:#E8C778}
+.pill.demo{border-color:#4A3A12;background:#2A2210;color:#E8C778}
 .pill.live{border-color:#17502F;background:#0F2A1C;color:#6EE7A8}
 .pill .dot{width:7px;height:7px;border-radius:50%;background:currentColor;animation:bl 1.6s infinite}
 @keyframes bl{0%,100%{opacity:1}50%{opacity:.25}}
@@ -117,7 +117,7 @@ button,input,select{font:inherit;color:inherit}
   text-transform:uppercase;border:1px solid var(--line);color:var(--muted);background:var(--surface)}
 .badge.bw{border-color:#2B3A6B;background:#141C33;color:#9FB4FF}
 .badge.nx{border-color:#1C4B47;background:#0F2422;color:#7FE3D6}
-.badge.Live{border-color:#4A3A12;background:#2A2210;color:#E8C778}
+.badge.demo{border-color:#4A3A12;background:#2A2210;color:#E8C778}
 .acc-fig{text-align:right;line-height:1.3}
 .acc-fig b{display:block;font-size:15px;font-family:"IBM Plex Mono",monospace}
 .acc-fig span{font-size:12.5px;font-family:"IBM Plex Mono",monospace}
@@ -163,7 +163,7 @@ table{max-width:100%}
 .mkt-stop-tx{flex:1;min-width:0}
 .mkt-stop b{display:block;font-size:16px;color:#FFD5D7;font-family:"Sora",sans-serif}
 .mkt-stop span{display:block;font-size:13.5px;color:#F0A3A6;margin-top:4px;line-height:1.35}
-.mkt-Live{flex:none;align-self:flex-start;background:#E5484D;color:#fff;border-radius:6px;
+.mkt-demo{flex:none;align-self:flex-start;background:#E5484D;color:#fff;border-radius:6px;
   padding:3px 9px;font-size:11px;letter-spacing:.08em;text-transform:uppercase}
 .is-mkt-closed #btnRun,.is-mkt-closed .acc-run{opacity:.45;pointer-events:none;filter:grayscale(.5)}
 
@@ -183,6 +183,38 @@ table{max-width:100%}
   padding:6px 12px;font-size:12.5px;color:var(--muted);cursor:pointer}
 .chips button.on{border-color:var(--accent);background:var(--accent-soft);color:var(--text)}
 input[type=range]{width:100%;accent-color:var(--accent)}
+/* ---- касса: пополнение и вывод ---- */
+#cash{margin-bottom:16px}
+.cs-top{display:grid;grid-template-columns:minmax(0,260px) minmax(0,1fr) auto;gap:14px;
+  align-items:end;margin-bottom:16px}
+.cs-tabs{grid-template-columns:repeat(2,minmax(0,1fr));max-width:320px}
+.cs-bal{text-align:right;white-space:nowrap}
+.cs-bal small{display:block;font-size:11px;color:var(--dim);text-transform:uppercase;letter-spacing:.07em}
+.cs-bal b{font-size:19px}
+.cs-grid{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,360px);gap:18px;align-items:start}
+.cs-grid>*{min-width:0}
+.cs-req{border:1px solid var(--line);border-radius:var(--radius-lg);background:var(--surface-2);padding:16px}
+.cs-req-h{display:flex;align-items:center;gap:8px;font-size:13px;font-weight:600;margin-bottom:12px}
+.cs-qr{height:116px;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:4px;
+  border:1px dashed var(--line);border-radius:12px;margin-bottom:13px;color:var(--dim);
+  font-size:21px;letter-spacing:.22em;font-weight:700;
+  background:repeating-linear-gradient(45deg,transparent 0 9px,rgba(255,255,255,.028) 9px 18px)}
+.cs-qr s{text-decoration:none;font-size:10.5px;letter-spacing:.04em;font-weight:400}
+.cs-kv{display:flex;justify-content:space-between;gap:10px;font-size:12.5px;padding:6px 0;
+  border-bottom:1px solid var(--line)}
+.cs-kv:last-of-type{border-bottom:0}
+.cs-kv span{color:var(--muted)}
+.cs-addr-l{display:flex;align-items:center;gap:7px;font-size:12.5px;color:var(--muted);margin:12px 0 6px}
+.cs-addr{display:flex;gap:8px;align-items:center}
+.cs-addr code{flex:1;min-width:0;overflow-wrap:anywhere;background:var(--surface);border:1px solid var(--line);
+  border-radius:10px;padding:9px 11px;font-size:12px;letter-spacing:.03em;color:var(--text)}
+.cs-ok{border:1px solid #2BD67B;background:rgba(43,214,123,.08);border-radius:var(--radius-lg);
+  padding:16px 18px;margin-bottom:14px}
+.cs-ok b{display:block;font-size:14.5px;margin-bottom:5px}
+.cs-ok p{margin:0;font-size:12.5px;color:var(--muted);line-height:1.55}
+@media (max-width:900px){.cs-top{grid-template-columns:minmax(0,1fr)}.cs-bal{text-align:left}
+  .cs-grid{grid-template-columns:minmax(0,1fr)}}
+
 </style>
 </head>
 <body>
@@ -199,7 +231,7 @@ input[type=range]{width:100%;accent-color:var(--accent)}
       </svg>
       Verdix AI <i>Multi</i>
     </span>
-    
+    <span class="pill demo"><i class="dot"></i>демонстрационный режим</span>
     <span class="sp"></span>
     <span class="pill live hidden" id="pillLive"><i class="dot"></i><b id="pillCnt">0</b>&nbsp;активных сессий</span>
     <div class="who hidden" id="who"><b id="whoSum">—</b><small id="whoCnt">—</small></div>
@@ -236,7 +268,9 @@ input[type=range]{width:100%;accent-color:var(--accent)}
 
     <div id="linked" style="margin-top:20px"></div>
   </div>
- 
+  <p class="note" style="margin-top:16px;text-align:center">
+    Учебный демонстрационный продукт. Сделки не отправляются на биржу: помощник ведёт
+    демо-кошелёк по рассчитанному сценарию, как и боты на самих площадках.</p>
 </section>
 
 <!-- ПУЛЬТ -->
@@ -249,10 +283,92 @@ input[type=range]{width:100%;accent-color:var(--accent)}
       <b id="mktStopT">Биржа закрыта</b>
       <span id="mktStopS">Торги приостановлены</span>
     </div>
-    <span class="mkt-Live">Live</span>
+    <span class="mkt-demo">демо</span>
   </div>
 
   <div class="kpis" id="kpis"></div>
+
+  <!-- КАССА: пополнение и вывод по выбранному кошельку -->
+  <div class="panel" id="cash">
+    <div class="panel-head">
+      <h3>Касса — пополнение и вывод</h3>
+      <span class="badge demo">демо</span>
+    </div>
+
+    <div class="cs-top">
+      <div class="field" style="margin:0">
+        <label for="csAcct">Кошелёк</label>
+        <select id="csAcct"></select>
+      </div>
+      <div class="seg cs-tabs" id="csTabs">
+        <button data-t="in" class="on">Пополнить</button>
+        <button data-t="out">Вывести</button>
+      </div>
+      <div class="cs-bal"><small>Доступно</small><b class="num" id="csBal">—</b></div>
+    </div>
+
+    <!-- пополнение -->
+    <div id="csIn">
+      <div class="cs-grid">
+        <div>
+          <div class="field"><label>Сеть — пополнение только криптовалютой</label>
+            <div class="chips" id="csNets"></div></div>
+          <div class="field"><label for="csAmt">Сумма пополнения, USD</label>
+            <input id="csAmt" class="num" type="number" min="10" step="10" placeholder="100"></div>
+          <div class="err" id="csInErr"></div>
+          <div id="csInDone"></div>
+          <button class="btn btn-primary btn-full" id="csInGo">Я перевёл — создать заявку</button>
+          <p class="note" style="margin-top:11px">Учебный демонстрационный стенд: ни сеть, ни адрес
+            не настоящие, переводить по ним нечего и некуда. Заявка создаётся по кнопке и ждёт
+            подтверждения администратора площадки.</p>
+        </div>
+
+        <div class="cs-req">
+          <div class="cs-req-h">Реквизиты для перевода <span class="badge demo">демо</span></div>
+          <div class="cs-qr" aria-hidden="true">ДЕМО<s>QR-код не настоящий</s></div>
+          <div class="cs-kv"><span>Сеть</span><b id="csNetName">—</b></div>
+          <div class="cs-kv"><span>Актив</span><b>USDT</b></div>
+          <div class="cs-kv"><span>Минимальная сумма</span><b class="num" id="csMin">—</b></div>
+          <div class="cs-kv"><span>Комиссия сети</span><b class="num" id="csNetFee">—</b></div>
+          <div class="cs-kv"><span>Зачисление</span><b id="csEta">—</b></div>
+          <label class="cs-addr-l">Адрес пополнения <span class="badge demo">демо</span></label>
+          <div class="cs-addr"><code id="csAddr">—</code>
+            <button class="btn btn-sm" id="csCopy">Копировать</button></div>
+          <p class="note" style="margin-top:10px">Адрес показан для демонстрации и помечен словом
+            DEMO. Настоящие реквизиты получателя на учебном стенде не публикуются.</p>
+        </div>
+      </div>
+    </div>
+
+    <!-- вывод -->
+    <div id="csOut" hidden>
+      <div class="cs-grid">
+        <div>
+          <div class="field"><label for="csMeth">Способ вывода</label><select id="csMeth"></select></div>
+          <div class="field"><label for="csOutAmt">Сумма вывода, USD</label>
+            <input id="csOutAmt" class="num" type="number" min="10" step="10" placeholder="100"></div>
+          <div class="field"><label for="csReq">Реквизиты получателя — хватит последних цифр</label>
+            <input id="csReq" placeholder="•••• 4417"></div>
+          <div class="field"><label for="csName">Получатель, как в документе</label>
+            <input id="csName" placeholder="необязательно"></div>
+          <div class="err" id="csOutErr"></div>
+          <div id="csOutDone"></div>
+          <button class="btn btn-primary btn-full" id="csOutGo">Создать заявку на вывод</button>
+        </div>
+
+        <div class="cs-req">
+          <div class="cs-req-h">Расчёт заявки <span class="badge demo">демо</span></div>
+          <div class="cs-kv"><span>Способ</span><b id="csOutM">—</b></div>
+          <div class="cs-kv"><span>Сумма</span><b class="num" id="csOutS">—</b></div>
+          <div class="cs-kv"><span>Сбор площадки</span><b class="num down" id="csOutF">—</b></div>
+          <div class="cs-kv"><span>К зачислению</span><b class="num" id="csOutN">—</b></div>
+          <div class="cs-kv"><span>Срок</span><b id="csOutE">—</b></div>
+          <p class="note" style="margin-top:12px">Реквизиты сервер целиком не хранит: в заявке
+            и в истории остаются только последние четыре знака. Настоящих переводов стенд не делает.</p>
+        </div>
+      </div>
+    </div>
+  </div>
 
   <div class="grid">
 
@@ -268,6 +384,13 @@ input[type=range]{width:100%;accent-color:var(--accent)}
           <div style="margin-top:8px"><input id="fHoursCustom" class="num" type="number" min="1" max="2160"
             placeholder="свои часы" style="max-width:140px"></div>
         </div>
+
+        <div class="field"><label>Направление сценария</label>
+          <div class="seg" id="fDir" style="grid-template-columns:repeat(2,minmax(0,1fr))">
+            <button data-d="up" class="on">В плюс — прибыль</button>
+            <button data-d="down">В минус — убыток</button>
+          </div>
+          <div class="note" id="dirNote" style="margin-top:7px"></div></div>
 
         <div class="field"><label>Режим риска</label><div class="seg" id="fRisk"></div>
           <div class="note" id="riskNote" style="margin-top:7px"></div></div>
@@ -343,7 +466,9 @@ input[type=range]{width:100%;accent-color:var(--accent)}
   </div>
 
   <div class="foot wrap">
-    
+    Verdix AI Multi — учебный демонстрационный продукт. Сервис не является брокером,
+    не принимает платежи и не отправляет ордера на биржу: он управляет сценариями
+    демо-кошельков на демонстрационных площадках. Все цифры на странице условны.
   </div>
 </main>
 
@@ -599,7 +724,7 @@ function logOf(a,limit){
 
 /* ============ состояние ============ */
 const S={creds:[],accounts:[],pairs:{},risks:{},sel:new Set(),open:new Set(),
-  params:{pair:"XAU/USD",hours:24,risk:"balance",share:0.6},per:{}};
+  params:{pair:"XAU/USD",hours:24,risk:"balance",share:0.6,dir:"up"},per:{}};
 const keyOf=a=>a.site+":"+a.acct;
 function loadCreds(){
   try{const r=JSON.parse(localStorage.getItem(LS)||"[]");if(Array.isArray(r))S.creds=r;}catch(e){}
@@ -626,13 +751,15 @@ function forecast(balance,p,fees){
   const swap=0.3*f.swap*days*Math.max(1,Math.round(perDay/6));
   const service=Math.max(0,gross)*f.plat/100;
   const fee=commission+swap+service;
-  const gain=gross-fee;
-  return {work,gross,fee,gain,trades,target:balance+gain,
+  /* сценарий «в минус»: рынок уходит против позиции, сборы площадки всё равно удерживаются */
+  const g=(p.dir==="down")?-gross:gross;
+  const gain=g-fee;
+  return {work,gross:g,fee,gain,trades,target:Math.max(0,balance+gain),
     pct:balance>0?gain/balance*100:0,dd:r.dd,perDay};
 }
 
 /* ============ отрисовка ============ */
-function siteBadge(s){ return '<span class="badge '+s+'">'+(s==="nx"?"FxPro":"BullWaves")+'</span>'; }
+function siteBadge(s){ return '<span class="badge '+s+'">'+(s==="nx"?"Тюльпан":"BullWaves")+'</span>'; }
 function fmtLeft(ms){
   if(ms<=0) return "завершено";
   const h=Math.floor(ms/3600000),m=Math.floor(ms%3600000/60000),d=Math.floor(h/24);
@@ -649,7 +776,7 @@ function renderKpis(){
   const nx=S.accounts.filter(a=>!a.error&&a.site==="nx").length;
   $("kpis").innerHTML=
     '<div class="kpi"><small>Суммарный капитал</small><b class="num">'+usd(bal)+'</b>'+
-      '<span>'+(bw+nx)+' кошельков · BullWaves '+bw+' · FxPro '+nx+'</span></div>'+
+      '<span>'+(bw+nx)+' кошельков · BullWaves '+bw+' · Тюльпан '+nx+'</span></div>'+
     '<div class="kpi"><small>Доход за торговые сутки</small><b class="num '+(day>=0?"up":"down")+'">'+sig(day)+'</b>'+
       '<span>последний торговый день, все счета</span></div>'+
     '<div class="kpi"><small>Результат сессий</small><b class="num '+(pl>=0?"up":"down")+'">'+sig(pl)+'</b>'+
@@ -674,7 +801,7 @@ function renderAccs(){
     return '<div class="acc'+(S.sel.has(k)?" sel":"")+(S.open.has(k)?" open":"")+'" data-k="'+k+'">'+
       '<div class="acc-top" data-tog="'+k+'">'+
         '<div class="acc-chk" data-chk="'+k+'">✓</div>'+
-        '<div class="acc-name"><b>#'+a.acct+' '+siteBadge(a.site)+' <span class="badge Live">Live</span></b>'+
+        '<div class="acc-name"><b>#'+a.acct+' '+siteBadge(a.site)+' <span class="badge demo">демо</span></b>'+
           '<small>'+(a.name||"Клиент")+' · сервер '+a.srv+(w?' · сессия '+(w.d.pair||"")+(w.en>Date.now()?' · осталось '+fmtLeft(w.en-Date.now()):' · сессия завершена'):' · сессия не запущена')+'</small></div>'+
         '<div class="acc-fig"><b class="num">'+usd(cur)+'</b>'+
           '<span class="'+(day>=0?"up":"down")+'">за сутки '+sig(day)+'</span></div>'+
@@ -691,6 +818,9 @@ function renderAccs(){
           '<div><small>Инструмент сценария</small><select data-f="pair" data-k="'+k+'">'+
             Object.keys(S.pairs).map(x=>'<option value="'+x+'"'+(x===p.pair?" selected":"")+'>'+x+'</option>').join("")+'</select></div>'+
           '<div><small>Часы</small><input class="num" data-f="hours" data-k="'+k+'" type="number" min="1" max="2160" value="'+p.hours+'"></div>'+
+          '<div><small>Направление</small><select data-f="dir" data-k="'+k+'">'+
+            '<option value="up"'+((p.dir||"up")==="up"?" selected":"")+'>В плюс</option>'+
+            '<option value="down"'+(p.dir==="down"?" selected":"")+'>В минус</option></select></div>'+
           '<div><small>Риск</small><select data-f="risk" data-k="'+k+'">'+
             Object.keys(S.risks).map(x=>'<option value="'+x+'"'+(x===p.risk?" selected":"")+'>'+S.risks[x].name+'</option>').join("")+'</select></div>'+
           '<div><small>Доля депозита</small><input class="num" data-f="share" data-k="'+k+'" type="number" min="10" max="100" step="5" value="'+Math.round(p.share*100)+'"></div>'+
@@ -820,10 +950,158 @@ function renderForecast(){
 }
 function renderAll(){
   renderMktStop(); renderKpis(); renderAccs(); drawChart(); renderDeals(); renderLog(); renderForecast();
+  cashSync();
+}
+
+/* ============ касса: пополнение и вывод ============ */
+/* Учебный стенд: сети и адреса пополнения выдуманы и помечены словом DEMO,
+   настоящие реквизиты получателя здесь не публикуются. Вывод уходит тем же
+   маршрутом /api/hub/withdraw, что и кнопка в карточке кошелька. */
+const CS_NETS=[
+  {k:"trc20",name:"USDT · TRC-20 (Tron)",     min:20,fee:"≈ 1 USDT",  eta:"до 2 часов",
+   addr:"DEMO-TRC20-0000-0000-0000-DEMO"},
+  {k:"erc20",name:"USDT · ERC-20 (Ethereum)", min:50,fee:"≈ 6 USDT",  eta:"до 3 часов",
+   addr:"DEMO-ERC20-0000-0000-0000-DEMO"},
+  {k:"bep20",name:"USDT · BEP-20 (BNB Chain)",min:20,fee:"≈ 0,5 USDT",eta:"до 2 часов",
+   addr:"DEMO-BEP20-0000-0000-0000-DEMO"}
+];
+const CS={tab:"in",net:"trc20",key:"",meth:{},sign:""};
+const csRef=p=>p+"-"+String(Date.now()).slice(-6)+"-"+Math.random().toString(36).slice(2,5).toUpperCase();
+function csAcct(){ return S.accounts.filter(a=>!a.error&&keyOf(a)===CS.key)[0]||null; }
+
+/* список кошельков пересобираем только когда он действительно изменился:
+   иначе ежесекундная перерисовка сбрасывала бы выбор прямо под руками */
+function cashSync(){
+  const box=$("csAcct"); if(!box) return;
+  const list=S.accounts.filter(a=>!a.error);
+  const sign=list.map(a=>keyOf(a)+":"+a.acct).join("|");
+  if(sign!==CS.sign){
+    CS.sign=sign;
+    box.innerHTML=list.map(a=>'<option value="'+keyOf(a)+'">#'+a.acct+" · "+
+      (a.siteName||a.site)+" · "+usd(valOf(a))+"</option>").join("")
+      ||'<option value="">кошельки не подключены</option>';
+    if(!list.some(a=>keyOf(a)===CS.key)) CS.key=list.length?keyOf(list[0]):"";
+    box.value=CS.key;
+  }
+  const a=csAcct();
+  $("csBal").textContent=a?usd(valOf(a)):"—";
+}
+
+function csNets(){
+  $("csNets").innerHTML=CS_NETS.map(n=>'<button data-n="'+n.k+'"'+
+    (n.k===CS.net?' class="on"':'')+'>'+n.name+"</button>").join("");
+  $("csNets").querySelectorAll("[data-n]").forEach(b=>b.onclick=()=>{
+    CS.net=b.dataset.n; csNets(); });
+  const n=CS_NETS.filter(x=>x.k===CS.net)[0]||CS_NETS[0];
+  $("csNetName").textContent=n.name;
+  $("csMin").textContent="$"+n.min;
+  $("csNetFee").textContent=n.fee;
+  $("csEta").textContent=n.eta;
+  $("csAddr").textContent=n.addr;
+}
+
+function csTab(t){
+  CS.tab=t;
+  $("csTabs").querySelectorAll("[data-t]").forEach(b=>b.classList.toggle("on",b.dataset.t===t));
+  $("csIn").hidden=t!=="in";
+  $("csOut").hidden=t!=="out";
+}
+
+function csOutCalc(){
+  const m=CS.meth[$("csMeth").value]||{};
+  const amt=Number($("csOutAmt").value)||0;
+  const fee=+(amt*(m.fee||0)).toFixed(2);
+  $("csOutM").textContent=m.name||"—";
+  $("csOutS").textContent=amt?usd(amt):"—";
+  $("csOutF").textContent=amt?"−"+usd(fee):"—";
+  $("csOutN").textContent=amt?usd(Math.max(0,amt-fee)):"—";
+  $("csOutE").textContent=m.eta||"—";
+}
+
+function csDeposit(){
+  const a=csAcct(), c=a&&credOf(a);
+  const n=CS_NETS.filter(x=>x.k===CS.net)[0]||CS_NETS[0];
+  const amt=Math.round((Number($("csAmt").value)||0)*100)/100;
+  const err=m=>{ $("csInErr").textContent=m||""; };
+  if(!a||!c) return err("Сначала подключите кошелёк");
+  if(!(amt>0)) return err("Укажите сумму пополнения");
+  if(amt<n.min) return err("Минимум для сети "+n.name+" — $"+n.min);
+  if(amt>100000) return err("Разовое пополнение на стенде — не больше $100 000");
+  err("");
+  const go=$("csInGo"); go.disabled=true; go.style.opacity=".6";
+  const done=j=>{
+    const ref=(j&&j.ref)||csRef("DEP");
+    $("csInDone").innerHTML='<div class="cs-ok"><b>Заявка на пополнение создана</b>'+
+      "<p>Кошелёк #"+a.acct+" · "+usd(amt)+" · "+n.name+" · заявка "+ref+
+      ". Деньги зачислятся после подтверждения администратором площадки. "+
+      "Это учебный стенд: настоящего перевода не было и не требуется.</p></div>";
+    $("csAmt").value="";
+    toast("Заявка на пополнение "+ref+" создана");
+    if(window.Notify) Notify.add({kind:"pay",title:"Заявка на пополнение "+usd(amt),
+      text:"Кошелёк #"+a.acct+" · "+n.name+" · заявка "+ref+" · ждёт подтверждения."});
+    refresh();
+  };
+  /* маршрут пополнения может быть ещё не поднят на сервере — тогда заявка
+     остаётся демонстрационной и показывается только здесь */
+  api("/api/hub/deposit",{method:"POST",body:JSON.stringify({
+      key:c.key,amount:amt,net:CS.net,asset:"USDT"})})
+    .then(done).catch(()=>done(null))
+    .then(()=>{ go.disabled=false; go.style.opacity=""; });
+}
+
+function csWithdraw(){
+  const a=csAcct(), c=a&&credOf(a);
+  const amt=Math.round((Number($("csOutAmt").value)||0)*100)/100;
+  const req=($("csReq").value||"").trim();
+  const err=m=>{ $("csOutErr").textContent=m||""; };
+  if(!a||!c) return err("Сначала подключите кошелёк");
+  if(!(amt>0)) return err("Укажите сумму вывода");
+  if(amt>valOf(a)) return err("На кошельке только "+usd(valOf(a)));
+  if(req.replace(/\D/g,"").length<4) return err("Укажите реквизиты — хватит последних четырёх цифр");
+  err("");
+  const go=$("csOutGo"); go.disabled=true; go.style.opacity=".6";
+  api("/api/hub/withdraw",{method:"POST",body:JSON.stringify({
+      key:c.key,amount:amt,method:$("csMeth").value,req:req,name:($("csName").value||"").trim()})})
+    .then(j=>{
+      $("csOutDone").innerHTML='<div class="cs-ok"><b>Заявка на вывод создана</b>'+
+        "<p>Кошелёк #"+a.acct+" · "+usd(j.amount)+" · "+j.method+" · "+j.mask+
+        " · к зачислению "+usd(j.net)+" · срок "+j.eta+" · заявка "+j.ref+
+        ". Учебный стенд: настоящего перевода не происходит.</p></div>";
+      $("csOutAmt").value=""; $("csReq").value="";
+      toast("Заявка на вывод "+j.ref+" создана");
+      csOutCalc(); refresh();
+    })
+    .catch(e=>err(e.message))
+    .then(()=>{ go.disabled=false; go.style.opacity=""; });
+}
+
+function cashBuild(){
+  if(!$("cash")) return;
+  csNets(); csTab("in"); cashSync();
+  $("csAcct").onchange=()=>{ CS.key=$("csAcct").value; cashSync();
+    $("csInDone").innerHTML=""; $("csOutDone").innerHTML=""; };
+  $("csTabs").querySelectorAll("[data-t]").forEach(b=>b.onclick=()=>csTab(b.dataset.t));
+  $("csCopy").onclick=()=>{
+    const t=$("csAddr").textContent;
+    if(navigator.clipboard) navigator.clipboard.writeText(t).then(()=>toast("Адрес скопирован"));
+  };
+  $("csAmt").oninput=()=>{ $("csInErr").textContent=""; };
+  $("csInGo").onclick=csDeposit;
+  $("csOutAmt").oninput=()=>{ $("csOutErr").textContent=""; csOutCalc(); };
+  $("csReq").oninput=()=>{ $("csOutErr").textContent=""; };
+  $("csOutGo").onclick=csWithdraw;
+  api("/api/hub/methods").then(j=>{
+    CS.meth=j.methods||{};
+    $("csMeth").innerHTML=Object.keys(CS.meth).map(k=>
+      '<option value="'+k+'">'+CS.meth[k].name+" — сбор "+(CS.meth[k].fee*100).toFixed(1)+
+      "% · от $"+CS.meth[k].min+"</option>").join("");
+    $("csMeth").onchange=csOutCalc;
+    csOutCalc();
+  }).catch(()=>{});
 }
 
 /* ============ форма общего сценария ============ */
-const HOUR_PRESETS=[[6,"6 часов"],[24,"1 день"],[72,"3 дня"],[168,"7 дней"],[336,"14 дней"],[720,"30 дней"]];
+const HOUR_PRESETS=[[24,"1 день"],[48,"2 дня"],[72,"3 дня"],[96,"4 дня"],[120,"5 дней"],[240,"10 дней"],[480,"20 дней"]];
 function buildForm(){
   $("fPair").innerHTML=Object.keys(S.pairs).map(k=>
     '<option value="'+k+'">'+k+" — "+S.pairs[k].name+'</option>').join("");
@@ -836,6 +1114,13 @@ function buildForm(){
   $("fHoursCustom").oninput=()=>{
     const v=Math.max(1,Math.min(2160,Math.round(Number($("fHoursCustom").value)||0)));
     if(v){S.params.hours=v;$("fHours").querySelectorAll("button").forEach(b=>b.classList.remove("on"));renderForecast();}};
+  $("fDir").querySelectorAll("[data-d]").forEach(b=>{
+    b.classList.toggle("on",b.dataset.d===(S.params.dir||"up"));
+    b.onclick=()=>{ S.params.dir=b.dataset.d; buildForm(); renderForecast(); };
+  });
+  $("dirNote").textContent=(S.params.dir==="down")
+    ? "Кошельки уйдут в убыток: баланс снижается по той же кривой, журнал покажет убыточные сделки."
+    : "Обычный сценарий: баланс растёт к расчётной цели.";
   $("fRisk").innerHTML=Object.keys(S.risks).map(k=>
     '<button data-r="'+k+'"'+(k===S.params.risk?' class="on"':'')+'>'+S.risks[k].name+'</button>').join("");
   $("fRisk").querySelectorAll("[data-r]").forEach(b=>b.onclick=()=>{
@@ -874,8 +1159,10 @@ async function runKeys(keys,params){
   if(!list.length) return toast("Не выбрано ни одного кошелька");
   if(params) list.forEach(x=>x.params=params);
   const names=list.map(x=>"#"+x.acct).join(", ");
+  const pp=params||list[0].params;
   if(!confirm("Запустить сценарий на "+list.length+" кошельке(ах): "+names+"?\n\nИнструмент: "+
-    (params||list[0].params).pair+"\nГоризонт: "+(params||list[0].params).hours+" ч")) return;
+    pp.pair+"\nГоризонт: "+pp.hours+" ч\nНаправление: "+
+    (pp.dir==="down"?"В МИНУС — кошельки уйдут в убыток":"в плюс"))) return;
   try{
     const j=await api("/api/hub/start",{method:"POST",body:JSON.stringify({accounts:list})});
     const ok=(j.items||[]).filter(x=>x.ok).length;
@@ -980,7 +1267,7 @@ function openDesk(){
   $("who").classList.remove("hidden");
   $("btnAdd").classList.remove("hidden");
   $("btnOut").classList.remove("hidden");
-  buildForm(); refresh();
+  buildForm(); cashBuild(); refresh();
 }
 on("btnLogin",async ()=>{
   const email=$("inMail").value.trim(), pass=$("inPass").value;
