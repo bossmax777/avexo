@@ -194,6 +194,8 @@ input[type=range]{width:100%;accent-color:var(--accent)}
 .cs-top{display:grid;grid-template-columns:minmax(0,260px) minmax(0,1fr) auto;gap:14px;
   align-items:end;margin-bottom:16px}
 .cs-tabs{grid-template-columns:repeat(2,minmax(0,1fr));max-width:320px}
+.cs-own{display:block;margin-top:6px;font-size:12px;color:var(--muted)}
+.cs-own b{color:var(--fg);font-weight:600}
 .cs-bal{text-align:right;white-space:nowrap}
 .cs-bal small{display:block;font-size:11px;color:var(--dim);text-transform:uppercase;letter-spacing:.07em}
 .cs-bal b{font-size:19px}
@@ -405,6 +407,7 @@ input[type=range]{width:100%;accent-color:var(--accent)}
       <div class="field" style="margin:0">
         <label for="csAcct">Кошелёк</label>
         <select id="csAcct"></select>
+        <small class="cs-own">Владелец кошелька: <b id="csOwn">—</b></small>
       </div>
       <div class="seg cs-tabs" id="csTabs">
         <button data-t="in" class="on">Пополнить</button>
@@ -431,6 +434,7 @@ input[type=range]{width:100%;accent-color:var(--accent)}
 
         <div class="cs-req">
           <div class="cs-req-h">Реквизиты для перевода <span class="badge demo">демо</span></div>
+          <div class="cs-kv"><span>Владелец кошелька</span><b id="csOwnIn">—</b></div>
           <div class="cs-kv"><span>Сеть</span><b id="csNetName">—</b></div>
           <div class="cs-kv"><span>Актив</span><b>USDT</b></div>
           <div class="cs-kv"><span>Минимальная сумма</span><b class="num" id="csMin">—</b></div>
@@ -464,6 +468,7 @@ input[type=range]{width:100%;accent-color:var(--accent)}
 
         <div class="cs-req">
           <div class="cs-req-h">Расчёт заявки <span class="badge demo">демо</span></div>
+          <div class="cs-kv"><span>Владелец кошелька</span><b id="csOwnOut">—</b></div>
           <div class="cs-kv"><span>Способ</span><b id="csOutM">—</b></div>
           <div class="cs-kv"><span>Сумма</span><b class="num" id="csOutS">—</b></div>
           <div class="cs-kv"><span>Сбор площадки</span><b class="num down" id="csOutF">—</b></div>
@@ -972,7 +977,7 @@ const CS_NETS=[
   {k:"bep20",name:"USDT · BEP-20 (BNB Chain)",min:20,fee:"≈ 0,5 USDT",eta:"до 2 часов",
    addr:"0xDEMObep20DEMObep20DEMObep20DEMO03", memoL:"Контракт USDT", memo:"0xDEMO…bep20 (демо)"}
 ];
-const CS={tab:"in",net:"trc20",key:"",meth:{},sign:""};
+const CS={tab:"in",net:"trc20",key:"",meth:{},sign:"",nameAuto:""};
 const csRef=p=>p+"-"+String(Date.now()).slice(-6)+"-"+Math.random().toString(36).slice(2,5).toUpperCase();
 function csAcct(){ return S.accounts.filter(a=>!a.error&&keyOf(a)===CS.key)[0]||null; }
 
@@ -984,7 +989,7 @@ function cashSync(){
   const sign=list.map(a=>keyOf(a)+":"+a.acct).join("|");
   if(sign!==CS.sign){
     CS.sign=sign;
-    box.innerHTML=list.map(a=>'<option value="'+keyOf(a)+'">#'+a.acct+" · "+
+    box.innerHTML=list.map(a=>'<option value="'+keyOf(a)+'">#'+a.acct+" · "+csWho(a)+" · "+
       (a.siteName||a.site)+" · "+usd(valOf(a))+"</option>").join("")
       ||'<option value="">кошельки не подключены</option>';
     if(!list.some(a=>keyOf(a)===CS.key)) CS.key=list.length?keyOf(list[0]):"";
@@ -992,6 +997,25 @@ function cashSync(){
   }
   const a=csAcct();
   $("csBal").textContent=a?usd(valOf(a)):"—";
+  const who=a?csWho(a):"—";
+  $("csOwn").textContent=who;
+  $("csOwnIn").textContent=who;
+  $("csOwnOut").textContent=who;
+  csNamePre(a);
+}
+
+/* имя и фамилия владельца кошелька: берём из профиля счёта на площадке */
+function csWho(a){
+  const n=String((a&&a.name)||"").trim();
+  return n||"Клиент без имени";
+}
+
+/* поле «Получатель» подставляем сами, но не трогаем то, что набрал пользователь */
+function csNamePre(a){
+  const f=$("csName"); if(!f) return;
+  const who=a?csWho(a):"";
+  if(f.value && f.value!==CS.nameAuto) return;
+  f.value=who; CS.nameAuto=who;
 }
 
 function csNets(){
