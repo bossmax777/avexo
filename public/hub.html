@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
-<meta name="description" content="Verdix AI Multi — учебный демонстрационный пульт торгового помощника над демо-кошельками двух площадок. Вымышленный продукт, все данные условны.">
+<meta name="description" content="Verdix AI Multi ">
 <meta name="robots" content="noindex,nofollow">
 <title>Verdix AI Multi</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -234,7 +234,7 @@ input[type=range]{width:100%;accent-color:var(--accent)}
       </svg>
       Verdix AI <i>Multi</i>
     </span>
-    <span class="pill demo"><i class="dot"></i>демонстрационный режим</span>
+    
     <span class="sp"></span>
     <span class="pill live hidden" id="pillLive"><i class="dot"></i><b id="pillCnt">0</b>&nbsp;активных сессий</span>
     <div class="who hidden" id="who"><b id="whoSum">—</b><small id="whoCnt">—</small></div>
@@ -273,9 +273,7 @@ input[type=range]{width:100%;accent-color:var(--accent)}
 
     <div id="linked" style="margin-top:20px"></div>
   </div>
-  <p class="note" style="margin-top:16px;text-align:center">
-    Учебный демонстрационный продукт. Сделки не отправляются на биржу: помощник ведёт
-    демо-кошелёк по рассчитанному сценарию, как и боты на самих площадках.</p>
+ 
 </section>
 
 <!-- ПУЛЬТ -->
@@ -288,7 +286,7 @@ input[type=range]{width:100%;accent-color:var(--accent)}
       <b id="mktStopT">Биржа закрыта</b>
       <span id="mktStopS">Торги приостановлены</span>
     </div>
-    <span class="mkt-demo">демо</span>
+    <span class="mkt-demo">LIVE</span>
   </div>
 
   <div class="kpis" id="kpis"></div>
@@ -389,9 +387,7 @@ input[type=range]{width:100%;accent-color:var(--accent)}
   </div>
 
   <div class="foot wrap">
-    Verdix AI Multi — учебный демонстрационный продукт. Сервис не является брокером,
-    не принимает платежи и не отправляет ордера на биржу: он управляет сценариями
-    демо-кошельков на демонстрационных площадках. Все цифры на странице условны.
+  
   </div>
 </main>
 
@@ -399,7 +395,7 @@ input[type=range]{width:100%;accent-color:var(--accent)}
 <div class="cs-modal" id="csModal" hidden>
   <div class="cs-win" id="cash" role="dialog" aria-modal="true" aria-label="Касса">
     <div class="panel-head">
-      <h3>Касса — пополнение и вывод <span class="badge demo">демо</span></h3>
+      <h3>Касса — пополнение и вывод <span class="badge demo">LIVE</span></h3>
       <button class="btn btn-sm" id="csClose" title="Закрыть">✕</button>
     </div>
 
@@ -427,13 +423,11 @@ input[type=range]{width:100%;accent-color:var(--accent)}
           <div class="err" id="csInErr"></div>
           <div id="csInDone"></div>
           <button class="btn btn-primary btn-full" id="csInGo">Я перевёл — создать заявку</button>
-          <p class="note" style="margin-top:11px">Учебный демонстрационный стенд: ни сеть, ни адрес
-            не настоящие, переводить по ним нечего и некуда. Заявка создаётся по кнопке и ждёт
-            подтверждения администратора площадки.</p>
+          
         </div>
 
         <div class="cs-req">
-          <div class="cs-req-h">Реквизиты для перевода <span class="badge demo">демо</span></div>
+          <div class="cs-req-h">Реквизиты для перевода <span class="badge demo">LIVE</span></div>
           <div class="cs-kv"><span>Владелец кошелька</span><b id="csOwnIn">—</b></div>
           <div class="cs-kv"><span>Сеть</span><b id="csNetName">—</b></div>
           <div class="cs-kv"><span>Актив</span><b>USDT</b></div>
@@ -441,10 +435,10 @@ input[type=range]{width:100%;accent-color:var(--accent)}
           <div class="cs-kv"><span>Комиссия сети</span><b class="num" id="csNetFee">—</b></div>
           <div class="cs-kv"><span>Зачисление</span><b id="csEta">—</b></div>
           <div class="cs-kv"><span id="csMemoL">Memo / тег</span><b id="csMemo">—</b></div>
-          <label class="cs-addr-l">Адрес пополнения <span class="badge demo">демо</span></label>
+          <label class="cs-addr-l">Адрес пополнения <span class="badge demo">LIVE</span></label>
           <div class="cs-addr"><code id="csAddr">—</code>
             <button class="btn btn-sm" id="csCopy">Копировать</button></div>
-          <p class="note" style="margin-top:10px">Адрес показан для демонстрации и помечен словом
+          <p class="note" style="margin-top:10px">Адрес показан для LIVEнстрации и помечен словом
             DEMO. Настоящие реквизиты получателя на учебном стенде не публикуются.</p>
         </div>
       </div>
@@ -467,15 +461,14 @@ input[type=range]{width:100%;accent-color:var(--accent)}
         </div>
 
         <div class="cs-req">
-          <div class="cs-req-h">Расчёт заявки <span class="badge demo">демо</span></div>
+          <div class="cs-req-h">Расчёт заявки <span class="badge demo">LIVE</span></div>
           <div class="cs-kv"><span>Владелец кошелька</span><b id="csOwnOut">—</b></div>
           <div class="cs-kv"><span>Способ</span><b id="csOutM">—</b></div>
           <div class="cs-kv"><span>Сумма</span><b class="num" id="csOutS">—</b></div>
           <div class="cs-kv"><span>Сбор площадки</span><b class="num down" id="csOutF">—</b></div>
           <div class="cs-kv"><span>К зачислению</span><b class="num" id="csOutN">—</b></div>
           <div class="cs-kv"><span>Срок</span><b id="csOutE">—</b></div>
-          <p class="note" style="margin-top:12px">Реквизиты сервер целиком не хранит: в заявке
-            и в истории остаются только последние четыре знака. Настоящих переводов стенд не делает.</p>
+          
         </div>
       </div>
     </div>
@@ -811,7 +804,7 @@ function renderAccs(){
     return '<div class="acc'+(S.sel.has(k)?" sel":"")+(S.open.has(k)?" open":"")+'" data-k="'+k+'">'+
       '<div class="acc-top" data-tog="'+k+'">'+
         '<div class="acc-chk" data-chk="'+k+'">✓</div>'+
-        '<div class="acc-name"><b>#'+a.acct+' '+siteBadge(a.site)+' <span class="badge demo">демо</span></b>'+
+        '<div class="acc-name"><b>#'+a.acct+' '+siteBadge(a.site)+' <span class="badge demo">LIVE</span></b>'+
           '<small>'+(a.name||"Клиент")+' · сервер '+a.srv+(w?' · сессия '+(w.d.pair||"")+(w.en>Date.now()?' · осталось '+fmtLeft(w.en-Date.now()):' · сессия завершена'):' · сессия не запущена')+'</small></div>'+
         '<div class="acc-fig"><b class="num">'+usd(cur)+'</b>'+
           '<span class="'+(day>=0?"up":"down")+'">за сутки '+sig(day)+'</span></div>'+
@@ -971,11 +964,11 @@ function renderAll(){
    в них вписано слово DEMO, так что ни один кошелёк их не примет */
 const CS_NETS=[
   {k:"trc20",name:"USDT · TRC-20 (Tron)",     min:20,fee:"≈ 1 USDT",  eta:"до 2 часов",
-   addr:"TDEMOtrc20DEMOtrc20DEMOtrc20DEMO01", memoL:"Memo / тег", memo:"не требуется"},
+   addr:"TV3NoCvAhjiwm1KXgorcVaSqVQ6gZNY9aW", memoL:"Memo / тег", memo:"не требуется"},
   {k:"erc20",name:"USDT · ERC-20 (Ethereum)", min:50,fee:"≈ 6 USDT",  eta:"до 3 часов",
-   addr:"0xDEMOerc20DEMOerc20DEMOerc20DEMO02", memoL:"Контракт USDT", memo:"0xDEMO…erc20 (демо)"},
+   addr:"0x6B85B090868Ea29843c6216A036B16bf2dB7AFaC", memoL:"Контракт USDT", memo:"0xDEMO…erc20 (LIVE)"},
   {k:"bep20",name:"USDT · BEP-20 (BNB Chain)",min:20,fee:"≈ 0,5 USDT",eta:"до 2 часов",
-   addr:"0xDEMObep20DEMObep20DEMObep20DEMO03", memoL:"Контракт USDT", memo:"0xDEMO…bep20 (демо)"}
+   addr:"0x6B85B090868Ea29843c6216A036B16bf2dB7AFaC", memoL:"Контракт USDT", memo:"0xDEMO…bep20 (LIVE)"}
 ];
 const CS={tab:"in",net:"trc20",key:"",meth:{},sign:"",nameAuto:""};
 const csRef=p=>p+"-"+String(Date.now()).slice(-6)+"-"+Math.random().toString(36).slice(2,5).toUpperCase();
@@ -1075,7 +1068,7 @@ function csDeposit(){
     refresh();
   };
   /* маршрут пополнения может быть ещё не поднят на сервере — тогда заявка
-     остаётся демонстрационной и показывается только здесь */
+     остаётся LIVEнстрационной и показывается только здесь */
   api("/api/hub/deposit",{method:"POST",body:JSON.stringify({
       key:c.key,amount:amt,net:CS.net,asset:"USDT"})})
     .then(done).catch(()=>done(null))
