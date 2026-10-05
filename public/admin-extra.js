@@ -363,3 +363,217 @@
     document.addEventListener("DOMContentLoaded", function () { setTimeout(boot, 600); });
   } else setTimeout(boot, 600);
 })();
+
+/* ---------------------------------------------------------------------------
+   Админка: вкладка «Отчёт».
+   По выбранной дате показывает построчно каждого клиента площадки: какой у него
+   итог торгового дня, какие были пополнения и выводы и каким стал баланс.
+   Данные берутся из тех же кошельков, что и в разделе «Кошельки», — отдельного
+   запроса к серверу не нужно. Отчёт выгружается в CSV для Excel.
+--------------------------------------------------------------------------- */
+(function () {
+  "use strict";
+  var DAY = "Итог торгового дня";
+  var el = function (i) { return document.getElementById(i); };
+  var esc = function (v) {
+    return String(v == null ? "" : v).replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+  };
+  var money = function (v) {
+    v = Number(v) || 0;
+    return (v < 0 ? "−" : "+") + "$" + Math.abs(v).toFixed(2);
+  };
+  var plain = function (v) { return (Number(v) || 0).toFixed(2); };
+  var iso = function (d) {
+    return d.getFullYear() + "-" + ("0" + (d.getMonth() + 1)).slice(-2) + "-" + ("0" + d.getDate()).slice(-2);
+  };
+  var ru = function (v) { return String(v || "").split("-").reverse().join("."); };
+  var wallets = function () {
+    try { return (typeof uLoad === "function" ? uLoad() : []) || []; } catch (e) { return []; }
+  };
+  /* сумма из строки истории: «+$188.00» или «−$66.00» */
+  var num = function (s) {
+    s = String(s == null ? "" : s);
+    var n = parseFloat(s.replace(/[^0-9.,]/g, "").replace(",", "."));
+    if (!isFinite(n)) return 0;
+    return /^\s*[-−]/.test(s) ? -n : n;
+  };
+
+  var CSS =
+    "#rpCard .rp-row{display:flex;gap:10px;flex-wrap:wrap;align-items:flex-end;margin-bottom:12px}" +
+    "#rpCard .rp-f{display:flex;flex-direction:column;gap:5px;min-width:150px}" +
+    "#rpCard .rp-f label{font-size:11.5px;color:var(--muted)}" +
+    "#rpCard .rp-f input{padding:9px 10px;border:1px solid var(--line);border-radius:9px;" +
+    "font:inherit;font-size:13px;width:100%;box-sizing:border-box}" +
+    "#rpCard .rp-kpi{display:flex;gap:10px;flex-wrap:wrap;margin-bottom:14px}" +
+    "#rpCard .rp-k{border:1px solid var(--line);border-radius:11px;padding:9px 13px;min-width:132px}" +
+    "#rpCard .rp-k span{display:block;font-size:11px;color:var(--muted);text-transform:uppercase;letter-spacing:.05em}" +
+    "#rpCard .rp-k b{font-size:17px}" +
+    "#rpCard .rp-scroll{overflow:auto;border:1px solid var(--line);border-radius:11px}" +
+    "#rpCard table{border-collapse:collapse;width:100%;font-size:12.5px;min-width:720px}" +
+    "#rpCard th,#rpCard td{padding:9px 12px;text-align:left;border-bottom:1px solid var(--line);white-space:nowrap}" +
+    "#rpCard th{font-size:11px;color:var(--muted);text-transform:uppercase;letter-spacing:.05em}" +
+    "#rpCard tr:last-child td{border-bottom:0}" +
+    "#rpCard td.n{text-align:right;font-variant-numeric:tabular-nums}" +
+    "#rpCard .up{color:var(--buy,#16A34A)}#rpCard .dn{color:var(--sell,#EF4444)}" +
+    "#rpCard .zero{color:var(--muted)}" +
+    "#rpCard .rp-empty{font-size:12.5px;color:var(--muted);padding:16px 2px;line-height:1.5}";
+
+  var PANE =
+    '<div class="card" id="rpCard"><h2>Отчёт за день</h2>' +
+    '<p class="sub">Построчно по каждому клиенту площадки: итог торгового дня за выбранную дату, ' +
+    'пополнения и выводы в этот же день и текущий баланс кошелька. ' +
+    'Строки берутся из истории операций — той самой, что видит клиент в кабинете.</p>' +
+    '<div class="rp-row">' +
+      '<div class="rp-f"><label for="rpDate">Дата</label><input id="rpDate" type="date"></div>' +
+      '<div class="rp-f" style="min-width:auto"><label>&nbsp;</label>' +
+        '<button class="btn btn-ghost" id="rpPrev">← день назад</button></div>' +
+      '<div class="rp-f" style="min-width:auto"><label>&nbsp;</label>' +
+        '<button class="btn btn-ghost" id="rpNext">день вперёд →</button></div>' +
+      '<div class="rp-f" style="min-width:auto"><label>&nbsp;</label>' +
+        '<button class="btn btn-ghost" id="rpReload">Обновить</button></div>' +
+      '<div class="rp-f" style="min-width:auto"><label>&nbsp;</label>' +
+        '<button class="btn btn-primary" id="rpCsv">Скачать CSV</button></div>' +
+    '</div>' +
+    '<div class="rp-kpi" id="rpKpi"></div>' +
+    '<div id="rpBox"></div></div>';
+
+  function build() {
+    if (el("rpCard")) return true;
+    var host = document.querySelector('[data-pane="users"]');
+    if (!host || !host.parentNode) return false;
+    var st = document.createElement("style"); st.id = "rpCss"; st.textContent = CSS;
+    document.head.appendChild(st);
+    var pane = document.createElement("div");
+    pane.id = "rpPane";
+    pane.setAttribute("data-pane", "report");
+    pane.hidden = true;
+    pane.innerHTML = PANE;
+    host.parentNode.insertBefore(pane, host.nextSibling);
+    var tabs = el("tabs");
+    if (tabs && !tabs.querySelector('[data-tab="report"]')) {
+      var after = tabs.querySelector('[data-tab="users"]');
+      var b = document.createElement("button");
+      b.setAttribute("data-tab", "report");
+      b.innerHTML = "<i></i>Отчёт";
+      if (after) after.parentNode.insertBefore(b, after.nextSibling); else tabs.appendChild(b);
+    }
+    var d = el("rpDate");
+    if (d && !d.value) d.value = iso(new Date());
+    el("rpDate").addEventListener("change", draw);
+    el("rpPrev").onclick = function () { shift(-1); };
+    el("rpNext").onclick = function () { shift(1); };
+    el("rpReload").onclick = reload;
+    el("rpCsv").onclick = csv;
+    return true;
+  }
+
+  function shift(n) {
+    var d = el("rpDate"); if (!d || !d.value) return;
+    var t = new Date(d.value + "T12:00:00");
+    t.setDate(t.getDate() + n);
+    d.value = iso(t);
+    draw();
+  }
+
+  /* разбираем историю одного кошелька за выбранный день */
+  function rowFor(u, day) {
+    var res = { day: 0, cash: 0, has: false, note: "" };
+    (u.tx || []).forEach(function (t) {
+      if (!t || String(t[0]) !== day) return;
+      var v = num(t[2]);
+      if (String(t[1]).indexOf(DAY) === 0) { res.day += v; res.has = true; res.note = String(t[4] || ""); }
+      else res.cash += v;
+    });
+    res.day = +res.day.toFixed(2);
+    res.cash = +res.cash.toFixed(2);
+    return res;
+  }
+
+  function rows() {
+    var day = ru((el("rpDate") || {}).value || "");
+    return wallets().map(function (u) {
+      var r = rowFor(u, day);
+      return {
+        name: u.name || u.email || "—",
+        mail: u.email || "",
+        acct: u.acct || "",
+        balance: Number(u.balance) || 0,
+        cur: u.cur || "USD",
+        day: r.day, cash: r.cash, has: r.has, note: r.note
+      };
+    }).sort(function (a, b) { return b.day - a.day; });
+  }
+
+  function draw() {
+    if (!build()) return;
+    var box = el("rpBox"), kpi = el("rpKpi");
+    var day = (el("rpDate") || {}).value || "";
+    var list = rows();
+    if (!list.length) {
+      kpi.innerHTML = "";
+      box.innerHTML = '<p class="rp-empty">На площадке пока нет кошельков.</p>';
+      return;
+    }
+    var sum = list.reduce(function (s, x) { return s + x.day; }, 0);
+    var cash = list.reduce(function (s, x) { return s + x.cash; }, 0);
+    var up = list.filter(function (x) { return x.day > 0; }).length;
+    var dn = list.filter(function (x) { return x.day < 0; }).length;
+    var no = list.filter(function (x) { return !x.has; }).length;
+    kpi.innerHTML =
+      '<div class="rp-k"><span>Итог за ' + esc(ru(day)) + '</span><b class="' +
+        (sum > 0 ? "up" : sum < 0 ? "dn" : "zero") + '">' + money(sum) + "</b></div>" +
+      '<div class="rp-k"><span>Кошельков</span><b>' + list.length + "</b></div>" +
+      '<div class="rp-k"><span>В плюсе</span><b class="up">' + up + "</b></div>" +
+      '<div class="rp-k"><span>В минусе</span><b class="dn">' + dn + "</b></div>" +
+      '<div class="rp-k"><span>Без записи</span><b class="zero">' + no + "</b></div>" +
+      '<div class="rp-k"><span>Касса за день</span><b>' + money(cash) + "</b></div>";
+    box.innerHTML = '<div class="rp-scroll"><table><thead><tr>' +
+      "<th>Клиент</th><th>Счёт</th><th>Итог дня</th><th>Пополнения и выводы</th>" +
+      "<th>Баланс сейчас</th><th>Статус</th></tr></thead><tbody>" +
+      list.map(function (x) {
+        return "<tr><td>" + esc(x.name) + "<br><span class=\"zero\">" + esc(x.mail) + "</span></td>" +
+          "<td>#" + esc(x.acct) + '</td><td class="n ' +
+          (x.day > 0 ? "up" : x.day < 0 ? "dn" : "zero") + '">' + (x.has ? money(x.day) : "—") + "</td>" +
+          '<td class="n ' + (x.cash ? (x.cash > 0 ? "up" : "dn") : "zero") + '">' +
+          (x.cash ? money(x.cash) : "—") + "</td>" +
+          '<td class="n">' + plain(x.balance) + " " + esc(x.cur) + "</td>" +
+          "<td>" + esc(x.has ? (x.note || (x.day >= 0 ? "Прибыль" : "Убыток")) : "нет записи за этот день") +
+          "</td></tr>";
+      }).join("") + "</tbody></table></div>";
+  }
+
+  /* перечитываем кошельки с сервера и перерисовываем отчёт */
+  function reload() {
+    var p = Promise.resolve();
+    if (typeof uFetch === "function") p = Promise.resolve(uFetch());
+    return p.then(function () { draw(); if (typeof renderUsers === "function") renderUsers(); })
+      .catch(function (e) { if (typeof toast === "function") toast(e.message); });
+  }
+
+  function csv() {
+    var day = (el("rpDate") || {}).value || "";
+    var list = rows();
+    var q = function (v) { return '"' + String(v == null ? "" : v).replace(/"/g, '""') + '"'; };
+    var lines = [["Клиент", "Email", "Счёт", "Итог дня", "Пополнения и выводы", "Баланс", "Валюта", "Статус"].map(q).join(";")];
+    list.forEach(function (x) {
+      lines.push([x.name, x.mail, x.acct, x.has ? plain(x.day) : "", plain(x.cash),
+        plain(x.balance), x.cur, x.has ? (x.note || "") : "нет записи"].map(q).join(";"));
+    });
+    var blob = new Blob(["﻿" + lines.join("\r\n")], { type: "text/csv;charset=utf-8" });
+    var a = document.createElement("a");
+    a.href = URL.createObjectURL(blob);
+    a.download = "otchet-" + day + ".csv";
+    document.body.appendChild(a); a.click();
+    setTimeout(function () { URL.revokeObjectURL(a.href); a.remove(); }, 400);
+  }
+  window.renderReport = draw;
+
+  document.addEventListener("click", function (e) {
+    if (e.target.closest && e.target.closest('[data-tab="report"]')) setTimeout(reload, 60);
+  });
+
+  function boot() { if (build()) draw(); }
+  if (document.readyState === "loading") {
+    document.addEventListener("DOMContentLoaded", function () { setTimeout(boot, 700); });
+  } else setTimeout(boot, 700);
+})();
