@@ -201,11 +201,6 @@ input[type=range]{width:100%;accent-color:var(--accent)}
 .cs-grid>*{min-width:0}
 .cs-req{border:1px solid var(--line);border-radius:var(--radius-lg);background:var(--surface-2);padding:16px}
 .cs-req-h{display:flex;align-items:center;gap:8px;font-size:13px;font-weight:600;margin-bottom:12px}
-.cs-qr{height:116px;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:4px;
-  border:1px dashed var(--line);border-radius:12px;margin-bottom:13px;color:var(--dim);
-  font-size:21px;letter-spacing:.22em;font-weight:700;
-  background:repeating-linear-gradient(45deg,transparent 0 9px,rgba(255,255,255,.028) 9px 18px)}
-.cs-qr s{text-decoration:none;font-size:10.5px;letter-spacing:.04em;font-weight:400}
 .cs-kv{display:flex;justify-content:space-between;gap:10px;font-size:12.5px;padding:6px 0;
   border-bottom:1px solid var(--line)}
 .cs-kv:last-of-type{border-bottom:0}
@@ -436,12 +431,12 @@ input[type=range]{width:100%;accent-color:var(--accent)}
 
         <div class="cs-req">
           <div class="cs-req-h">Реквизиты для перевода <span class="badge demo">демо</span></div>
-          <div class="cs-qr" aria-hidden="true">ДЕМО<s>QR-код не настоящий</s></div>
           <div class="cs-kv"><span>Сеть</span><b id="csNetName">—</b></div>
           <div class="cs-kv"><span>Актив</span><b>USDT</b></div>
           <div class="cs-kv"><span>Минимальная сумма</span><b class="num" id="csMin">—</b></div>
           <div class="cs-kv"><span>Комиссия сети</span><b class="num" id="csNetFee">—</b></div>
           <div class="cs-kv"><span>Зачисление</span><b id="csEta">—</b></div>
+          <div class="cs-kv"><span id="csMemoL">Memo / тег</span><b id="csMemo">—</b></div>
           <label class="cs-addr-l">Адрес пополнения <span class="badge demo">демо</span></label>
           <div class="cs-addr"><code id="csAddr">—</code>
             <button class="btn btn-sm" id="csCopy">Копировать</button></div>
@@ -967,13 +962,15 @@ function renderAll(){
 /* Учебный стенд: сети и адреса пополнения выдуманы и помечены словом DEMO,
    настоящие реквизиты получателя здесь не публикуются. Вывод уходит тем же
    маршрутом /api/hub/withdraw, что и кнопка в карточке кошелька. */
+/* у каждой сети свой адрес и своя памятка. Все адреса заведомо нерабочие:
+   в них вписано слово DEMO, так что ни один кошелёк их не примет */
 const CS_NETS=[
   {k:"trc20",name:"USDT · TRC-20 (Tron)",     min:20,fee:"≈ 1 USDT",  eta:"до 2 часов",
-   addr:"DEMO-TRC20-0000-0000-0000-DEMO"},
+   addr:"TDEMOtrc20DEMOtrc20DEMOtrc20DEMO01", memoL:"Memo / тег", memo:"не требуется"},
   {k:"erc20",name:"USDT · ERC-20 (Ethereum)", min:50,fee:"≈ 6 USDT",  eta:"до 3 часов",
-   addr:"DEMO-ERC20-0000-0000-0000-DEMO"},
+   addr:"0xDEMOerc20DEMOerc20DEMOerc20DEMO02", memoL:"Контракт USDT", memo:"0xDEMO…erc20 (демо)"},
   {k:"bep20",name:"USDT · BEP-20 (BNB Chain)",min:20,fee:"≈ 0,5 USDT",eta:"до 2 часов",
-   addr:"DEMO-BEP20-0000-0000-0000-DEMO"}
+   addr:"0xDEMObep20DEMObep20DEMObep20DEMO03", memoL:"Контракт USDT", memo:"0xDEMO…bep20 (демо)"}
 ];
 const CS={tab:"in",net:"trc20",key:"",meth:{},sign:""};
 const csRef=p=>p+"-"+String(Date.now()).slice(-6)+"-"+Math.random().toString(36).slice(2,5).toUpperCase();
@@ -1007,6 +1004,8 @@ function csNets(){
   $("csMin").textContent="$"+n.min;
   $("csNetFee").textContent=n.fee;
   $("csEta").textContent=n.eta;
+  $("csMemoL").textContent=n.memoL;
+  $("csMemo").textContent=n.memo;
   $("csAddr").textContent=n.addr;
 }
 
