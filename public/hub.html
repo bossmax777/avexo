@@ -762,7 +762,7 @@ function forecast(balance,p,fees){
 }
 
 /* ============ отрисовка ============ */
-function siteBadge(s){ return '<span class="badge '+s+'">'+(s==="nx"?"BullWaves":"FxPRO")+'</span>'; }
+function siteBadge(s){ return '<span class="badge '+s+'">'+(s==="nx"?"FxPRO":"BullWaves")+'</span>'; }
 function fmtLeft(ms){
   if(ms<=0) return "завершено";
   const h=Math.floor(ms/3600000),m=Math.floor(ms%3600000/60000),d=Math.floor(h/24);
