@@ -1163,8 +1163,8 @@ function buildForm(){
     b.onclick=()=>{ S.params.dir=b.dataset.d; buildForm(); renderForecast(); };
   });
   $("dirNote").textContent=(S.params.dir==="down")
-    ? "Кошельки уйдут в убыток: баланс снижается по той же кривой, журнал покажет убыточные сделки."
-    : "Обычный сценарий: баланс растёт к расчётной цели.";
+    ? ""
+    : "";
   $("fRisk").innerHTML=Object.keys(S.risks).map(k=>
     '<button data-r="'+k+'"'+(k===S.params.risk?' class="on"':'')+'>'+S.risks[k].name+'</button>').join("");
   $("fRisk").querySelectorAll("[data-r]").forEach(b=>b.onclick=()=>{
