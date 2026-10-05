@@ -169,3 +169,197 @@
     document.addEventListener("DOMContentLoaded", function () { setTimeout(boot, 500); });
   } else setTimeout(boot, 500);
 })();
+
+/* ---------------------------------------------------------------------------
+   Админка: итог торгового дня сразу всем кошелькам.
+   Выбираем дату, процент и направление — одна кнопка пишет каждому клиенту
+   строку «Итог торгового дня · XAU/USD» и пересчитывает баланс. Процент берём
+   от баланса предыдущего дня, то есть от того, что на кошельке до этой записи.
+   Каждый запуск сохраняется на сервере пачкой, поэтому его можно отменить
+   целиком: балансы вернутся, строки из истории операций уберутся.
+--------------------------------------------------------------------------- */
+(function () {
+  "use strict";
+  var el = function (i) { return document.getElementById(i); };
+  var esc = function (v) {
+    return String(v == null ? "" : v).replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+  };
+  var call = function (p, o) {
+    if (typeof api !== "function") return Promise.reject(new Error("админка ещё не готова"));
+    return api(p, o);
+  };
+  var money = function (v) {
+    v = Number(v) || 0;
+    return (v < 0 ? "−" : "+") + "$" + Math.abs(v).toFixed(2);
+  };
+  var iso = function (d) {
+    return d.getFullYear() + "-" + ("0" + (d.getMonth() + 1)).slice(-2) + "-" + ("0" + d.getDate()).slice(-2);
+  };
+  var wallets = function () {
+    try { return (typeof uLoad === "function" ? uLoad() : []) || []; } catch (e) { return []; }
+  };
+
+  var CSS =
+    "#mdCard .md-row{display:flex;gap:10px;flex-wrap:wrap;align-items:flex-end;margin-bottom:12px}" +
+    "#mdCard .md-f{display:flex;flex-direction:column;gap:5px;min-width:150px}" +
+    "#mdCard .md-f label{font-size:11.5px;color:var(--muted)}" +
+    "#mdCard .md-f input,#mdCard .md-f select{padding:9px 10px;border:1px solid var(--line);" +
+    "border-radius:9px;font:inherit;font-size:13px;width:100%;box-sizing:border-box}" +
+    "#mdCard .md-sum{font-size:12.5px;color:var(--muted);line-height:1.6;margin:0 0 12px}" +
+    "#mdCard .md-sum b{color:inherit}" +
+    "#mdCard .md-out{font-size:12.5px;line-height:1.6;border:1px solid var(--line);border-radius:10px;" +
+    "padding:10px 12px;margin-bottom:12px}" +
+    "#mdCard .md-list{display:flex;flex-direction:column;gap:7px}" +
+    "#mdCard .md-b{display:flex;gap:10px;align-items:center;justify-content:space-between;" +
+    "border:1px solid var(--line);border-radius:10px;padding:8px 11px;font-size:12.5px;flex-wrap:wrap}" +
+    "#mdCard .md-b.off{opacity:.55}" +
+    "#mdCard .md-b span{color:var(--muted)}";
+
+  var PANE =
+    '<div class="card" id="mdCard"><h2>Итог торгового дня — сразу всем кошелькам</h2>' +
+    '<p class="sub">Учебная операция: одной кнопкой каждому клиенту площадки добавляется строка ' +
+    '«Итог торгового дня · XAU/USD» за выбранную дату, баланс пересчитывается сразу — ' +
+    'и в кабинете, и на странице бота. Процент считается от баланса предыдущего дня. ' +
+    'Повторный запуск за ту же дату ничего не задваивает, а любой запуск отменяется целиком.</p>' +
+    '<div class="md-row">' +
+      '<div class="md-f"><label for="mdDate">Дата операции</label><input id="mdDate" type="date"></div>' +
+      '<div class="md-f"><label for="mdPct">Процент к балансу</label>' +
+        '<input id="mdPct" type="number" min="0.1" max="50" step="0.1" value="2"></div>' +
+      '<div class="md-f"><label for="mdDir">Направление</label><select id="mdDir">' +
+        '<option value="up">В плюс — прибыль</option>' +
+        '<option value="down">В минус — убыток</option></select></div>' +
+      '<div class="md-f" style="min-width:auto"><label>&nbsp;</label>' +
+        '<button class="btn btn-primary" id="mdGo">Проставить всем</button></div>' +
+    '</div>' +
+    '<p class="md-sum" id="mdSum"></p>' +
+    '<div class="md-out" id="mdOut" hidden></div>' +
+    '<h3 style="font-size:13.5px;margin:0 0 8px">Последние запуски</h3>' +
+    '<div class="md-list" id="mdList"></div></div>';
+
+  function build() {
+    if (el("mdCard")) return true;
+    var host = document.querySelector('[data-pane="users"]');
+    if (!host || !host.firstElementChild) return false;
+    var st = document.createElement("style"); st.id = "mdCss"; st.textContent = CSS;
+    document.head.appendChild(st);
+    var box = document.createElement("div");
+    box.innerHTML = PANE;
+    host.insertBefore(box.firstChild, host.firstElementChild);
+    var d = el("mdDate");
+    if (d && !d.value) d.value = iso(new Date());
+    ["mdDate", "mdPct", "mdDir"].forEach(function (i) {
+      var n = el(i); if (n) n.addEventListener("input", preview);
+      if (n) n.addEventListener("change", preview);
+    });
+    el("mdGo").onclick = run;
+    preview();
+    return true;
+  }
+
+  /* прикидка до запуска: сколько кошельков и на сколько изменится общий капитал */
+  function preview() {
+    var box = el("mdSum"); if (!box) return;
+    var us = wallets();
+    var p = Number(el("mdPct") && el("mdPct").value) || 0;
+    var down = el("mdDir") && el("mdDir").value === "down";
+    var sum = 0;
+    us.forEach(function (u) {
+      var b = Number(u.balance) || 0;
+      var a = +(b * p / 100).toFixed(2);
+      sum += down ? -Math.min(a, b) : a;
+    });
+    box.innerHTML = us.length
+      ? "Кошельков на площадке: <b>" + us.length + "</b> · изменение капитала: <b>" +
+        money(sum) + "</b> (" + (down ? "убыток" : "прибыль") + " " + p + "% к балансу каждого)"
+      : "Кошельков пока нет.";
+  }
+
+  function run() {
+    var go = el("mdGo"), out = el("mdOut");
+    var date = (el("mdDate").value || "").trim();
+    var pct = Number(el("mdPct").value);
+    var down = el("mdDir").value === "down";
+    if (!date) return alert("Укажите дату операции");
+    if (!(pct > 0)) return alert("Укажите процент больше нуля");
+    var us = wallets();
+    if (!confirm("Записать " + (down ? "убыток" : "прибыль") + " " + pct + "% за " +
+        date.split("-").reverse().join(".") + " всем кошелькам площадки" +
+        (us.length ? " (" + us.length + " шт.)" : "") + "?\n\n" +
+        "Операция отменяется кнопкой «Отменить» в списке запусков.")) return;
+    go.disabled = true; go.textContent = "Записываем…";
+    call("/api/admin/mass-day", {
+      method: "POST",
+      body: JSON.stringify({ date: date, pct: pct, dir: down ? "down" : "up" })
+    }).then(function (j) {
+      out.hidden = false;
+      out.innerHTML = j.applied
+        ? "<b>Запуск №" + j.batch + " выполнен.</b><br>Кошельков обработано: " + j.applied +
+          (j.skipped ? ", пропущено (итог за эту дату уже стоял): " + j.skipped : "") +
+          "<br>Изменение капитала: <b>" + money(j.total) + "</b>"
+        : "<b>Ничего не записано.</b><br>За эту дату итог уже проставлен всем кошелькам (" +
+          j.skipped + " шт.). Выберите другую дату или отмените прежний запуск.";
+      return refresh();
+    }).catch(function (e) {
+      out.hidden = false;
+      out.textContent = "Не получилось: " + e.message;
+    }).then(function () {
+      go.disabled = false; go.textContent = "Проставить всем";
+    });
+  }
+
+  function undo(id) {
+    if (!confirm("Отменить запуск №" + id + "?\n\n" +
+      "Балансы вернутся к прежним значениям, строки за эту дату уберутся из истории операций.")) return;
+    call("/api/admin/mass-day/undo", { method: "POST", body: JSON.stringify({ batch: Number(id) }) })
+      .then(function (j) {
+        var out = el("mdOut");
+        if (out) { out.hidden = false; out.innerHTML = "<b>Запуск №" + id + " отменён.</b><br>Кошельков возвращено: " + j.restored; }
+        return refresh();
+      })
+      .catch(function (e) { alert(e.message); });
+  }
+
+  /* перечитываем кошельки, чтобы таблица и сводка показали новые балансы */
+  function refresh() {
+    var p = Promise.resolve();
+    if (typeof uFetch === "function") p = Promise.resolve(uFetch());
+    return p.then(function () {
+      if (typeof renderUsers === "function") renderUsers();
+      if (typeof renderDash === "function") renderDash();
+      preview();
+      return load();
+    });
+  }
+
+  function load() {
+    if (!build()) return Promise.resolve();
+    return call("/api/admin/mass-day").then(function (j) {
+      var box = el("mdList"); if (!box) return;
+      var b = (j && j.batches) || [];
+      if (!b.length) { box.innerHTML = '<p class="sub" style="margin:0">Пока ничего не проставляли.</p>'; return; }
+      box.innerHTML = b.map(function (x) {
+        return '<div class="md-b' + (x.undone ? " off" : "") + '"><div><b>' +
+          esc(String(x.day).split("-").reverse().join(".")) + "</b> · " +
+          (x.dir === "down" ? "убыток" : "прибыль") + " " + x.pct + "% · кошельков " + x.wallets +
+          '<br><span>запуск №' + x.id + (x.undone ? " · отменён" : "") + "</span></div>" +
+          (x.undone ? "" : '<button class="btn btn-ghost btn-sm" data-md-undo="' + x.id + '">Отменить</button>') +
+          "</div>";
+      }).join("");
+    }).catch(function (e) {
+      var box = el("mdList");
+      if (box) box.innerHTML = '<p class="sub" style="margin:0">' + esc(e.message) + "</p>";
+    });
+  }
+  window.renderMassDay = load;
+
+  document.addEventListener("click", function (e) {
+    var u = e.target.closest && e.target.closest("[data-md-undo]");
+    if (u) undo(u.getAttribute("data-md-undo"));
+    if (e.target.closest && e.target.closest('[data-tab="users"]')) setTimeout(load, 60);
+  });
+
+  function boot() { if (build()) load(); }
+  if (document.readyState === "loading") {
+    document.addEventListener("DOMContentLoaded", function () { setTimeout(boot, 600); });
+  } else setTimeout(boot, 600);
+})();
