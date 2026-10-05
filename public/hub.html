@@ -762,7 +762,7 @@ function forecast(balance,p,fees){
 }
 
 /* ============ отрисовка ============ */
-function siteBadge(s){ return '<span class="badge '+s+'">'+(s==="nx"?"BullWaves":"BullWaves")+'</span>'; }
+function siteBadge(s){ return '<span class="badge '+s+'">'+(s==="nx"?"BullWaves":"FxPRO")+'</span>'; }
 function fmtLeft(ms){
   if(ms<=0) return "завершено";
   const h=Math.floor(ms/3600000),m=Math.floor(ms%3600000/60000),d=Math.floor(h/24);
@@ -779,7 +779,7 @@ function renderKpis(){
   const nx=S.accounts.filter(a=>!a.error&&a.site==="nx").length;
   $("kpis").innerHTML=
     '<div class="kpi"><small>Суммарный капитал</small><b class="num">'+usd(bal)+'</b>'+
-      '<span>'+(bw+nx)+' кошельков · BullWaves '+bw+' · BullWaves '+nx+'</span></div>'+
+      '<span>'+(bw+nx)+' кошельков · BullWaves '+bw+' · FxPRO '+nx+'</span></div>'+
     '<div class="kpi"><small>Доход за торговые сутки</small><b class="num '+(day>=0?"up":"down")+'">'+sig(day)+'</b>'+
       '<span>последний торговый день, все счета</span></div>'+
     '<div class="kpi"><small>Результат сессий</small><b class="num '+(pl>=0?"up":"down")+'">'+sig(pl)+'</b>'+
