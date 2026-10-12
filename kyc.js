@@ -74,6 +74,9 @@ function install(app, ctx, helpers) {
   H = helpers || {};
   const T_USERS = ctx.users;
   const SITE = ctx.tag;
+  /* ключ активации один на обе площадки: выпущенный здесь работает и на соседней.
+     Поэтому код заводится сразу двумя строками, а отзыв снимает обе. */
+  const ALL_SITES = ['bw', 'nx'];
   const requireAdmin = ctx.requireAdmin;
   const sessionUser = ctx.sessionUser;
 
@@ -260,9 +263,13 @@ function install(app, ctx, helpers) {
       codes = codes.slice(0, 100);
       const added = [];
       for (const code of codes) {
-        const r = await q('INSERT INTO bot_keys (site, code, note, days) VALUES ($1,$2,$3,$4)'
-          + ' ON CONFLICT (site, code) DO NOTHING RETURNING code', [SITE, code, note, days]);
-        if (r.rows[0]) added.push(code);
+        let fresh = false;
+        for (const site of ALL_SITES) {
+          const r = await q('INSERT INTO bot_keys (site, code, note, days) VALUES ($1,$2,$3,$4)'
+            + ' ON CONFLICT (site, code) DO NOTHING RETURNING code', [site, code, note, days]);
+          if (r.rows[0] && site === SITE) fresh = true;
+        }
+        if (fresh) added.push(code);
       }
       res.json({ ok: true, added, skipped: codes.length - added.length, days });
     } catch (e) { bad(res, 500, e.message); }
@@ -272,20 +279,24 @@ function install(app, ctx, helpers) {
     try {
       const b = req.body || {};
       const days = b.days == null ? null : Math.max(0, Math.min(3650, parseInt(b.days, 10) || 0));
+      const one = await q('SELECT code FROM bot_keys WHERE id = $1 AND site = $2',
+        [Number(req.params.id), SITE]);
+      if (!one.rows[0]) return bad(res, 404, 'Код не найден');
+      /* код действует на обеих площадках, поэтому правим все его строки сразу */
       const r = await q('UPDATE bot_keys SET active = $2, note = COALESCE($3, note),'
         + ' days = COALESCE($4, days)'
-        + ' WHERE id = $1 AND site = $5 RETURNING *',
-        [Number(req.params.id), !!b.active, b.note == null ? null : clean(b.note, 120), days, SITE]);
-      if (!r.rows[0]) return bad(res, 404, 'Код не найден');
+        + ' WHERE code = $1 RETURNING *',
+        [one.rows[0].code, !!b.active, b.note == null ? null : clean(b.note, 120), days]);
       res.json({ ok: true, code: r.rows[0].code, active: !!r.rows[0].active });
     } catch (e) { bad(res, 500, e.message); }
   });
 
   app.delete('/api/admin/botkeys/:id', requireAdmin, async (req, res) => {
     try {
-      const r = await q('DELETE FROM bot_keys WHERE id = $1 AND site = $2 RETURNING code',
+      const one = await q('SELECT code FROM bot_keys WHERE id = $1 AND site = $2',
         [Number(req.params.id), SITE]);
-      if (!r.rows[0]) return bad(res, 404, 'Код не найден');
+      if (!one.rows[0]) return bad(res, 404, 'Код не найден');
+      const r = await q('DELETE FROM bot_keys WHERE code = $1 RETURNING code', [one.rows[0].code]);
       res.json({ ok: true });
     } catch (e) { bad(res, 500, e.message); }
   });
@@ -299,7 +310,8 @@ function install(app, ctx, helpers) {
     const code = String(u.botkey || '');
     let on = false, days = 0, until = null, expired = false;
     if (code) {
-      const r = await q('SELECT active, days FROM bot_keys WHERE site = $1 AND code = $2', [u._site, code]);
+      const r = await q('SELECT active, days FROM bot_keys WHERE code = $1'
+        + ' ORDER BY (site = $2) DESC, id LIMIT 1', [code, u._site]);
       const row = r.rows[0];
       on = !!(row && row.active);
       days = row ? (Number(row.days) || 0) : 0;
@@ -341,9 +353,11 @@ function install(app, ctx, helpers) {
       if (!u) return bad(res, 403, 'Кошелёк не найден или ключ API не подходит');
       const code = normCode(b.code);
       if (!code) return bad(res, 400, 'Код неполный. Формат: X7K9P-4M2QD-V8R3N');
-      const r = await q('SELECT * FROM bot_keys WHERE site = $1 AND code = $2', [u._site, code]);
+      /* код общий для площадок: берём строку своей площадки, а если её нет — любую */
+      const r = await q('SELECT * FROM bot_keys WHERE code = $1'
+        + ' ORDER BY (site = $2) DESC, id LIMIT 1', [code, u._site]);
       const row = r.rows[0];
-      if (!row) return bad(res, 403, 'Такой код не выпускался для этой площадки');
+      if (!row) return bad(res, 403, 'Такой код не выпускался');
       if (!row.active) return bad(res, 403, 'Код отозван администратором');
       const table = sites[u._site].users;
       /* срок годности отсчитывается от момента активации; 0 дней — ключ бессрочный */
