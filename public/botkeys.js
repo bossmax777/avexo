@@ -41,6 +41,19 @@
     ".bk-left i{width:7px;height:7px;border-radius:50%;background:currentColor;flex:none}" +
     ".bk-left.g{color:#2BA87A}.bk-left.y{color:#E2B23A}.bk-left.r{color:#E5484D}" +
     ".bk-badge.off{border-color:#E5484D;color:#E5484D;background:rgba(229,72,77,.12)}" +
+    ".bk-badge.wait{border-color:#E2B23A;color:#E2B23A;background:rgba(226,178,58,.12)}" +
+    ".bk-badge.wait i{background:#E2B23A;box-shadow:0 0 0 3px rgba(226,178,58,.18)}" +
+    ".bk-kyc{display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-top:8px}" +
+    ".bk-win{position:fixed;inset:0;z-index:10001;display:flex;align-items:center;justify-content:center;" +
+    "background:rgba(6,8,12,.82);backdrop-filter:blur(5px);padding:18px}" +
+    ".bk-win-box{width:100%;max-width:430px;border:1px solid var(--line);border-radius:16px;" +
+    "background:var(--surface,#11151c);padding:20px 22px 22px;box-shadow:0 30px 80px rgba(0,0,0,.6)}" +
+    ".bk-win h4{margin:0 0 6px;font-size:16px}" +
+    ".bk-win p{margin:0 0 14px;font-size:12.5px;color:var(--muted);line-height:1.55}" +
+    ".bk-file{display:block;margin-bottom:12px;font-size:12.5px;color:var(--muted)}" +
+    ".bk-file input{display:block;margin-top:6px;width:100%;font:inherit;font-size:12.5px;color:var(--text)}" +
+    ".bk-win-act{display:flex;gap:8px;justify-content:flex-end;margin-top:6px}" +
+    ".bk-err{color:#E5484D;font-size:12px;margin:0 0 10px;min-height:14px}" +
     ".bk-badge.off i{background:#E5484D;box-shadow:0 0 0 3px rgba(229,72,77,.18)}" +
     ".bk-ok{position:fixed;inset:0;z-index:10000;display:flex;align-items:center;justify-content:center;" +
     "background:rgba(6,8,12,.82);backdrop-filter:blur(5px);animation:bkIn .18s ease-out}" +
@@ -95,6 +108,12 @@
   }
 
   /* ---------- строка активации в карточке ---------- */
+  /* кнопка верификации в карточке кошелька */
+  document.addEventListener("click", function (e) {
+    var b = e.target.closest && e.target.closest("[data-kyc]");
+    if (b) { e.preventDefault(); e.stopPropagation(); kycWin(b.getAttribute("data-kyc")); }
+  });
+
   var LOADED = 0;
   function rows() {
     css();
@@ -151,6 +170,103 @@
     return m + " мин " + (sec < 10 ? "0" : "") + sec + " с";
   }
 
+  /* верификация кошелька: показываем состояние и кнопку отправки документов.
+     Строка появляется только у активированных кошельков — как и просил владелец. */
+  function kycRow(s, k) {
+    var st = s && s.kyc;
+    if (st === "approved") {
+      return '<div class="bk-kyc"><span class="bk-badge"><i></i>Аккаунт верифицирован</span>' +
+        '<span class="bk-note" style="width:auto;margin:0">документы приняты площадкой</span></div>';
+    }
+    if (st === "pending") {
+      return '<div class="bk-kyc"><span class="bk-badge wait"><i></i>Документы на проверке</span>' +
+        '<span class="bk-note" style="width:auto;margin:0">решение придёт в кабинет</span></div>';
+    }
+    return '<div class="bk-kyc">' +
+      '<button class="btn btn-sm" data-kyc="' + k + '">Отправить паспорт</button>' +
+      '<span class="bk-note" style="width:auto;margin:0">' +
+      (st === "rejected" ? "верификация отклонена — можно отправить документы заново"
+                         : "аккаунт не верифицирован") + "</span></div>";
+  }
+
+  /* файл в строку data:URL — в таком виде снимок уходит на площадку */
+  function readFile(f) {
+    return new Promise(function (ok, no) {
+      if (!f) return ok(null);
+      if (f.size > 4 * 1024 * 1024) return no(new Error("Файл больше 4 МБ: " + f.name));
+      if (!/^image\/(jpeg|png|webp)$/.test(f.type)) return no(new Error("Нужен снимок JPG, PNG или WEBP"));
+      var r = new FileReader();
+      r.onload = function () { ok({ kind: "id", name: f.name, data: String(r.result) }); };
+      r.onerror = function () { no(new Error("Не удалось прочитать файл")); };
+      r.readAsDataURL(f);
+    });
+  }
+
+  /* доступ к кошельку по ключу карточки: ключ API берём из того же хранилища,
+     что и остальная страница */
+  function credOfKey(k) {
+    var S0 = state();
+    var a = ((S0 && S0.accounts) || []).filter(function (x) { return kOf(x) === k; })[0];
+    return a ? cred(a) : null;
+  }
+  /* общее окно «готово»: тот же вид, что и после активации ключа */
+  function okBox(title, text) {
+    var el = document.createElement("div");
+    el.className = "bk-ok";
+    el.innerHTML = '<div class="bk-ok-box">' +
+      '<svg viewBox="0 0 64 64" fill="none" stroke="#2BA87A" stroke-width="3.4" stroke-linecap="round">' +
+      '<circle cx="32" cy="32" r="27"/><path d="M20 33l8.5 8.5L45 25"/></svg>' +
+      "<b>" + esc(title) + "</b><p>" + esc(text) + "</p></div>";
+    document.body.appendChild(el);
+    var close = function () { el.remove(); };
+    el.onclick = close;
+    setTimeout(close, 4200);
+  }
+
+  function kycWin(k) {
+    var cr = credOfKey(k);
+    if (!cr) return;
+    var win = document.createElement("div");
+    win.className = "bk-win";
+    win.innerHTML = '<div class="bk-win-box">' +
+      "<h4>Верификация кошелька</h4>" +
+      "<p>Нужны два снимка: страница паспорта с фотографией и селфи с этим же документом в руках. " +
+      "JPG, PNG или WEBP, до 4 МБ каждый. Учебный стенд: снимки видит только администратор площадки.</p>" +
+      '<label class="bk-file">Паспорт — страница с фотографией' +
+        '<input type="file" accept="image/jpeg,image/png,image/webp" data-f="doc"></label>' +
+      '<label class="bk-file">Селфи с паспортом' +
+        '<input type="file" accept="image/jpeg,image/png,image/webp" data-f="self"></label>' +
+      '<p class="bk-err" data-err></p>' +
+      '<div class="bk-win-act"><button class="btn btn-sm" data-no>Отмена</button>' +
+      '<button class="btn btn-sm btn-primary" data-go>Отправить</button></div></div>';
+    document.body.appendChild(win);
+    var err = win.querySelector("[data-err]");
+    var close = function () { win.remove(); };
+    win.onclick = function (e) { if (e.target === win) close(); };
+    win.querySelector("[data-no]").onclick = close;
+    win.querySelector("[data-go]").onclick = function () {
+      var go = this;
+      var a = win.querySelector('[data-f="doc"]').files[0];
+      var b = win.querySelector('[data-f="self"]').files[0];
+      err.textContent = "";
+      if (!a || !b) { err.textContent = "Приложите оба снимка"; return; }
+      go.disabled = true; go.textContent = "Отправляем…";
+      Promise.all([readFile(a), readFile(b)])
+        .then(function (docs) {
+          return call("/api/hub/kyc", { method: "POST",
+            body: JSON.stringify({ key: cr.key, docs: [docs[0], { kind: "selfie", name: docs[1].name, data: docs[1].data }] }) });
+        })
+        .then(function (j) {
+          if (j && j.state) ST[k] = j.state;
+          close(); rows();
+          okBox("Документы отправлены", "Заявка на верификацию принята. Решение примет администратор площадки.");
+        })
+        .catch(function (e) {
+          err.textContent = e.message; go.disabled = false; go.textContent = "Отправить";
+        });
+    };
+  }
+
   function paint(host, k) {
     var s = ST[k];
     if (s && s.on) {
@@ -165,10 +281,10 @@
         (s.code ? " <s>" + esc(s.code) + "</s>" : "") + "</span>" + timer + "</div>" +
         '<p class="bk-note">Код принят. ' +
         (ms !== null
-          ? "Срок действия ключа — " + (s.days || 0) + " дн. с момента активации, до " +
-            new Date(s.until).toLocaleDateString("ru-RU") + ". "
+          ? "Активация действует до " + new Date(s.until).toLocaleDateString("ru-RU") + ". "
           : "Ключ бессрочный. ") +
-        "Снять активацию может только администратор площадки.</p>";
+        "Снять активацию может только администратор площадки.</p>" +
+        kycRow(s, k);
       return;
     }
     /* срок вышел: показываем это над полем и просим ввести новый код */
