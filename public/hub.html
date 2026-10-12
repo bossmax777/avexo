@@ -261,7 +261,7 @@ input[type=range]{width:100%;accent-color:var(--accent)}
     </span>
     <span class="pill demo"><i class="dot"></i>демонстрационный режим</span>
     <span class="sp"></span>
-    <span class="pill live hidden" id="pillLive"><i class="dot"></i><b id="pillCnt">0</b>&nbsp;активных сессий</span>
+    <span class="pill live hidden" id="pillLive"><i class="dot"></i><b id="pillCnt">0</b>&nbsp;<span id="pillWord">подключённых аккаунтов</span></span>
     <div class="who hidden" id="who"><b id="whoSum">—</b><small id="whoCnt">—</small></div>
     <button class="btn btn-sm hidden" id="btnCashIn" title="Пополнить кошелёк">Пополнить</button>
     <button class="btn btn-sm hidden" id="btnCashOut" title="Вывести средства">Вывести</button>
@@ -500,7 +500,7 @@ input[type=range]{width:100%;accent-color:var(--accent)}
             <input id="csOutAmt" class="num" type="number" min="10" step="10" placeholder="100"></div>
           <div class="field"><label for="csAddr2">Кошелёк для вывода</label>
             <input id="csAddr2" placeholder="адрес, привязанный к счёту" autocomplete="off"></div>
-          <div class="field"><label for="csReq">Реквизиты получателя — хватит последних цифр</label>
+          <div class="field" id="csReqF"><label for="csReq">Реквизиты получателя — хватит последних цифр</label>
             <input id="csReq" placeholder="•••• 4417"></div>
           <div class="field"><label for="csName">Получатель, как в документе</label>
             <input id="csName" placeholder="необязательно"></div>
@@ -884,6 +884,14 @@ function kpi(color,icon,label,value,tone,note){
     '<b class="num'+(tone?" "+tone:"")+'">'+value+'</b><span>'+note+'</span></div>';
 }
 
+/* «1 аккаунт», «2 аккаунта», «5 аккаунтов» — чтобы подпись читалась по-русски */
+function accWord(n){
+  const t=n%10, h=n%100;
+  if(t===1&&h!==11) return n+" подключённый аккаунт";
+  if(t>=2&&t<=4&&(h<10||h>=20)) return n+" подключённых аккаунта";
+  return n+" подключённых аккаунтов";
+}
+
 function renderKpis(){
   const live=S.accounts.filter(a=>!a.error&&winOf(a));
   const bal=S.accounts.filter(a=>!a.error).reduce((s,a)=>s+valOf(a),0);
@@ -902,8 +910,13 @@ function renderKpis(){
         "от старта текущих сценариев")+
     kpi("#BE8716",KPI_IC.bolt,"Подключённых аккаунтов",String(bw+nx),"",
         live.length?("активных сессий: "+live.length):"ни один сценарий не запущен");
-  $("pillLive").classList.toggle("hidden",!live.length);
-  $("pillCnt").textContent=live.length;
+  /* в пилюле — сколько кошельков подключено к пульту; каждая площадка считается
+     отдельным аккаунтом, поэтому один кошелёк здесь и один там дают двойку */
+  const links=bw+nx;
+  $("pillLive").classList.toggle("hidden",!links);
+  $("pillCnt").textContent=links;
+  $("pillWord").textContent=links===1?"подключённый аккаунт"
+    :(links%10>=2&&links%10<=4&&(links%100<10||links%100>=20)?"подключённых аккаунта":"подключённых аккаунтов");
   $("whoSum").textContent=usd(bal);
   $("whoCnt").textContent=(bw+nx)+" кошельков · "+live.length+" в работе";
 }
@@ -1003,7 +1016,8 @@ function drawChart(){
   const live=S.accounts.filter(a=>!a.error&&winOf(a));
   if(!live.length){
     svg.innerHTML='<text x="450" y="115" text-anchor="middle" fill="#6B7689" font-size="14" font-family="IBM Plex Sans">Сводный график появится после запуска сценария</text>';
-    $("eqMeta").textContent="нет активных сессий"; return;
+    $("eqMeta").textContent=accWord(S.accounts.filter(a=>!a.error).length)+
+      " · ни один сценарий не запущен"; return;
   }
   const st=Math.min(...live.map(a=>winOf(a).st));
   const en=Math.max(...live.map(a=>winOf(a).en));
@@ -1028,7 +1042,9 @@ function drawChart(){
     '<path d="'+d+'" fill="none" stroke="#7C5CFF" stroke-width="2.4" stroke-linejoin="round"/>'+
     (dp?'<path d="'+dp+'" fill="none" stroke="#2BD67B" stroke-width="2" stroke-dasharray="6 6" opacity=".85"/>':'')+
     '<circle cx="'+x(pts[pts.length-1][0]).toFixed(1)+'" cy="'+y(pts[pts.length-1][1]).toFixed(1)+'" r="4.5" fill="#7C5CFF"/>';
-  $("eqMeta").textContent=live.length+" активных сессий · до завершения "+fmtLeft(en-now);
+  $("eqMeta").textContent=accWord(S.accounts.filter(a=>!a.error).length)+
+    " · сессий в работе: "+live.length+
+    (en>now?" · до завершения "+fmtLeft(en-now):" · сессии завершены");
 }
 function renderDeals(){
   const all=[];
@@ -1179,8 +1195,12 @@ function csTab(t){
   $("csOut").hidden=t!=="out";
 }
 
+/* у криптовывода реквизиты получателя — это сам адрес кошелька,
+   поэтому второе поле с последними цифрами там не показываем */
+function csCrypto(){ return String($("csMeth").value||"").toLowerCase()==="crypto"; }
 function csOutCalc(){
   const m=CS.meth[$("csMeth").value]||{};
+  const f=$("csReqF"); if(f) f.style.display=csCrypto()?"none":"";
   const amt=Number($("csOutAmt").value)||0;
   const fee=+(amt*(m.fee||0)).toFixed(2);
   $("csOutM").textContent=m.name||"—";
@@ -1231,11 +1251,14 @@ function csWithdraw(){
   if(!(amt>0)) return err("Укажите сумму вывода");
   if(amt>valOf(a)) return err("На кошельке только "+usd(valOf(a)));
   if(!addr) return err("Укажите кошелёк для вывода — заявка принимается только на привязанный адрес");
-  if(req.replace(/\D/g,"").length<4) return err("Укажите реквизиты — хватит последних четырёх цифр");
+  /* в крипте реквизиты получателя — это сам кошелёк: в заявке останутся его последние знаки */
+  const mask=csCrypto()?addr:req;
+  if(!csCrypto()&&req.replace(/\D/g,"").length<4)
+    return err("Укажите реквизиты — хватит последних четырёх цифр");
   err("");
   const go=$("csOutGo"); go.disabled=true; go.style.opacity=".6";
   api("/api/hub/withdraw",{method:"POST",body:JSON.stringify({
-      key:c.key,amount:amt,method:$("csMeth").value,req:req,addr:addr,
+      key:c.key,amount:amt,method:$("csMeth").value,req:mask,addr:addr,
       name:($("csName").value||"").trim()})})
     .then(j=>{
       $("csOutDone").innerHTML='<div class="cs-ok"><b>Заявка на вывод создана</b>'+
