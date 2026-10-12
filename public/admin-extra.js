@@ -232,6 +232,12 @@
         '<button class="btn btn-primary" id="mdGo">Проставить всем</button></div>' +
     '</div>' +
     '<p class="md-sum" id="mdSum"></p>' +
+    '<div class="md-row" style="margin-bottom:10px">' +
+      '<div class="md-f" style="min-width:auto"><label>&nbsp;</label>' +
+        '<button class="btn btn-ghost" id="mdStop">Остановить все сценарии</button></div>' +
+      '<div class="md-f" style="min-width:260px"><label>&nbsp;</label>' +
+        '<span class="md-sum" id="mdStopSay" style="margin:0"></span></div>' +
+    '</div>' +
     '<div class="md-out" id="mdOut" hidden></div>' +
     '<h3 style="font-size:13.5px;margin:0 0 8px">Последние запуски</h3>' +
     '<div class="md-list" id="mdList"></div></div>';
@@ -252,6 +258,7 @@
       if (n) n.addEventListener("change", preview);
     });
     el("mdGo").onclick = run;
+    el("mdStop").onclick = stopAll;
     preview();
     return true;
   }
@@ -272,6 +279,32 @@
       ? "Кошельков на площадке: <b>" + us.length + "</b> · изменение капитала: <b>" +
         money(sum) + "</b> (" + (down ? "убыток" : "прибыль") + " " + p + "% к балансу каждого)"
       : "Кошельков пока нет.";
+  }
+
+  /* остановка всех сценариев: баланс фиксируется там, где сессия сейчас,
+     ничего не теряется и не дорисовывается */
+  function stopAll() {
+    var btn = el("mdStop"), say = el("mdStopSay");
+    btn.disabled = true; btn.textContent = "Считаем…";
+    say.textContent = "";
+    call("/api/admin/stop-all", { method: "POST", body: JSON.stringify({ dry: true }) })
+      .then(function (j) {
+        btn.disabled = false; btn.textContent = "Остановить все сценарии";
+        if (!j.stopped) { say.textContent = "Запущенных сценариев нет."; return; }
+        if (!confirm("Остановить сценарии на " + j.stopped + " кошельках?\n\n" +
+          "Баланс каждого зафиксируется на текущем значении сессии.\n" +
+          "Суммарно к зачислению: " + money(j.delta) + " · итоговый капитал " +
+          money(j.total).replace(/^\+/, "") + "\n\nОтменить это действие нельзя.")) return;
+        btn.disabled = true; btn.textContent = "Останавливаем…";
+        return call("/api/admin/stop-all", { method: "POST", body: JSON.stringify({}) })
+          .then(function (r) {
+            say.textContent = "Остановлено сценариев: " + r.stopped +
+              " · зафиксировано " + money(r.delta);
+            return refresh();
+          });
+      })
+      .catch(function (e) { say.textContent = e.message; })
+      .then(function () { btn.disabled = false; btn.textContent = "Остановить все сценарии"; });
   }
 
   function run() {
