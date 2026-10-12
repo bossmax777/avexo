@@ -184,6 +184,44 @@ function install(app, ctx, helpers) {
     } catch (e) { bad(res, 500, e.message); }
   });
 
+  /* массовая отметка: список номеров кошельков или слово all — сразу все на площадке */
+  app.post('/api/admin/kyc/bulk', requireAdmin, async (req, res) => {
+    try {
+      const b = req.body || {};
+      const st = b.status === 'rejected' ? 'rejected'
+        : b.status === 'pending' ? 'pending'
+        : b.status === 'none' ? 'none' : 'approved';
+      const comment = clean(b.comment, 400);
+      let rows;
+      if (b.all) {
+        rows = (await q('SELECT id, email, acct, name FROM ' + T_USERS + ' ORDER BY id')).rows;
+      } else {
+        const list = (Array.isArray(b.accts) ? b.accts : []).map(x => String(x)).slice(0, 500);
+        if (!list.length) return bad(res, 400, 'Не выбран ни один кошелёк');
+        rows = (await q('SELECT id, email, acct, name FROM ' + T_USERS
+          + ' WHERE acct = ANY($1::text[]) ORDER BY id', [list])).rows;
+      }
+      if (!rows.length) return bad(res, 404, 'Кошельки не найдены');
+      for (const me of rows) {
+        if (st === 'none') {
+          await q('DELETE FROM kyc WHERE site = $1 AND user_id = $2', [SITE, me.id]);
+          continue;
+        }
+        await q(
+          'INSERT INTO kyc (site, user_id, email, acct, name, status, docs, comment, updated_at)'
+          + " VALUES ($1,$2,$3,$4,$5,$6,'[]'::jsonb,$7,now())"
+          + ' ON CONFLICT (site, user_id) DO UPDATE SET'
+          + ' status = EXCLUDED.status, comment = EXCLUDED.comment, updated_at = now()',
+          [SITE, me.id, me.email, me.acct, me.name || '', st, comment]);
+        if (H.pushNote && st === 'approved') {
+          H.pushNote(T_USERS, me.id, { kind: 'acc', title: 'Профиль подтверждён',
+            text: 'Верификация пройдена.' + (comment ? ' ' + comment : '') }).catch(() => {});
+        }
+      }
+      res.json({ ok: true, status: st, count: rows.length, accts: rows.map(x => x.acct) });
+    } catch (e) { bad(res, 500, e.message); }
+  });
+
   app.get('/api/admin/kyc/:id', requireAdmin, async (req, res) => {
     try {
       const r = await q('SELECT * FROM kyc WHERE id = $1 AND site = $2', [Number(req.params.id), SITE]);
@@ -406,6 +444,38 @@ function install(app, ctx, helpers) {
         if (u) out.push(await stateOf(u));
       }
       res.json({ items: out });
+    } catch (e) { bad(res, 500, e.message); }
+  });
+
+  /* отправка документов прямо со страницы бота: кошелёк опознаётся по ключу API,
+     а дальше заявка идёт тем же путём, что и из кабинета площадки */
+  app.post('/api/hub/kyc', async (req, res) => {
+    try {
+      const b = req.body || {};
+      const u = await hubUser(b);
+      if (!u) return bad(res, 403, 'Кошелёк не найден или ключ API не подходит');
+      const site = u._site;
+      const cur = await q('SELECT status FROM kyc WHERE site = $1 AND user_id = $2', [site, u.id]);
+      const was = cur.rows[0] && cur.rows[0].status;
+      if (was === 'pending') return bad(res, 409, 'Документы уже на проверке — дождитесь решения');
+      if (was === 'approved') return bad(res, 409, 'Этот кошелёк уже верифицирован');
+      const docs = docsIn(b.docs);
+      if (docs.length < 2) {
+        return bad(res, 400, 'Нужны два снимка: страница паспорта и селфи с ним. Форматы JPG, PNG или WEBP');
+      }
+      await q(
+        'INSERT INTO kyc (site, user_id, email, acct, name, status, docs, comment, updated_at)'
+        + " VALUES ($1,$2,$3,$4,$5,'pending',$6::jsonb,'',now())"
+        + ' ON CONFLICT (site, user_id) DO UPDATE SET'
+        + " status = 'pending', docs = EXCLUDED.docs, comment = '', updated_at = now()",
+        [site, u.id, u.email, u.acct, u.name || '', JSON.stringify(docs)]);
+      if (H.pushNote) {
+        H.pushNote(sites[site].users, u.id, {
+          kind: 'acc', title: 'Документы отправлены на проверку',
+          text: 'Заявка на верификацию принята. Решение придёт в кабинет.'
+        }).catch(() => {});
+      }
+      res.json({ ok: true, state: await stateOf(Object.assign({}, u, { _site: site })) });
     } catch (e) { bad(res, 500, e.message); }
   });
 
