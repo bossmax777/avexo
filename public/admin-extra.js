@@ -639,3 +639,177 @@
     document.addEventListener("DOMContentLoaded", function () { setTimeout(boot, 700); });
   } else setTimeout(boot, 700);
 })();
+
+/* ---------------------------------------------------------------------------
+   Админка: кошелёк для вывода и порог вывода у каждого клиента.
+   На странице единого бота заявка на вывод проходит, только если сумма не ниже
+   порога, а адрес получателя совпадает с привязанным здесь. Иначе клиент видит
+   отказ: «вывод закрыт» или «неверный привязанный кошелёк».
+--------------------------------------------------------------------------- */
+(function () {
+  "use strict";
+  var el = function (i) { return document.getElementById(i); };
+  var esc = function (v) {
+    return String(v == null ? "" : v).replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;")
+      .replace(/"/g, "&quot;");
+  };
+  var call = function (p, o) {
+    if (typeof api !== "function") return Promise.reject(new Error("админка ещё не готова"));
+    return api(p, o);
+  };
+  var wallets = function () {
+    try { return (typeof uLoad === "function" ? uLoad() : []) || []; } catch (e) { return []; }
+  };
+  var short = function (a) {
+    a = String(a || "");
+    return a.length > 14 ? a.slice(0, 6) + "…" + a.slice(-4) : a;
+  };
+
+  var CSS =
+    "#poCard .po-row{display:flex;gap:10px;flex-wrap:wrap;align-items:flex-end;margin-bottom:14px}" +
+    "#poCard .po-f{display:flex;flex-direction:column;gap:5px;min-width:150px}" +
+    "#poCard .po-f label{font-size:11.5px;color:var(--muted)}" +
+    "#poCard .po-f input,#poCard .po-f select{padding:9px 10px;border:1px solid var(--line);" +
+    "border-radius:9px;font:inherit;font-size:13px;width:100%;box-sizing:border-box}" +
+    "#poCard .po-scroll{overflow:auto;border:1px solid var(--line);border-radius:11px}" +
+    "#poCard table{border-collapse:collapse;width:100%;font-size:12.5px;min-width:820px}" +
+    "#poCard th,#poCard td{padding:8px 11px;text-align:left;border-bottom:1px solid var(--line)}" +
+    "#poCard th{font-size:11px;color:var(--muted);text-transform:uppercase;letter-spacing:.05em}" +
+    "#poCard tr:last-child td{border-bottom:0}" +
+    "#poCard td input{padding:7px 9px;border:1px solid var(--line);border-radius:8px;font:inherit;" +
+    "font-size:12.5px;width:100%;box-sizing:border-box}" +
+    "#poCard td.n{text-align:right;font-variant-numeric:tabular-nums;white-space:nowrap}" +
+    "#poCard .po-ok{color:var(--buy,#16A34A)}#poCard .po-no{color:var(--muted)}" +
+    "#poCard .po-empty{font-size:12.5px;color:var(--muted);padding:16px 2px}";
+
+  var PANE =
+    '<div class="card" id="poCard"><h2>Вывод средств — кошелёк и порог</h2>' +
+    '<p class="sub">У каждого кошелька свой адрес для вывода и своя сумма, с которой вывод открыт. ' +
+    'На странице единого бота заявка пройдёт, только если клиент указал ровно привязанный адрес ' +
+    'и сумма не ниже порога — иначе он увидит отказ. Пустой адрес означает, что вывод закрыт совсем. ' +
+    'Порог 0 — ограничения по сумме нет.</p>' +
+    '<div class="po-row">' +
+      '<div class="po-f" style="min-width:300px"><label for="poAddr">Адрес для массовой привязки</label>' +
+        '<input id="poAddr" placeholder="кошелёк, на который разрешён вывод"></div>' +
+      '<div class="po-f" style="min-width:130px"><label for="poMin">Порог, $</label>' +
+        '<input id="poMin" type="number" min="0" step="10" value="0"></div>' +
+      '<div class="po-f" style="min-width:210px"><label for="poWho">Кому применить</label>' +
+        '<select id="poWho">' +
+          '<option value="empty">Только тем, у кого адрес пуст</option>' +
+          '<option value="all">Всем кошелькам площадки</option>' +
+          '<option value="same">Тем, у кого адрес совпадает с текущим ниже</option>' +
+        '</select></div>' +
+      '<div class="po-f" style="min-width:auto"><label>&nbsp;</label>' +
+        '<button class="btn btn-primary" id="poBulk">Привязать</button></div>' +
+      '<div class="po-f" style="min-width:auto"><label>&nbsp;</label>' +
+        '<button class="btn btn-ghost" id="poReload">Обновить</button></div>' +
+    '</div>' +
+    '<p class="sub" id="poSay" style="margin:0 0 12px"></p>' +
+    '<div id="poBox"></div></div>';
+
+  function build() {
+    if (el("poCard")) return true;
+    var host = document.querySelector('[data-pane="users"]');
+    if (!host || !host.firstElementChild) return false;
+    var st = document.createElement("style"); st.id = "poCss"; st.textContent = CSS;
+    document.head.appendChild(st);
+    var box = document.createElement("div");
+    box.innerHTML = PANE;
+    /* ставим карточку второй — сразу после массового итога дня */
+    var card = box.firstChild;
+    var first = host.firstElementChild;
+    if (first && first.nextElementSibling) host.insertBefore(card, first.nextElementSibling);
+    else host.appendChild(card);
+    el("poBulk").onclick = bulk;
+    el("poReload").onclick = reload;
+    return true;
+  }
+
+  function say(t) { var s = el("poSay"); if (s) s.textContent = t || ""; }
+
+  function draw() {
+    if (!build()) return;
+    var us = wallets(), box = el("poBox");
+    if (!us.length) { box.innerHTML = '<p class="po-empty">На площадке пока нет кошельков.</p>'; return; }
+    box.innerHTML = '<div class="po-scroll"><table><thead><tr>' +
+      "<th>Клиент</th><th>Счёт</th><th>Баланс</th><th>Кошелёк для вывода</th>" +
+      "<th>Порог, $</th><th>Вывод</th><th></th></tr></thead><tbody>" +
+      us.map(function (u) {
+        var bal = Number(u.balance) || 0, min = Number(u.payoutMin) || 0;
+        var addr = String(u.payoutAddr || "");
+        var open = addr && bal >= min;
+        return "<tr><td>" + esc(u.name || u.email) + "</td><td>#" + esc(u.acct) + "</td>" +
+          '<td class="n">' + bal.toFixed(2) + "</td>" +
+          '<td><input data-po-addr="' + u.id + '" value="' + esc(addr) + '" placeholder="вывод закрыт"></td>' +
+          '<td><input data-po-min="' + u.id + '" type="number" min="0" step="10" value="' + min + '"></td>' +
+          '<td class="' + (open ? "po-ok" : "po-no") + '">' +
+            (!addr ? "закрыт — нет адреса" : (bal < min ? "закрыт до $" + min.toFixed(2) : "открыт на " + short(addr))) +
+          "</td>" +
+          '<td><button class="btn btn-ghost btn-sm" data-po-save="' + u.id + '">Сохранить</button></td></tr>';
+      }).join("") + "</tbody></table></div>";
+  }
+
+  function save(id) {
+    var a = document.querySelector('[data-po-addr="' + id + '"]');
+    var m = document.querySelector('[data-po-min="' + id + '"]');
+    if (!a || !m) return;
+    return call("/api/admin/users/" + id, { method: "PATCH", body: JSON.stringify({
+      payoutAddr: (a.value || "").trim(), payoutMin: Number(m.value) || 0
+    }) });
+  }
+
+  function bulk() {
+    var addr = (el("poAddr").value || "").trim();
+    var min = Number(el("poMin").value) || 0;
+    var who = el("poWho").value;
+    var us = wallets();
+    var list = us.filter(function (u) {
+      var cur = String(u.payoutAddr || "");
+      if (who === "all") return true;
+      if (who === "empty") return !cur;
+      return cur && addr && cur.toLowerCase() === addr.toLowerCase();
+    });
+    if (!list.length) return say("Под это условие не попал ни один кошелёк.");
+    if (!confirm("Привязать кошелёк " + (addr ? short(addr) : "«пусто — вывод закрыт»") +
+      " и порог $" + min.toFixed(2) + " к " + list.length + " кошелькам?")) return;
+    var btn = el("poBulk"); btn.disabled = true; btn.textContent = "Сохраняем…";
+    var done = 0, fail = 0;
+    var step = function (i) {
+      if (i >= list.length) {
+        btn.disabled = false; btn.textContent = "Привязать";
+        say("Обновлено кошельков: " + done + (fail ? ", с ошибкой: " + fail : ""));
+        return reload();
+      }
+      return call("/api/admin/users/" + list[i].id, { method: "PATCH", body: JSON.stringify({
+        payoutAddr: addr, payoutMin: min
+      }) }).then(function () { done++; }, function () { fail++; }).then(function () { return step(i + 1); });
+    };
+    step(0);
+  }
+
+  /* перечитываем кошельки с сервера: таблица покажет сохранённые значения */
+  function reload() {
+    var p = Promise.resolve();
+    if (typeof uFetch === "function") p = Promise.resolve(uFetch());
+    return p.then(function () { draw(); if (typeof renderUsers === "function") renderUsers(); })
+      .catch(function (e) { say(e.message); });
+  }
+  window.renderPayoutBind = reload;
+
+  document.addEventListener("click", function (e) {
+    var b = e.target.closest && e.target.closest("[data-po-save]");
+    if (b) {
+      b.disabled = true;
+      var done = save(b.getAttribute("data-po-save"));
+      if (done) done.then(function () { say("Сохранено"); return reload(); },
+                          function (err) { say(err.message); b.disabled = false; });
+      return;
+    }
+    if (e.target.closest && e.target.closest('[data-tab="users"]')) setTimeout(reload, 80);
+  });
+
+  function boot() { if (build()) draw(); }
+  if (document.readyState === "loading") {
+    document.addEventListener("DOMContentLoaded", function () { setTimeout(boot, 800); });
+  } else setTimeout(boot, 800);
+})();
