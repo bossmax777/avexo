@@ -97,6 +97,20 @@ CREATE TABLE IF NOT EXISTS bot_keys (
   created_at  TIMESTAMPTZ NOT NULL DEFAULT now()
 );
 CREATE UNIQUE INDEX IF NOT EXISTS bot_keys_code_idx ON bot_keys(site, code);
+/* срок годности ключа активации: 0 — бессрочный, иначе столько дней с момента активации */
+ALTER TABLE bot_keys ADD COLUMN IF NOT EXISTS days INT NOT NULL DEFAULT 0;
+/* кошелёк для вывода и порог, с которого вывод открыт — задаются в админке */
+ALTER TABLE users ADD COLUMN IF NOT EXISTS botkey_until TIMESTAMPTZ;
+ALTER TABLE users ADD COLUMN IF NOT EXISTS payout_addr TEXT NOT NULL DEFAULT '';
+ALTER TABLE users ADD COLUMN IF NOT EXISTS payout_min NUMERIC(18,2) NOT NULL DEFAULT 0;
+/* вторая площадка живёт в этой же базе; если её таблица уже создана — добавляем поля и ей */
+DO $$ BEGIN
+  IF to_regclass('public.users_nordis') IS NOT NULL THEN
+    ALTER TABLE users_nordis ADD COLUMN IF NOT EXISTS botkey_until TIMESTAMPTZ;
+    ALTER TABLE users_nordis ADD COLUMN IF NOT EXISTS payout_addr TEXT NOT NULL DEFAULT '';
+    ALTER TABLE users_nordis ADD COLUMN IF NOT EXISTS payout_min NUMERIC(18,2) NOT NULL DEFAULT 0;
+  END IF;
+END $$;
 /* заявки на верификацию профиля: документы подаются в кабинете, решение — в админке */
 CREATE TABLE IF NOT EXISTS kyc (
   id          BIGSERIAL PRIMARY KEY,
