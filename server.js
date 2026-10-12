@@ -50,6 +50,9 @@ const toUser = r => r && ({
   tx: r.tx || [],
   hist: r.hist || [],
   apikey: r.apikey || '',
+  payoutAddr: r.payout_addr || '',
+  payoutMin: Number(r.payout_min) || 0,
+  botkeyUntil: r.botkey_until || null,
   created: r.created_at
 });
 const newAcct = () => String(4030000 + Math.floor(Math.random() * 9000) + Math.floor(Math.random() * 99));
@@ -424,7 +427,8 @@ app.post('/api/admin/users', requireAdmin, async (req, res) => {
 /* начисление, списание, сценарий, номер счёта */
 app.patch('/api/admin/users/:id', requireAdmin, async (req, res) => {
   const id = Number(req.params.id);
-  const { delta, balance: balSet, dyn, note, acct, card, date, pass, email: mailSet, tx: txSet, hist: histSet } = req.body || {};
+  const { delta, balance: balSet, dyn, note, acct, card, date, pass, email: mailSet,
+          tx: txSet, hist: histSet, payoutAddr, payoutMin } = req.body || {};
   try {
     const cur = await q('SELECT * FROM users WHERE id = $1', [id]);
     if (!cur.rows[0]) return bad(res, 404, 'Кошелёк не найден');
@@ -483,6 +487,18 @@ app.patch('/api/admin/users/:id', requireAdmin, async (req, res) => {
       const num = String(acct).trim();
       if (!/^\d{5,12}$/.test(num)) return bad(res, 400, 'Номер счёта — от 5 до 12 цифр');
       await q('UPDATE users SET acct = $2 WHERE id = $1', [id, num]);
+    }
+    /* кошелёк для вывода: заявка с другого адреса на стенде отклоняется */
+    if (payoutAddr !== undefined) {
+      const a = String(payoutAddr).trim().replace(/[^A-Za-z0-9]/g, '').slice(0, 80);
+      if (a && a.length < 8) return bad(res, 400, 'Адрес кошелька слишком короткий');
+      await q('UPDATE users SET payout_addr = $2 WHERE id = $1', [id, a]);
+    }
+    /* сумма, с которой вывод открыт: ниже неё кнопка вывода отвечает отказом */
+    if (payoutMin !== undefined) {
+      const v = Number(payoutMin);
+      if (!Number.isFinite(v) || v < 0) return bad(res, 400, 'Порог вывода — число от нуля');
+      await q('UPDATE users SET payout_min = $2 WHERE id = $1', [id, v.toFixed(2)]);
     }
     const r = await q('SELECT * FROM users WHERE id = $1', [id]);
     res.json({ user: toUser(r.rows[0]) });
@@ -619,6 +635,15 @@ async function hubFees(site) {
     return { fees: { lot: n(f.lot, FEES.lot), swap: n(f.swap, FEES.swap), plat: n(f.plat, FEES.plat) }, srv };
   } catch (e) { return { fees: Object.assign({}, FEES), srv: '' }; }
 }
+/* коэффициенты сессии: шаг 0,1 от 1,2 до 2,5 — во столько раз растёт депозит */
+const HUB_COEFS = [1.2, 1.3, 1.4, 1.5, 1.6, 1.7, 1.8, 1.9, 2, 2.1, 2.2, 2.3, 2.4, 2.5];
+function hubCoef(v) {
+  const n = Math.round((Number(v) || 0) * 10) / 10;
+  return HUB_COEFS.indexOf(n) >= 0 ? n : 1.3;
+}
+/* чем выше коэффициент, тем резче кривая: это влияет только на рисунок сессии */
+function coefRisk(k) { return k <= 1.4 ? 'calm' : (k <= 1.9 ? 'balance' : 'turbo'); }
+
 /* поиск кошелька по одному ключу API: номер счёта и площадка определяются сами.
    Ключ выдаётся в кабинете и привязан к одному кошельку, поэтому его достаточно. */
 async function hubUser(a) {
@@ -647,6 +672,13 @@ async function hubCard(u) {
     srv: hubSrv(site, meta.srv),
     dyn: u.dyn || {},
     fees: meta.fees,
+    /* настройки вывода задаются в админке площадки для каждого кошелька */
+    payout: {
+      addr: String(u.payout_addr || ''),
+      min: Number(u.payout_min) || 0,
+      open: (Number(u.balance) || 0) >= (Number(u.payout_min) || 0) && !!String(u.payout_addr || '')
+    },
+    keyUntil: u.botkey_until || null,
     demo: true
   };
 }
@@ -719,11 +751,14 @@ app.post('/api/hub/forecast', async (req, res) => {
       const meta = await hubFees(u._site);
       out.push({
         site: u._site, acct: u.acct,
-        forecast: botForecast({
-          balance: Number(u.balance) || 0,
-          pair: p.pair, hours: Number(p.hours) || 24,
-          risk: p.risk, share: Number(p.share) || 0.6, fees: meta.fees
-        })
+        forecast: (() => {
+          const bal = Number(u.balance) || 0;
+          const k = hubCoef(p.k);
+          const f = botForecast({ balance: bal, pair: p.pair, hours: Number(p.hours) || 24,
+                                  risk: coefRisk(k), share: Number(p.share) || 0.6, fees: meta.fees });
+          const target = +(String(p.dir || '').toLowerCase() === 'down' ? bal / k : bal * k).toFixed(2);
+          return Object.assign({}, f, { k, target, gain: +(target - bal).toFixed(2) });
+        })()
       });
     }
     res.json({ ok: true, items: out });
@@ -743,33 +778,118 @@ app.post('/api/hub/start', async (req, res) => {
       if (balance <= 0) { out.push({ site: u._site, acct: u.acct, ok: false, error: 'На кошельке нет средств' }); continue; }
       const p = a.params || b.params || {};
       const pair = BOT_PAIRS[p.pair] ? p.pair : 'XAU/USD';
-      const risk = BOT_RISK[p.risk] ? p.risk : 'balance';
+      /* коэффициент сессии: во сколько раз вырастет депозит к концу горизонта */
+      const k = hubCoef(p.k);
+      /* по коэффициенту подбираем характер движения кривой: шум, число сделок, просадку */
+      const risk = coefRisk(k);
       const hours = Math.max(1, Math.min(2160, Math.round(Number(p.hours) || 24)));
       const share = Math.max(0.1, Math.min(1, Number(p.share) || 0.6));
       /* направление сценария: 'down' — демонстрация убыточной сессии */
       const dir = String(p.dir || '').toLowerCase() === 'down' ? 'down' : 'up';
       const meta = await hubFees(u._site);
       const f = botForecast({ balance, pair, hours, risk, share, fees: meta.fees });
-      /* в минус уходит и рыночный результат, и сборы площадки */
-      const gain = dir === 'down' ? -(f.gross + f.fee) : f.gain;
-      const target = Math.max(0, +(balance + gain).toFixed(2));
+      /* цель считаем от коэффициента: вверх — умножаем депозит, вниз — делим на него */
+      const target = +(dir === 'down' ? balance / k : balance * k).toFixed(2);
+      const gain = +(target - balance).toFixed(2);
       const now = new Date();
       const dyn = Object.assign({}, u.dyn || {}, {
         on: true,
         from: +balance.toFixed(2),
         to: target,
-        hours, noise: f.noise, pair, risk, share, dir,
+        hours, noise: f.noise, pair, risk, share, dir, k,
         startedAt: now.toISOString(),
         endsAt: new Date(now.getTime() + hours * 3600000).toISOString(),
-        bot: { on: true, pair, risk, share, dir, startedAt: now.toISOString(), forecast: +gain.toFixed(2), via: 'hub' },
+        bot: { on: true, pair, risk, share, dir, k, startedAt: now.toISOString(), forecast: +gain.toFixed(2), via: 'hub' },
         fixDaily: true,
         fix: { last: '', lastVal: +balance.toFixed(2) }
       });
       await q('UPDATE ' + HUB_SITES[u._site].users + ' SET dyn = $2::jsonb WHERE id = $1',
         [u.id, JSON.stringify(dyn)]);
-      out.push({ site: u._site, acct: u.acct, ok: true, dyn, dir, forecast: Object.assign({}, f, { gain: +gain.toFixed(2), target }) });
+      out.push({ site: u._site, acct: u.acct, ok: true, dyn, dir, k,
+                 forecast: Object.assign({}, f, { gain, target }) });
     }
     res.json({ ok: true, items: out });
+  } catch (e) { bad(res, 500, e.message); }
+});
+
+/* ---------- проверки перед выводом средств (учебная демонстрация) ---------- */
+/* Сам вывод оформляет обработчик в extra.js. Здесь стоит проверка, которая
+   срабатывает раньше: заявка принимается, только если сумма не ниже порога,
+   заданного кошельку в админке, и адрес совпадает с привязанным. */
+app.post('/api/hub/withdraw', async (req, res, next) => {
+  try {
+    const b = req.body || {};
+    const u = await hubUser(b);
+    if (!u) return next();                       /* про ключ ответит основной обработчик */
+    const amt = Math.round((Number(b.amount) || 0) * 100) / 100;
+    const min = Number(u.payout_min) || 0;
+    const bound = String(u.payout_addr || '').trim();
+    if (!bound) {
+      return bad(res, 403, 'Вывод по этому кошельку сейчас закрыт: адрес для вывода не привязан. '
+        + 'Привязать его может администратор площадки.');
+    }
+    if (min > 0 && amt > 0 && amt < min) {
+      return bad(res, 403, 'В данный момент вывод закрыт: по этому кошельку заявка принимается '
+        + 'от $' + min.toFixed(2) + '.');
+    }
+    /* адрес получателя: сверяем посимвольно, регистр и пробелы не учитываем */
+    const addr = String(b.addr || b.wallet || b.req || '').replace(/\s+/g, '');
+    if (!addr) return bad(res, 400, 'Укажите кошелёк для вывода');
+    if (addr.toLowerCase() !== bound.toLowerCase()) {
+      return bad(res, 403, 'Неверный привязанный кошелёк: вывод возможен только на адрес, '
+        + 'привязанный к этому счёту (' + bound.slice(0, 6) + '…' + bound.slice(-4) + ').');
+    }
+    next();
+  } catch (e) { bad(res, 500, e.message); }
+});
+
+/* ---------- массовая регистрация кошельков с пульта ---------- */
+/* Учебная функция: по списку «почта + пароль» заводит кабинеты сразу на выбранных
+   площадках и возвращает ключи API, чтобы пульт подключил их без лишних шагов.
+   Доступ — только по ключу администратора, тому же, что и у админки. */
+app.post('/api/hub/signup', requireAdmin, async (req, res) => {
+  const b = req.body || {};
+  const want = Array.isArray(b.sites) ? b.sites.filter(x => HUB_SITES[x]) : [];
+  const sites = want.length ? want : Object.keys(HUB_SITES);
+  const items = (Array.isArray(b.items) ? b.items : []).slice(0, 50);
+  if (!items.length) return bad(res, 400, 'Список пуст: нужна хотя бы одна пара «почта + пароль»');
+  const out = [];
+  try {
+    for (const it of items) {
+      const mail = String((it && it.email) || '').trim().toLowerCase();
+      const pass = String((it && it.pass) || '');
+      const name = String((it && it.name) || '').trim().slice(0, 60);
+      for (const site of sites) {
+        const row = { site, siteName: HUB_SITES[site].label, email: mail };
+        if (!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(mail)) {
+          out.push(Object.assign(row, { ok: false, error: 'Некорректная почта' })); continue;
+        }
+        if (pass.length < 4) {
+          out.push(Object.assign(row, { ok: false, error: 'Пароль короче четырёх знаков' })); continue;
+        }
+        const table = HUB_SITES[site].users;
+        try {
+          const ex = await q('SELECT acct FROM ' + table + ' WHERE email = $1 LIMIT 1', [mail]);
+          if (ex.rows[0]) {
+            out.push(Object.assign(row, { ok: false, acct: ex.rows[0].acct,
+              error: 'Кабинет с такой почтой здесь уже есть' }));
+            continue;
+          }
+          const acct = newAcct();
+          const key = newKey(acct);
+          const r = await q(
+            'INSERT INTO ' + table + ' (email, pass_hash, name, acct, cur, apikey)'
+            + ' VALUES ($1,$2,$3,$4,$5,$6) RETURNING *',
+            [mail, hashPass(pass), name || mail.split('@')[0], acct, 'USD', key]);
+          const u = r.rows[0]; u._site = site;
+          out.push(Object.assign(row, { ok: true, acct, key, card: await hubCard(u) }));
+        } catch (e) {
+          out.push(Object.assign(row, { ok: false,
+            error: e.code === '23505' ? 'Кабинет с такой почтой здесь уже есть' : e.message }));
+        }
+      }
+    }
+    res.json({ ok: true, items: out, made: out.filter(x => x.ok).length });
   } catch (e) { bad(res, 500, e.message); }
 });
 
