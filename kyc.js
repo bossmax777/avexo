@@ -301,6 +301,67 @@ function install(app, ctx, helpers) {
     } catch (e) { bad(res, 500, e.message); }
   });
 
+  /* ---------- активация ключа администратором ---------- */
+  /* В админке можно включить бота клиенту, не прося его вводить код, и так же снять.
+     Код берётся из выпущенных: можно указать конкретный, иначе берётся свежий активный. */
+  app.post('/api/admin/botkeys/assign', requireAdmin, async (req, res) => {
+    try {
+      const b = req.body || {};
+      const id = Number(b.user);
+      if (!id) return bad(res, 400, 'Не указан кошелёк');
+      const u = await q('SELECT id, acct, botkey FROM ' + T_USERS + ' WHERE id = $1', [id]);
+      if (!u.rows[0]) return bad(res, 404, 'Кошелёк не найден');
+      let row = null;
+      const asked = normCode(b.code);
+      if (asked) {
+        const r = await q('SELECT * FROM bot_keys WHERE code = $1 ORDER BY (site = $2) DESC, id LIMIT 1',
+          [asked, SITE]);
+        row = r.rows[0];
+        if (!row) return bad(res, 404, 'Такой код не выпускался');
+        if (!row.active) return bad(res, 403, 'Код отозван');
+      } else {
+        /* свободный активный код: сперва тот, которым ещё никто не пользовался */
+        const r = await q('SELECT k.* FROM bot_keys k WHERE k.site = $1 AND k.active'
+          + ' ORDER BY (SELECT count(*) FROM ' + T_USERS + ' w WHERE w.botkey = k.code), k.id LIMIT 1',
+          [SITE]);
+        row = r.rows[0];
+        if (!row) return bad(res, 404, 'Нет ни одного активного кода — выпустите их во вкладке «Ключи бота»');
+      }
+      const days = Number(row.days) || 0;
+      const until = days > 0 ? new Date(Date.now() + days * 86400000) : null;
+      await q('UPDATE ' + T_USERS + ' SET botkey = $2, botkey_at = now(), botkey_until = $3 WHERE id = $1',
+        [id, row.code, until]);
+      await q('UPDATE bot_keys SET uses = uses + 1 WHERE code = $1 AND site = $2', [row.code, SITE]).catch(() => {});
+      res.json({ ok: true, acct: u.rows[0].acct, code: row.code, days, until });
+    } catch (e) { bad(res, 500, e.message); }
+  });
+
+  app.post('/api/admin/botkeys/revoke', requireAdmin, async (req, res) => {
+    try {
+      const id = Number((req.body || {}).user);
+      if (!id) return bad(res, 400, 'Не указан кошелёк');
+      const r = await q('UPDATE ' + T_USERS + " SET botkey = '', botkey_until = NULL"
+        + ' WHERE id = $1 RETURNING acct', [id]);
+      if (!r.rows[0]) return bad(res, 404, 'Кошелёк не найден');
+      res.json({ ok: true, acct: r.rows[0].acct });
+    } catch (e) { bad(res, 500, e.message); }
+  });
+
+  /* продлить активацию: срок считается заново от этой минуты */
+  app.post('/api/admin/botkeys/extend', requireAdmin, async (req, res) => {
+    try {
+      const b = req.body || {};
+      const id = Number(b.user);
+      const days = Math.max(0, Math.min(3650, parseInt(b.days, 10) || 0));
+      if (!id) return bad(res, 400, 'Не указан кошелёк');
+      const until = days > 0 ? new Date(Date.now() + days * 86400000) : null;
+      const r = await q('UPDATE ' + T_USERS + ' SET botkey_until = $2'
+        + " WHERE id = $1 AND botkey <> '' RETURNING acct", [id, until]);
+      if (!r.rows[0]) return bad(res, 404, 'У этого кошелька нет активации');
+      res.json({ ok: true, acct: r.rows[0].acct, days, until });
+    } catch (e) { bad(res, 500, e.message); }
+  });
+
   /* ---------- страница единого бота ---------- */
   if (!ctx.hub) return;
   const { hubUser, hubList, sites } = ctx;
