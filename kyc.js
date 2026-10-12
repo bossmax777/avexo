@@ -77,6 +77,10 @@ function install(app, ctx, helpers) {
   /* ключ активации один на обе площадки: выпущенный здесь работает и на соседней.
      Поэтому код заводится сразу двумя строками, а отзыв снимает обе. */
   const ALL_SITES = ['bw', 'nx'];
+  /* таблицы кошельков обеих площадок: база общая, поэтому отметку верификации
+     можно поставить сразу и там, и там — из любой админки */
+  const SITE_TABLES = { bw: 'users', nx: 'users_nordis' };
+  const SITE_NAMES = { bw: 'BullWaves', nx: 'Вторая площадка' };
   const requireAdmin = ctx.requireAdmin;
   const sessionUser = ctx.sessionUser;
 
@@ -192,34 +196,72 @@ function install(app, ctx, helpers) {
         : b.status === 'pending' ? 'pending'
         : b.status === 'none' ? 'none' : 'approved';
       const comment = clean(b.comment, 400);
-      let rows;
-      if (b.all) {
-        rows = (await q('SELECT id, email, acct, name FROM ' + T_USERS + ' ORDER BY id')).rows;
-      } else {
-        const list = (Array.isArray(b.accts) ? b.accts : []).map(x => String(x)).slice(0, 500);
-        if (!list.length) return bad(res, 400, 'Не выбран ни один кошелёк');
-        rows = (await q('SELECT id, email, acct, name FROM ' + T_USERS
-          + ' WHERE acct = ANY($1::text[]) ORDER BY id', [list])).rows;
-      }
-      if (!rows.length) return bad(res, 404, 'Кошельки не найдены');
-      for (const me of rows) {
-        if (st === 'none') {
-          await q('DELETE FROM kyc WHERE site = $1 AND user_id = $2', [SITE, me.id]);
+      /* обе площадки живут в одной базе, поэтому отметку можно поставить сразу везде */
+      const one = SITE_TABLES[String(b.site || '')] ? String(b.site) : '';
+      const scope = b.both ? Object.keys(SITE_TABLES).map(k => ({ site: k, table: SITE_TABLES[k] }))
+                   : one ? [{ site: one, table: SITE_TABLES[one] }]
+                         : [{ site: SITE, table: T_USERS }];
+      const done = [];
+      const accts = [];
+      for (const sc of scope) {
+        let rows = [];
+        try {
+          if (b.all) {
+            rows = (await q('SELECT id, email, acct, name FROM ' + sc.table + ' ORDER BY id')).rows;
+          } else {
+            const list = (Array.isArray(b.accts) ? b.accts : []).map(x => String(x)).slice(0, 500);
+            if (!list.length) return bad(res, 400, 'Не выбран ни один кошелёк');
+            rows = (await q('SELECT id, email, acct, name FROM ' + sc.table
+              + ' WHERE acct = ANY($1::text[]) ORDER BY id', [list])).rows;
+          }
+        } catch (e) {
+          /* площадки может не быть в этой базе — просто пропускаем её */
+          done.push({ site: sc.site, count: 0, error: e.message });
           continue;
         }
-        await q(
-          'INSERT INTO kyc (site, user_id, email, acct, name, status, docs, comment, updated_at)'
-          + " VALUES ($1,$2,$3,$4,$5,$6,'[]'::jsonb,$7,now())"
-          + ' ON CONFLICT (site, user_id) DO UPDATE SET'
-          + ' status = EXCLUDED.status, comment = EXCLUDED.comment, updated_at = now()',
-          [SITE, me.id, me.email, me.acct, me.name || '', st, comment]);
-        if (H.pushNote && st === 'approved') {
-          H.pushNote(T_USERS, me.id, { kind: 'acc', title: 'Профиль подтверждён',
-            text: 'Верификация пройдена.' + (comment ? ' ' + comment : '') }).catch(() => {});
+        for (const me of rows) {
+          if (st === 'none') {
+            await q('DELETE FROM kyc WHERE site = $1 AND user_id = $2', [sc.site, me.id]);
+            continue;
+          }
+          await q(
+            'INSERT INTO kyc (site, user_id, email, acct, name, status, docs, comment, updated_at)'
+            + " VALUES ($1,$2,$3,$4,$5,$6,'[]'::jsonb,$7,now())"
+            + ' ON CONFLICT (site, user_id) DO UPDATE SET'
+            + ' status = EXCLUDED.status, comment = EXCLUDED.comment, updated_at = now()',
+            [sc.site, me.id, me.email, me.acct, me.name || '', st, comment]);
+          if (H.pushNote && st === 'approved') {
+            H.pushNote(sc.table, me.id, { kind: 'acc', title: 'Профиль подтверждён',
+              text: 'Верификация пройдена.' + (comment ? ' ' + comment : '') }).catch(() => {});
+          }
         }
+        done.push({ site: sc.site, count: rows.length });
+        rows.forEach(x => accts.push(x.acct));
       }
-      res.json({ ok: true, status: st, count: rows.length, accts: rows.map(x => x.acct) });
+      const total = done.reduce((s, x) => s + x.count, 0);
+      if (!total) return bad(res, 404, 'Кошельки не найдены');
+      res.json({ ok: true, status: st, count: total, sites: done, accts });
     } catch (e) { bad(res, 500, e.message); }
+  });
+
+  /* все кошельки обеих площадок со статусом верификации: список для админки.
+     Маршрут идёт до /:id, иначе express примет слово wallets за номер заявки. */
+  app.get('/api/admin/kyc/wallets', requireAdmin, async (_req, res) => {
+    const out = [];
+    for (const site of Object.keys(SITE_TABLES)) {
+      try {
+        const r = await q('SELECT w.id, w.acct, w.name, w.email, k.status'
+          + ' FROM ' + SITE_TABLES[site] + ' w'
+          + ' LEFT JOIN kyc k ON k.site = $1 AND k.user_id = w.id'
+          + ' ORDER BY w.id', [site]);
+        r.rows.forEach(x => out.push({
+          site: site, siteName: SITE_NAMES[site] || site,
+          id: Number(x.id), acct: x.acct, name: x.name || '', email: x.email || '',
+          status: x.status || 'none', statusName: KYC_ST[x.status || 'none']
+        }));
+      } catch (e) { /* площадки может не быть в этой базе — пропускаем */ }
+    }
+    res.json({ items: out, statuses: KYC_ST, sites: SITE_NAMES });
   });
 
   app.get('/api/admin/kyc/:id', requireAdmin, async (req, res) => {
