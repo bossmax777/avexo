@@ -633,6 +633,33 @@ function renderMktStop(){
 setInterval(renderMktStop,30000);
 
 /* ============ движок сценария (один в один с кабинетами) ============ */
+/* настоящее расписание биржи: по нему расставляются сделки в журнале.
+   Эти функции намеренно отдельные от mktSegs — общая заглушка «биржа открыта всегда»
+   их не подменяет, иначе сделки появлялись бы и ночью, и в выходные. */
+function realSegs(dow){
+  if(dow===6) return [];
+  if(dow===0) return [[18,24]];
+  if(dow===5) return [[0,17]];
+  return [[0,17],[18,24]];
+}
+/* отступить от момента t назад на need миллисекунд именно торгового времени:
+   нерабочие часы и выходные перешагиваются целиком */
+function marketBack(t,need){
+  const off=mktOff(t);
+  const B=t+off;
+  let left=Math.max(0,need);
+  for(let day=Math.floor(B/86400000)*86400000; day>B-45*86400000; day-=86400000){
+    const segs=realSegs(new Date(day).getUTCDay());
+    for(let i=segs.length-1;i>=0;i--){
+      const s=day+segs[i][0]*3600000;
+      const e=Math.min(B,day+segs[i][1]*3600000);
+      if(e<=s) continue;
+      if(e-s>=left) return (e-left)-off;
+      left-=e-s;
+    }
+  }
+  return t-need;
+}
 function rnd(seed,i){const x=Math.sin(seed*13.17+i*97.31)*43758.5453;return x-Math.floor(x);}
 function phase(i,seed){const a=Math.sin(i*374.761+seed*911.13)*43758.5453;return (a-Math.floor(a))*Math.PI*2;}
 const FREQ=[1,2,3,5,8,13,21,34,55,89];
@@ -713,36 +740,47 @@ function basePrice(sym,t){
 const TRADES_DAY={calm:9,balance:18,turbo:34};
 /* закрытые сделки кошелька: детерминированы окном сценария, сумма результатов = достигнутой прибыли */
 function dealsOf(a,limit){
-  const w=winOf(a); if(!w) return [];
-  const d=w.d, sym=d.pair||"XAU/USD", seed=(w.st/60000)%9973;
-  const days=w.tspan/86400000;
-  const perDay=TRADES_DAY[d.risk]||TRADES_DAY.balance;
-  const total=Math.max(4,Math.round(perDay*days));
-  const warm=Math.min(w.tspan*0.05,20*60000);
-  const step=(w.tspan-warm)/Math.max(1,total);
-  const at=i=>mktEndWall(w.st,warm+step*(i+1));
+  const cap=Math.max(1,limit||40);
+  const w=winOf(a), p=paramsFor(a);
+  const sym=(w&&w.d.pair)||p.pair||"XAU/USD";
+  const seed=((Number(String(a.acct).replace(/\D/g,""))||7)*31)%9973;
+  /* частота сделок: у запущенной сессии своя, иначе берём настройку кошелька */
+  const risk=w?(w.d.risk||coefRisk(coefOf(w.d.k))):coefRisk(coefOf(p.k));
+  const perDay=TRADES_DAY[risk]||TRADES_DAY.balance;
+  const step=86400000/Math.max(1,perDay);
   const now=Date.now();
-  let done=0; while(done<total&&at(done)<=now) done++;
-  if(!done) return [];
-  const gain=valOf(a)-(Number(d.from)||0);
-  const ws=[]; for(let i=0;i<done;i++) ws.push(0.45+rnd(seed,i+120));
-  const sum=ws.reduce((x,y)=>x+y,0)||1;
+  /* сделки идут назад от текущей минуты по настоящим часам биржи,
+     поэтому в журнале всегда свежие даты, даже когда сценарий уже остановлен */
+  const ts=[];
+  let t=marketBack(now,step*0.4);
+  for(let i=0;i<cap;i++){ ts.push(t); t=marketBack(t,step*(0.65+rnd(seed,i+11)*0.7)); }
+  /* результат сессии распределяем по тем сделкам, что попали в её окно;
+     остальные дают мелкий разброс около нуля — баланс они не меняют */
+  const bal=valOf(a);
+  const gain=w?(bal-(Number(w.d.from)||0)):0;
+  const inWin=w?ts.filter(x=>x>=w.st):[];
+  const ws={}; let sum=0;
+  inWin.forEach((x,i)=>{ const v=0.45+rnd(seed,i+120); ws[x]=v; sum+=v; });
   const [c,dec]=SPEC[sym]||[100,2];
   const out=[];
-  for(let i=done-1;i>=0&&out.length<(limit||40);i--){
-    const t=at(i);
+  ts.forEach((x,i)=>{
     const side=rnd(seed,i+40)>0.32?"buy":"sell";
     const vol=Math.max(0.01,Math.round((0.05+rnd(seed,i+60)*0.6)*100)/100);
-    /* каждая пятая сделка убыточна — иначе журнал выглядит нереалистично */
-    const loss=rnd(seed,i+300)<0.22;
-    let pl=gain*ws[i]/sum;
-    if(loss) pl=-Math.abs(pl)*0.55;
-    const open=basePrice(sym,t);
+    let pl;
+    if(ws[x]!==undefined&&sum>0){
+      pl=gain*ws[x]/sum;
+      /* каждая пятая сделка убыточна — иначе журнал выглядит нереалистично */
+      if(rnd(seed,i+300)<0.22) pl=-Math.abs(pl)*0.55;
+    }else{
+      pl=bal*0.0011*(rnd(seed,i+500)-0.5)*2;
+    }
+    const open=basePrice(sym,x);
     const close=open+pl/(vol*c)*(side==="buy"?1:-1);
-    out.push({t,sym,side,vol,dec,open,close,pl,acct:a.acct,site:a.site});
-  }
+    out.push({t:x,sym,side,vol,dec,open,close,pl,acct:a.acct,site:a.site});
+  });
   return out;
 }
+
 const PHRASES=[
   ["Скан волатильности","Модель оценила диапазон ATR и ликвидность сессии",""],
   ["Сигнал подтверждён","Совпали тренд H1 и импульс M15 — готовим вход",""],
@@ -862,8 +900,8 @@ function renderKpis(){
         "последний торговый день, все счета")+
     kpi("#2BA87A",KPI_IC.chart,"Результат сессий",sig(pl),pl>=0?"up":"down",
         "от старта текущих сценариев")+
-    kpi("#BE8716",KPI_IC.bolt,"Активных сессий",String(live.length),"",
-        live.length?"помощник ведёт сделки":"ни один сценарий не запущен");
+    kpi("#BE8716",KPI_IC.bolt,"Подключённых аккаунтов",String(bw+nx),"",
+        live.length?("активных сессий: "+live.length):"ни один сценарий не запущен");
   $("pillLive").classList.toggle("hidden",!live.length);
   $("pillCnt").textContent=live.length;
   $("whoSum").textContent=usd(bal);
