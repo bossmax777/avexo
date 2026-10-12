@@ -36,6 +36,12 @@
     "box-shadow:0 0 0 3px rgba(43,168,122,.18)}" +
     ".bk-badge s{text-decoration:none;color:var(--muted);font-weight:400;letter-spacing:.06em}" +
     ".bk-note{font-size:11px;color:var(--muted);line-height:1.5;margin:4px 0 0;width:100%}" +
+    ".bk-left{display:inline-flex;align-items:center;gap:7px;padding:6px 11px;border-radius:999px;" +
+    "font-size:11.5px;font-weight:600;border:1px solid currentColor;background:rgba(255,255,255,.04)}" +
+    ".bk-left i{width:7px;height:7px;border-radius:50%;background:currentColor;flex:none}" +
+    ".bk-left.g{color:#2BA87A}.bk-left.y{color:#E2B23A}.bk-left.r{color:#E5484D}" +
+    ".bk-badge.off{border-color:#E5484D;color:#E5484D;background:rgba(229,72,77,.12)}" +
+    ".bk-badge.off i{background:#E5484D;box-shadow:0 0 0 3px rgba(229,72,77,.18)}" +
     ".bk-ok{position:fixed;inset:0;z-index:10000;display:flex;align-items:center;justify-content:center;" +
     "background:rgba(6,8,12,.82);backdrop-filter:blur(5px);animation:bkIn .18s ease-out}" +
     "@keyframes bkIn{from{opacity:0}to{opacity:1}}" +
@@ -89,10 +95,12 @@
   }
 
   /* ---------- строка активации в карточке ---------- */
+  var LOADED = 0;
   function rows() {
     css();
     var box = $("accs");
     if (!box) return;
+    var need = false;
     box.querySelectorAll(".acc").forEach(function (card) {
       var k = card.dataset.k;
       if (!k) return;
@@ -115,25 +123,68 @@
         else card.appendChild(host);
       }
       paint(host, k);
+      /* кошелёк появился в списке, а его состояния ещё нет — спрашиваем сервер.
+         Иначе срок ключа показался бы только через 45 секунд, на следующем опросе. */
+      if (!ST[k]) need = true;
     });
+    if (need && Date.now() - LOADED > 4000) { LOADED = Date.now(); load(); }
+  }
+
+  /* сколько осталось до конца срока: сервер присылает дату, пересчитываем на лету,
+     чтобы отсчёт шёл и между запросами к серверу */
+  function leftMs(s) {
+    if (!s || !s.until) return null;
+    return Math.max(0, new Date(s.until).getTime() - Date.now());
+  }
+  /* цвет полоски срока: 30 дней и больше зелёный, от 10 жёлтый, последние 3 дня красный */
+  function leftTone(ms) {
+    var d = ms / 86400000;
+    return d <= 3 ? "r" : (d <= 10 ? "y" : "g");
+  }
+  function leftTxt(ms) {
+    var d = Math.floor(ms / 86400000);
+    var h = Math.floor(ms % 86400000 / 3600000);
+    var m = Math.floor(ms % 3600000 / 60000);
+    var sec = Math.floor(ms % 60000 / 1000);
+    if (d > 0) return d + " д " + h + " ч";
+    if (h > 0) return h + " ч " + m + " мин";
+    return m + " мин " + (sec < 10 ? "0" : "") + sec + " с";
   }
 
   function paint(host, k) {
     var s = ST[k];
     if (s && s.on) {
+      var ms = leftMs(s);
+      var timer = "";
+      if (ms !== null) {
+        var tone = leftTone(ms);
+        timer = ' <span class="bk-left ' + tone + '" data-left="' + k + '"><i></i>' +
+          (ms > 0 ? "осталось " + leftTxt(ms) : "срок вышел") + "</span>";
+      }
       host.innerHTML = '<div class="bk-row"><span class="bk-badge"><i></i>Бот активен' +
-        (s.code ? " <s>" + esc(s.code) + "</s>" : "") + "</span></div>" +
+        (s.code ? " <s>" + esc(s.code) + "</s>" : "") + "</span>" + timer + "</div>" +
         '<p class="bk-note">Код принят. ' +
+        (ms !== null
+          ? "Срок действия ключа — " + (s.days || 0) + " дн. с момента активации, до " +
+            new Date(s.until).toLocaleDateString("ru-RU") + ". "
+          : "Ключ бессрочный. ") +
         "Снять активацию может только администратор площадки.</p>";
       return;
     }
+    /* срок вышел: показываем это над полем и просим ввести новый код */
+    var gone = !!(s && s.expired);
     /* узел перенесён из прежней карточки — он уже собран, вернуть нужно только курсор */
     if (host.querySelector("input")) { aim(host, k); return; }
-    host.innerHTML = '<div class="bk-row">' +
+    host.innerHTML =
+      (gone ? '<div class="bk-row"><span class="bk-badge off"><i></i>Срок ключа истёк</span></div>' : "") +
+      '<div class="bk-row">' +
       '<input maxlength="19" placeholder="X7K9P-4M2QD-V8R3N" autocomplete="off" ' +
       'autocapitalize="characters" spellcheck="false" data-code="' + k + '">' +
       '<button class="btn btn-sm" data-go="' + k + '">Активировать</button></div>' +
-      '<p class="bk-note">Ключ активации выдаёт администратор площадки.</p>';
+      '<p class="bk-note">' + (gone
+        ? "Активация закончилась" + (s.until ? " " + new Date(s.until).toLocaleDateString("ru-RU") : "") +
+          ". Введите новый ключ — его выдаёт администратор площадки."
+        : "Ключ активации выдаёт администратор площадки.") + "</p>";
     var inp = host.querySelector("input");
     var btn = host.querySelector("button");
     /* страница хаба обновляет карточки сама, поле при этом создаётся заново —
@@ -205,6 +256,7 @@
     if (!list.length) return Promise.resolve();
     var body = list.map(function (a) { var c = cred(a); return c ? { key: c.key } : null; }).filter(Boolean);
     if (!body.length) return Promise.resolve();
+    LOADED = Date.now();
     return call("/api/hub/bot/state", { method: "POST", body: JSON.stringify({ accounts: body }) })
       .then(function (j) {
         (j.items || []).forEach(function (it) { ST[it.site + ":" + it.acct] = it; });
