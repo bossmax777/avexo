@@ -846,3 +846,196 @@
     document.addEventListener("DOMContentLoaded", function () { setTimeout(boot, 800); });
   } else setTimeout(boot, 800);
 })();
+
+/* ---------------------------------------------------------------------------
+   Админка: ключи активации по каждому клиенту.
+   Здесь владелец площадки включает бота кошельку сам — без того, чтобы клиент
+   вводил код на странице бота, — продлевает срок или снимает активацию.
+   Код берётся из выпущенных во вкладке «Ключи бота».
+--------------------------------------------------------------------------- */
+(function () {
+  "use strict";
+  var el = function (i) { return document.getElementById(i); };
+  var esc = function (v) {
+    return String(v == null ? "" : v).replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;")
+      .replace(/"/g, "&quot;");
+  };
+  var call = function (p, o) {
+    if (typeof api !== "function") return Promise.reject(new Error("админка ещё не готова"));
+    return api(p, o);
+  };
+  var wallets = function () {
+    try { return (typeof uLoad === "function" ? uLoad() : []) || []; } catch (e) { return []; }
+  };
+  /* сколько осталось: тот же расчёт, что на странице бота */
+  var left = function (u) {
+    if (!u.botkey || !u.botkeyUntil) return null;
+    return Math.max(0, new Date(u.botkeyUntil).getTime() - Date.now());
+  };
+  var tone = function (ms) {
+    var d = ms / 86400000;
+    return d <= 3 ? "r" : (d <= 10 ? "y" : "g");
+  };
+  var leftTxt = function (ms) {
+    var d = Math.floor(ms / 86400000), h = Math.floor(ms % 86400000 / 3600000);
+    return d > 0 ? d + " дн. " + h + " ч" : h + " ч";
+  };
+
+  var CSS =
+    "#akCard .ak-row{display:flex;gap:10px;flex-wrap:wrap;align-items:flex-end;margin-bottom:14px}" +
+    "#akCard .ak-f{display:flex;flex-direction:column;gap:5px;min-width:150px}" +
+    "#akCard .ak-f label{font-size:11.5px;color:var(--muted)}" +
+    "#akCard .ak-f input,#akCard .ak-f select{padding:9px 10px;border:1px solid var(--line);" +
+    "border-radius:9px;font:inherit;font-size:13px;width:100%;box-sizing:border-box}" +
+    "#akCard .ak-scroll{overflow:auto;border:1px solid var(--line);border-radius:11px}" +
+    "#akCard table{border-collapse:collapse;width:100%;font-size:12.5px;min-width:780px}" +
+    "#akCard th,#akCard td{padding:8px 11px;text-align:left;border-bottom:1px solid var(--line)}" +
+    "#akCard th{font-size:11px;color:var(--muted);text-transform:uppercase;letter-spacing:.05em}" +
+    "#akCard tr:last-child td{border-bottom:0}" +
+    "#akCard td.nw{white-space:nowrap}" +
+    "#akCard .ak-code{font-family:ui-monospace,SFMono-Regular,Menlo,monospace;letter-spacing:.04em}" +
+    "#akCard .ak-pill{display:inline-flex;align-items:center;gap:6px;padding:3px 9px;border-radius:999px;" +
+    "font-size:11px;font-weight:600;border:1px solid currentColor}" +
+    "#akCard .ak-pill.g{color:#16A34A}#akCard .ak-pill.y{color:#C98A04}#akCard .ak-pill.r{color:#E5484D}" +
+    "#akCard .ak-pill.o{color:var(--muted)}" +
+    "#akCard .ak-empty{font-size:12.5px;color:var(--muted);padding:16px 2px}";
+
+  var PANE =
+    '<div class="card" id="akCard"><h2>Активация бота по клиентам</h2>' +
+    '<p class="sub">Включить бота кошельку можно прямо отсюда — клиенту не нужно вводить код ' +
+    'на странице бота. Берётся свободный код из выпущенных во вкладке «Ключи бота», ' +
+    'срок считается от момента активации. Снятие гасит плашку «Бот активен» у клиента сразу.</p>' +
+    '<div class="ak-row">' +
+      '<div class="ak-f" style="min-width:220px"><label for="akCode">Код для активации</label>' +
+        '<input id="akCode" placeholder="пусто — возьму свободный" maxlength="19"></div>' +
+      '<div class="ak-f" style="min-width:150px"><label for="akDays">Продлить на, дней</label>' +
+        '<input id="akDays" type="number" min="0" max="3650" value="30"></div>' +
+      '<div class="ak-f" style="min-width:auto"><label>&nbsp;</label>' +
+        '<button class="btn btn-primary" id="akAll">Активировать всем без ключа</button></div>' +
+      '<div class="ak-f" style="min-width:auto"><label>&nbsp;</label>' +
+        '<button class="btn btn-ghost" id="akNone">Снять у всех</button></div>' +
+      '<div class="ak-f" style="min-width:auto"><label>&nbsp;</label>' +
+        '<button class="btn btn-ghost" id="akReload">Обновить</button></div>' +
+    '</div>' +
+    '<p class="sub" id="akSay" style="margin:0 0 12px"></p>' +
+    '<div id="akBox"></div></div>';
+
+  function build() {
+    if (el("akCard")) return true;
+    var host = document.querySelector('[data-pane="users"]');
+    if (!host || !host.firstElementChild) return false;
+    var st = document.createElement("style"); st.id = "akCss"; st.textContent = CSS;
+    document.head.appendChild(st);
+    var box = document.createElement("div");
+    box.innerHTML = PANE;
+    var card = box.firstChild;
+    /* ставим карточку третьей — после массового итога дня и настроек вывода */
+    var kids = host.children;
+    if (kids.length > 2) host.insertBefore(card, kids[2]);
+    else host.appendChild(card);
+    el("akAll").onclick = function () { bulk(true); };
+    el("akNone").onclick = function () { bulk(false); };
+    el("akReload").onclick = reload;
+    return true;
+  }
+
+  function say(t) { var s = el("akSay"); if (s) s.textContent = t || ""; }
+
+  function draw() {
+    if (!build()) return;
+    var us = wallets(), box = el("akBox");
+    if (!us.length) { box.innerHTML = '<p class="ak-empty">На площадке пока нет кошельков.</p>'; return; }
+    box.innerHTML = '<div class="ak-scroll"><table><thead><tr>' +
+      "<th>Клиент</th><th>Счёт</th><th>Ключ</th><th>Активация</th><th>Срок</th><th></th>" +
+      "</tr></thead><tbody>" +
+      us.map(function (u) {
+        var ms = left(u);
+        var pill = !u.botkey
+          ? '<span class="ak-pill o">не активирован</span>'
+          : (ms === null ? '<span class="ak-pill g">бессрочно</span>'
+            : (ms > 0 ? '<span class="ak-pill ' + tone(ms) + '">' + leftTxt(ms) + "</span>"
+                      : '<span class="ak-pill r">срок вышел</span>'));
+        return "<tr><td>" + esc(u.name || u.email) + "</td><td>#" + esc(u.acct) + "</td>" +
+          '<td class="ak-code">' + (u.botkey ? esc(u.botkey) : "—") + "</td>" +
+          "<td>" + (u.botkey && u.botkeyAt ? new Date(u.botkeyAt).toLocaleDateString("ru-RU") : "—") + "</td>" +
+          '<td class="nw">' + pill + "</td>" +
+          '<td class="nw">' +
+            '<button class="btn btn-ghost btn-sm" data-ak-on="' + u.id + '">' +
+              (u.botkey ? "Перевыдать" : "Активировать") + "</button> " +
+            (u.botkey ? '<button class="btn btn-ghost btn-sm" data-ak-ext="' + u.id + '">Продлить</button> ' +
+                        '<button class="btn btn-ghost btn-sm" data-ak-off="' + u.id + '">Снять</button>' : "") +
+          "</td></tr>";
+      }).join("") + "</tbody></table></div>";
+  }
+
+  function onOne(id) {
+    var code = (el("akCode").value || "").trim();
+    return call("/api/admin/botkeys/assign", { method: "POST",
+      body: JSON.stringify(code ? { user: Number(id), code: code } : { user: Number(id) }) });
+  }
+  function offOne(id) {
+    return call("/api/admin/botkeys/revoke", { method: "POST", body: JSON.stringify({ user: Number(id) }) });
+  }
+  function extOne(id) {
+    var d = parseInt(el("akDays").value, 10);
+    return call("/api/admin/botkeys/extend", { method: "POST",
+      body: JSON.stringify({ user: Number(id), days: isFinite(d) && d > 0 ? d : 0 }) });
+  }
+
+  /* массовые действия: активировать тем, у кого ключа нет, или снять у всех */
+  function bulk(on) {
+    var us = wallets();
+    var list = on ? us.filter(function (u) { return !u.botkey; }) : us.filter(function (u) { return !!u.botkey; });
+    if (!list.length) return say(on ? "Все кошельки уже активированы." : "Активаций нет.");
+    if (!confirm(on
+      ? "Активировать бота на " + list.length + " кошельках без ключа?"
+      : "Снять активацию у " + list.length + " кошельков? Плашка «Бот активен» у клиентов погаснет.")) return;
+    var btn = on ? el("akAll") : el("akNone");
+    var was = btn.textContent;
+    btn.disabled = true; btn.textContent = "Готовим…";
+    var done = 0, fail = 0, err = "";
+    var step = function (i) {
+      if (i >= list.length) {
+        btn.disabled = false; btn.textContent = was;
+        say((on ? "Активировано: " : "Снято: ") + done + (fail ? ", с ошибкой: " + fail + " · " + err : ""));
+        return reload();
+      }
+      return (on ? onOne(list[i].id) : offOne(list[i].id))
+        .then(function () { done++; }, function (e) { fail++; err = e.message; })
+        .then(function () { return step(i + 1); });
+    };
+    step(0);
+  }
+
+  function reload() {
+    var p = Promise.resolve();
+    if (typeof uFetch === "function") p = Promise.resolve(uFetch());
+    return p.then(function () { draw(); if (typeof renderUsers === "function") renderUsers(); })
+      .catch(function (e) { say(e.message); });
+  }
+  window.renderBotAssign = reload;
+
+  document.addEventListener("click", function (e) {
+    var t = e.target;
+    if (!t.closest) return;
+    var on = t.closest("[data-ak-on]"), off = t.closest("[data-ak-off]"), ex = t.closest("[data-ak-ext]");
+    var run = function (btn, p, okTxt) {
+      btn.disabled = true;
+      p.then(function (j) { say(okTxt(j)); return reload(); },
+             function (err) { say(err.message); btn.disabled = false; });
+    };
+    if (on) return run(on, onOne(on.getAttribute("data-ak-on")),
+      function (j) { return "Кошелёк #" + j.acct + ": активирован кодом " + j.code +
+        (j.days ? " на " + j.days + " дн." : " бессрочно"); });
+    if (off) return run(off, offOne(off.getAttribute("data-ak-off")),
+      function (j) { return "Кошелёк #" + j.acct + ": активация снята"; });
+    if (ex) return run(ex, extOne(ex.getAttribute("data-ak-ext")),
+      function (j) { return "Кошелёк #" + j.acct + ": срок " + (j.days ? "продлён на " + j.days + " дн." : "снят, ключ бессрочный"); });
+    if (t.closest('[data-tab="users"]')) setTimeout(reload, 90);
+  });
+
+  function boot() { if (build()) draw(); }
+  if (document.readyState === "loading") {
+    document.addEventListener("DOMContentLoaded", function () { setTimeout(boot, 900); });
+  } else setTimeout(boot, 900);
+})();
