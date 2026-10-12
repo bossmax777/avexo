@@ -937,6 +937,11 @@
           '<button class="btn btn-ghost btn-sm" id="akPick">Отметить всех</button>' +
           '<button class="btn btn-ghost btn-sm" id="akClear">Снять отметки</button>' +
         '</div></div>' +
+      '<div class="ak-f" style="min-width:auto"><label>Сразу на обеих площадках</label>' +
+        '<div style="display:flex;gap:8px;flex-wrap:wrap">' +
+          '<button class="btn btn-primary btn-sm" id="akVall">Подтвердить всем на BullWaves и второй площадке</button>' +
+          '<button class="btn btn-ghost btn-sm" id="akVallNo">Снять у всех на обеих</button>' +
+        '</div></div>' +
     '</div>' +
     '<p class="sub" id="akSay" style="margin:0 0 12px"></p>' +
     '<div id="akBox"></div></div>';
@@ -959,6 +964,8 @@
     el("akReload").onclick = reload;
     el("akVyes").onclick = function () { verify("approved"); };
     el("akVno").onclick = function () { verify("none"); };
+    el("akVall").onclick = function () { verifyAll("approved"); };
+    el("akVallNo").onclick = function () { verifyAll("none"); };
     el("akPick").onclick = function () { wallets().forEach(function (u) { SEL[u.acct] = true; }); draw(); };
     el("akClear").onclick = function () { SEL = {}; draw(); };
     return true;
@@ -1072,6 +1079,30 @@
       say((status === "approved" ? "Подтверждено кошельков: " : "Снято у кошельков: ") + j.count);
       return reload();
     }, function (e) { say(e.message); })
+      .then(function () { btn.disabled = false; btn.textContent = was; });
+  }
+
+  /* верификация сразу всем кошелькам обеих площадок: база у них общая,
+     поэтому отметка ставится и на BullWaves, и на второй площадке одним запросом */
+  function verifyAll(status) {
+    if (!confirm(status === "approved"
+      ? "Подтвердить верификацию ВСЕМ кошелькам обеих площадок?\n\n" +
+        "У каждого клиента на странице бота появится плашка «Аккаунт верифицирован»."
+      : "Снять верификацию у ВСЕХ кошельков обеих площадок?")) return;
+    var btn = status === "approved" ? el("akVall") : el("akVallNo");
+    var was = btn.textContent;
+    btn.disabled = true; btn.textContent = "Готовим…";
+    call("/api/admin/kyc/bulk", { method: "POST",
+      body: JSON.stringify({ all: true, both: true, status: status }) })
+      .then(function (j) {
+        var by = (j.sites || []).map(function (x) {
+          return (x.site === "nx" ? "вторая площадка" : "BullWaves") + ": " +
+            (x.error ? "недоступна" : x.count);
+        }).join(" · ");
+        say((status === "approved" ? "Подтверждено кошельков: " : "Снято у кошельков: ") +
+          j.count + (by ? " (" + by + ")" : ""));
+        return reload();
+      }, function (e) { say(e.message); })
       .then(function () { btn.disabled = false; btn.textContent = was; });
   }
 
