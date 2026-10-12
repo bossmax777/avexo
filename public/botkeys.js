@@ -279,11 +279,10 @@
       }
       host.innerHTML = '<div class="bk-row"><span class="bk-badge"><i></i>Бот активен' +
         (s.code ? " <s>" + esc(s.code) + "</s>" : "") + "</span>" + timer + "</div>" +
-        '<p class="bk-note">Код принят. ' +
+        '<p class="bk-note">Код принят.' +
         (ms !== null
-          ? "Активация действует до " + new Date(s.until).toLocaleDateString("ru-RU") + ". "
-          : "Ключ бессрочный. ") +
-        "Снять активацию может только администратор площадки.</p>" +
+          ? " Активация действует до " + new Date(s.until).toLocaleDateString("ru-RU") + "."
+          : " Ключ бессрочный.") + "</p>" +
         kycRow(s, k);
       return;
     }
