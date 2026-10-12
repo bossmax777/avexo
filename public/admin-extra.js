@@ -285,7 +285,7 @@
      ничего не теряется и не дорисовывается */
   function stopAll() {
     var btn = el("mdStop"), say = el("mdStopSay");
-    btn.disabled = true; btn.textContent = "Считаем\\u2026";
+    btn.disabled = true; btn.textContent = "Считаем 26";
     say.textContent = "";
     call("/api/admin/stop-all", { method: "POST", body: JSON.stringify({ dry: true }) })
       .then(function (j) {
@@ -295,7 +295,7 @@
           "Баланс каждого зафиксируется на текущем значении сессии.\n" +
           "Суммарно к зачислению: " + money(j.delta) + " · итоговый капитал " +
           money(j.total).replace(/^\+/, "") + "\n\nОтменить это действие нельзя.")) return;
-        btn.disabled = true; btn.textContent = "Останавливаем\\u2026";
+        btn.disabled = true; btn.textContent = "Останавливаем 26";
         return call("/api/admin/stop-all", { method: "POST", body: JSON.stringify({}) })
           .then(function (r) {
             say.textContent = "Остановлено сценариев: " + r.stopped +
