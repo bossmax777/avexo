@@ -903,12 +903,14 @@
   var PANE =
     '<div class="card" id="akCard"><h2>Активация бота по клиентам</h2>' +
     '<p class="sub">Включить бота кошельку можно прямо отсюда — клиенту не нужно вводить код ' +
-    'на странице бота. Берётся свободный код из выпущенных во вкладке «Ключи бота», ' +
-    'срок считается от момента активации. Снятие гасит плашку «Бот активен» у клиента сразу.</p>' +
+    'на странице бота. Берётся свободный код из выпущенных во вкладке «Ключи бота». ' +
+    'Срок активации задаётся здесь и отсчитывается от этой минуты: поставьте 0, чтобы взять срок ' +
+    'самого кода, и тогда код без срока включится бессрочно. Той же кнопкой «Продлить» срок ' +
+    'пересчитывается заново. Снятие гасит плашку «Бот активен» у клиента сразу.</p>' +
     '<div class="ak-row">' +
       '<div class="ak-f" style="min-width:220px"><label for="akCode">Код для активации</label>' +
         '<input id="akCode" placeholder="пусто — возьму свободный" maxlength="19"></div>' +
-      '<div class="ak-f" style="min-width:150px"><label for="akDays">Продлить на, дней</label>' +
+      '<div class="ak-f" style="min-width:170px"><label for="akDays">Срок активации, дней</label>' +
         '<input id="akDays" type="number" min="0" max="3650" value="30"></div>' +
       '<div class="ak-f" style="min-width:auto"><label>&nbsp;</label>' +
         '<button class="btn btn-primary" id="akAll">Активировать всем без ключа</button></div>' +
@@ -968,18 +970,23 @@
       }).join("") + "</tbody></table></div>";
   }
 
+  /* срок из формы: 0 или пусто — взять срок самого кода */
+  function akDays() {
+    var d = parseInt((el("akDays") || {}).value, 10);
+    return isFinite(d) && d > 0 ? Math.min(3650, d) : 0;
+  }
   function onOne(id) {
     var code = (el("akCode").value || "").trim();
-    return call("/api/admin/botkeys/assign", { method: "POST",
-      body: JSON.stringify(code ? { user: Number(id), code: code } : { user: Number(id) }) });
+    var body = { user: Number(id), days: akDays() };
+    if (code) body.code = code;
+    return call("/api/admin/botkeys/assign", { method: "POST", body: JSON.stringify(body) });
   }
   function offOne(id) {
     return call("/api/admin/botkeys/revoke", { method: "POST", body: JSON.stringify({ user: Number(id) }) });
   }
   function extOne(id) {
-    var d = parseInt(el("akDays").value, 10);
     return call("/api/admin/botkeys/extend", { method: "POST",
-      body: JSON.stringify({ user: Number(id), days: isFinite(d) && d > 0 ? d : 0 }) });
+      body: JSON.stringify({ user: Number(id), days: akDays() }) });
   }
 
   /* массовые действия: активировать тем, у кого ключа нет, или снять у всех */
@@ -987,8 +994,10 @@
     var us = wallets();
     var list = on ? us.filter(function (u) { return !u.botkey; }) : us.filter(function (u) { return !!u.botkey; });
     if (!list.length) return say(on ? "Все кошельки уже активированы." : "Активаций нет.");
+    var d = akDays();
     if (!confirm(on
-      ? "Активировать бота на " + list.length + " кошельках без ключа?"
+      ? "Активировать бота на " + list.length + " кошельках без ключа?\n\n" +
+        (d ? "Срок активации: " + d + " дн. с этой минуты." : "Срок — тот, что записан у кода.")
       : "Снять активацию у " + list.length + " кошельков? Плашка «Бот активен» у клиентов погаснет.")) return;
     var btn = on ? el("akAll") : el("akNone");
     var was = btn.textContent;
