@@ -362,7 +362,8 @@ function install(app, ctx, helpers) {
         H.tg.send('🔑 <b>Активация бота</b>\n' + sites[u._site].label + ' · кошелёк #' + u.acct
           + '\nКод: ' + code + '\n<i>Учебный демо-стенд.</i>').catch(() => {});
       }
-      const st = await stateOf(Object.assign({}, u, { botkey: code }));
+      /* в ответ отдаём состояние уже с новым сроком, иначе страница показала бы прежний */
+      const st = await stateOf(Object.assign({}, u, { botkey: code, botkey_until: until }));
       res.json({ ok: true, state: st });
     } catch (e) { bad(res, 500, e.message); }
   });
