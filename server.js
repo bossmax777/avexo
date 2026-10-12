@@ -505,6 +505,43 @@ app.patch('/api/admin/users/:id', requireAdmin, async (req, res) => {
   } catch (e) { bad(res, 500, e.message); }
 });
 
+/* ---------- остановка всех сценариев разом ---------- */
+/* Кнопка в админке: сценарий выключается у всех кошельков площадки, а баланс
+   фиксируется на том значении, до которого сессия успела дойти к этой минуте —
+   ровно как при остановке одного кошелька на странице единого бота. */
+app.post('/api/admin/stop-all', requireAdmin, async (req, res) => {
+  const dry = !!(req.body || {}).dry;      /* только посмотреть, кого это затронет */
+  try {
+    const r = await q("SELECT * FROM users WHERE dyn->>'on' = 'true' ORDER BY id");
+    const items = [];
+    for (const row of r.rows) {
+      const u = toUser(row);
+      const d = u.dyn || {};
+      const st = new Date(d.startedAt || 0).getTime(), en = new Date(d.endsAt || 0).getTime();
+      const was = Number(u.balance) || 0;
+      let value = was;
+      if (isFinite(st) && isFinite(en) && en > st) {
+        const pr = Math.max(0, Math.min(1, (Date.now() - st) / (en - st)));
+        const from = Number(d.from) || was, to = Number(d.to) || from;
+        value = from + (to - from) * pr;
+      }
+      value = Math.max(0, +value.toFixed(2));
+      items.push({ id: u.id, acct: u.acct, name: u.name || '', was, balance: value,
+                   delta: +(value - was).toFixed(2) });
+      if (dry) continue;
+      const dyn = Object.assign({}, d, {
+        on: false,
+        bot: Object.assign({}, d.bot || {}, { on: false, stoppedAt: new Date().toISOString() })
+      });
+      await q('UPDATE users SET dyn = $2::jsonb, balance = $3 WHERE id = $1',
+        [u.id, JSON.stringify(dyn), value.toFixed(2)]);
+    }
+    res.json({ ok: true, dry, stopped: items.length,
+      total: +items.reduce((s, x) => s + x.balance, 0).toFixed(2),
+      delta: +items.reduce((s, x) => s + x.delta, 0).toFixed(2), items });
+  } catch (e) { bad(res, 500, e.message); }
+});
+
 app.delete('/api/admin/users/:id', requireAdmin, async (req, res) => {
   try {
     await q('DELETE FROM users WHERE id = $1', [Number(req.params.id)]);
