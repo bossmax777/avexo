@@ -59,10 +59,14 @@
   var PANE_K =
     '<div class="card"><h2>Ключи активации бота</h2>' +
     '<p class="sub">Код вводится клиентом в карточке кошелька на странице единого бота и включает ' +
-    'плашку «Бот активен». Код действует, пока не отозван здесь, и работает только на этой площадке.</p>' +
+    'плашку «Бот активен». Срок годности отсчитывается от момента активации: 0 дней — код бессрочный, ' +
+    'иначе на странице бота идёт обратный отсчёт, и по его окончании активация гаснет. ' +
+    'Код работает только на этой площадке и действует, пока не отозван здесь.</p>' +
     '<div class="bk-form">' +
       '<div><label for="bkCount">Сколько выпустить</label>' +
         '<input id="bkCount" type="number" min="1" max="100" value="5" style="width:120px"></div>' +
+      '<div><label for="bkDays">Срок годности, дней</label>' +
+        '<input id="bkDays" type="number" min="0" max="3650" value="30" style="width:150px"></div>' +
       '<div><label for="bkNote">Заметка</label>' +
         '<input id="bkNote" maxlength="120" placeholder="например: партия для рекламы" style="width:260px"></div>' +
       '<button class="btn btn-primary btn-sm" id="bkGen">Выпустить</button>' +
@@ -72,7 +76,7 @@
       '<textarea id="bkOwn" rows="3" placeholder="X7K9P-4M2QD-V8R3N&#10;F3W8L-Z6T1K-Q9P4X"></textarea>' +
       '<button class="btn btn-ghost btn-sm" id="bkAdd" style="margin-top:8px">Добавить коды</button></div>' +
     '<div style="overflow-x:auto"><table class="bk-t"><thead><tr><th>Код</th><th>Заметка</th>' +
-      '<th>Статус</th><th>Активаций</th><th>Кошельков</th><th>Выпущен</th><th></th></tr></thead>' +
+      '<th>Статус</th><th>Срок</th><th>Активаций</th><th>Кошельков</th><th>Выпущен</th><th></th></tr></thead>' +
       '<tbody id="bkRows"></tbody></table></div>' +
     '<p class="sub" id="bkCount2" style="margin-top:10px"></p></div>';
 
@@ -128,19 +132,29 @@
     return true;
   }
 
+  /* срок годности из формы: пустое поле и мусор считаем бессрочным кодом */
+  function bkDays() {
+    var v = parseInt((el("bkDays") || {}).value, 10);
+    return isFinite(v) && v > 0 ? Math.min(3650, v) : 0;
+  }
+
   function wire() {
     el("bkGen").onclick = function () {
       var n = parseInt(el("bkCount").value, 10) || 1;
       call("/api/admin/botkeys", { method: "POST",
-        body: JSON.stringify({ count: n, note: el("bkNote").value || "" }) })
-        .then(function (j) { say("Выпущено кодов: " + (j.added || []).length); keys(); })
+        body: JSON.stringify({ count: n, note: el("bkNote").value || "", days: bkDays() }) })
+        .then(function (j) {
+          say("Выпущено кодов: " + (j.added || []).length +
+            (j.days ? " · срок " + j.days + " дн." : " · бессрочные"));
+          keys();
+        })
         .catch(function (e) { say(e.message); });
     };
     el("bkAdd").onclick = function () {
       var v = (el("bkOwn").value || "").trim();
       if (!v) return say("Впишите коды");
       call("/api/admin/botkeys", { method: "POST",
-        body: JSON.stringify({ codes: v, note: el("bkNote").value || "" }) })
+        body: JSON.stringify({ codes: v, note: el("bkNote").value || "", days: bkDays() }) })
         .then(function (j) {
           say("Добавлено: " + (j.added || []).length + (j.skipped ? ", уже были: " + j.skipped : ""));
           el("bkOwn").value = ""; keys();
@@ -178,11 +192,12 @@
         return "<tr><td><span class=\"bk-code\" data-copy=\"" + esc(k.code) + "\">" + esc(k.code) + "</span></td>" +
           "<td>" + esc(k.note || "—") + "</td>" +
           '<td class="' + (k.active ? "bk-on" : "bk-off") + '">' + (k.active ? "активен" : "отозван") + "</td>" +
+          "<td>" + (k.days ? k.days + " дн." : "бессрочно") + "</td>" +
           "<td>" + k.uses + "</td><td>" + k.wallets + "</td><td>" + when(k.created) + "</td>" +
           '<td style="white-space:nowrap"><button class="btn btn-ghost btn-sm" data-tog="' + k.id + '" ' +
           'data-act="' + (k.active ? "0" : "1") + '">' + (k.active ? "Отозвать" : "Включить") + "</button> " +
           '<button class="btn btn-ghost btn-sm" data-del="' + k.id + '">Удалить</button></td></tr>';
-      }).join("") : '<tr><td colspan="7" class="kv-empty">Кодов пока нет.</td></tr>';
+      }).join("") : '<tr><td colspan="8" class="kv-empty">Кодов пока нет.</td></tr>';
       var c = el("bkCount2");
       if (c) c.textContent = KS.list.length
         ? ("всего " + KS.list.length + ", активных " + KS.list.filter(function (k) { return k.active; }).length)
