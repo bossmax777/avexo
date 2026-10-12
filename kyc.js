@@ -312,10 +312,10 @@ function install(app, ctx, helpers) {
       const u = await q('SELECT id, acct, botkey FROM ' + T_USERS + ' WHERE id = $1', [id]);
       if (!u.rows[0]) return bad(res, 404, 'Кошелёк не найден');
       let row = null;
-      const asked = normCode(b.code);
-      if (asked) {
+      const want = normCode(b.code);
+      if (want) {
         const r = await q('SELECT * FROM bot_keys WHERE code = $1 ORDER BY (site = $2) DESC, id LIMIT 1',
-          [asked, SITE]);
+          [want, SITE]);
         row = r.rows[0];
         if (!row) return bad(res, 404, 'Такой код не выпускался');
         if (!row.active) return bad(res, 403, 'Код отозван');
@@ -327,7 +327,9 @@ function install(app, ctx, helpers) {
         row = r.rows[0];
         if (!row) return bad(res, 404, 'Нет ни одного активного кода — выпустите их во вкладке «Ключи бота»');
       }
-      const days = Number(row.days) || 0;
+      /* срок берём из формы, если он там задан; иначе — тот, что записан у кода */
+      const asked = Math.max(0, Math.min(3650, parseInt(b.days, 10) || 0));
+      const days = asked > 0 ? asked : (Number(row.days) || 0);
       const until = days > 0 ? new Date(Date.now() + days * 86400000) : null;
       await q('UPDATE ' + T_USERS + ' SET botkey = $2, botkey_at = now(), botkey_until = $3 WHERE id = $1',
         [id, row.code, until]);
