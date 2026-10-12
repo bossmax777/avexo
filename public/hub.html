@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
-<meta name="description" content="Verdix AI Multi ">
+<meta name="description" content="Verdix AI Multi — учебный демонстрационный пульт торгового помощника над демо-кошельками двух площадок. Вымышленный продукт, все данные условны.">
 <meta name="robots" content="noindex,nofollow">
 <title>Verdix AI Multi</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -89,6 +89,7 @@ button,input,select{font:inherit;color:inherit}
   border-radius:11px;padding:11px 13px;font-size:14px;outline:none}
 .field input:focus,.field select:focus{border-color:var(--accent)}
 .seg{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:8px}
+.seg.wrap{grid-template-columns:repeat(auto-fill,minmax(66px,1fr))}
 .seg button{min-width:0;background:var(--surface-2);border:1px solid var(--line);border-radius:11px;
   padding:10px 4px;cursor:pointer;font-size:11.5px;letter-spacing:-.2px;line-height:1.3;color:var(--muted);
   white-space:nowrap;overflow:hidden;text-overflow:ellipsis;text-align:center}
@@ -234,7 +235,7 @@ input[type=range]{width:100%;accent-color:var(--accent)}
       </svg>
       Verdix AI <i>Multi</i>
     </span>
-    
+    <span class="pill demo"><i class="dot"></i>демонстрационный режим</span>
     <span class="sp"></span>
     <span class="pill live hidden" id="pillLive"><i class="dot"></i><b id="pillCnt">0</b>&nbsp;активных сессий</span>
     <div class="who hidden" id="who"><b id="whoSum">—</b><small id="whoCnt">—</small></div>
@@ -252,7 +253,8 @@ input[type=range]{width:100%;accent-color:var(--accent)}
       <h1>Один пульт для двух площадок</h1>
       <button class="btn btn-sm hidden" id="btnBack" title="Вернуться в пульт">✕ Закрыть</button>
     </div>
-   
+    <p class="note">Учебный демонстрационный стенд. Площадки, кошельки и сделки вымышлены,
+      настоящих денег и ордеров на бирже в системе нет.</p>
 
     <div class="field"><label>Почта от кабинета</label>
       <input id="inMail" type="email" autocomplete="username" placeholder="you@mail.com"></div>
@@ -271,6 +273,29 @@ input[type=range]{width:100%;accent-color:var(--accent)}
       <button class="btn btn-full" id="btnLink">Подключить этот кошелёк</button>
     </details>
 
+    <details style="margin-top:12px" id="regBox">
+      <summary class="note" style="cursor:pointer">Создать кабинеты на площадках (для администратора)</summary>
+      <p class="note" style="margin-top:10px">Одной кнопкой заводит кабинеты сразу на выбранных
+        площадках и подключает их к пульту. Строка — один клиент:
+        <b>почта пароль имя</b> (имя не обязательно). Нужен ключ администратора — тот же,
+        что открывает админку площадки.</p>
+      <div class="field" style="margin-top:10px"><label>Площадки</label>
+        <div class="seg" id="regSites">
+          <button data-s="bw" class="on">BullWaves</button>
+          <button data-s="nx" class="on">Вторая площадка</button>
+        </div></div>
+      <div class="field"><label for="regList">Список кабинетов</label>
+        <textarea id="regList" rows="4" style="width:100%;box-sizing:border-box;padding:11px 13px;
+          border:1px solid var(--line);border-radius:11px;background:var(--surface-2);color:var(--text);
+          font:inherit;font-size:13.5px;resize:vertical"
+          placeholder="ivan@mail.com Pass1234 Иван Петров&#10;olga@mail.com Pass5678"></textarea></div>
+      <div class="field"><label for="regKey">Ключ администратора</label>
+        <input id="regKey" type="password" placeholder="ADMIN_KEY" autocomplete="off"></div>
+      <div class="err" id="eReg"></div>
+      <button class="btn btn-full" id="btnReg">Создать и подключить</button>
+      <div id="regOut" style="margin-top:12px"></div>
+    </details>
+
     <div id="linked" style="margin-top:20px"></div>
   </div>
  
@@ -286,7 +311,7 @@ input[type=range]{width:100%;accent-color:var(--accent)}
       <b id="mktStopT">Биржа закрыта</b>
       <span id="mktStopS">Торги приостановлены</span>
     </div>
-    <span class="mkt-demo">LIVE</span>
+    <span class="mkt-demo">демо</span>
   </div>
 
   <div class="kpis" id="kpis"></div>
@@ -313,7 +338,8 @@ input[type=range]{width:100%;accent-color:var(--accent)}
           </div>
           <div class="note" id="dirNote" style="margin-top:7px"></div></div>
 
-        <div class="field"><label>Режим риска</label><div class="seg" id="fRisk"></div>
+        <div class="field"><label>Коэффициент сессии — во сколько раз вырастет депозит</label>
+          <div class="seg wrap" id="fCoef"></div>
           <div class="note" id="riskNote" style="margin-top:7px"></div></div>
 
         <div class="field"><label>Доля депозита в работе — <b class="num" id="shareVal">60%</b></label>
@@ -392,7 +418,7 @@ input[type=range]{width:100%;accent-color:var(--accent)}
 <div class="cs-modal" id="csModal" hidden>
   <div class="cs-win" id="cash" role="dialog" aria-modal="true" aria-label="Касса">
     <div class="panel-head">
-      <h3>Касса — пополнение и вывод <span class="badge demo">LIVE</span></h3>
+      <h3>Касса — пополнение и вывод <span class="badge demo">демо</span></h3>
       <button class="btn btn-sm" id="csClose" title="Закрыть">✕</button>
     </div>
 
@@ -424,7 +450,7 @@ input[type=range]{width:100%;accent-color:var(--accent)}
         </div>
 
         <div class="cs-req">
-          <div class="cs-req-h">Реквизиты для перевода <span class="badge demo">LIVE</span></div>
+          <div class="cs-req-h">Реквизиты для перевода <span class="badge demo">демо</span></div>
           <div class="cs-kv"><span>Владелец кошелька</span><b id="csOwnIn">—</b></div>
           <div class="cs-kv"><span>Сеть</span><b id="csNetName">—</b></div>
           <div class="cs-kv"><span>Актив</span><b>USDT</b></div>
@@ -432,10 +458,11 @@ input[type=range]{width:100%;accent-color:var(--accent)}
           <div class="cs-kv"><span>Комиссия сети</span><b class="num" id="csNetFee">—</b></div>
           <div class="cs-kv"><span>Зачисление</span><b id="csEta">—</b></div>
           <div class="cs-kv"><span id="csMemoL">Memo / тег</span><b id="csMemo">—</b></div>
-          <label class="cs-addr-l">Адрес пополнения <span class="badge demo">LIVE</span></label>
+          <label class="cs-addr-l">Адрес пополнения <span class="badge demo">демо</span></label>
           <div class="cs-addr"><code id="csAddr">—</code>
             <button class="btn btn-sm" id="csCopy">Копировать</button></div>
-         
+          <p class="note" style="margin-top:10px">Адрес показан для демонстрации и помечен словом
+            DEMO. Настоящие реквизиты получателя на учебном стенде не публикуются.</p>
         </div>
       </div>
     </div>
@@ -447,6 +474,8 @@ input[type=range]{width:100%;accent-color:var(--accent)}
           <div class="field"><label for="csMeth">Способ вывода</label><select id="csMeth"></select></div>
           <div class="field"><label for="csOutAmt">Сумма вывода, USD</label>
             <input id="csOutAmt" class="num" type="number" min="10" step="10" placeholder="100"></div>
+          <div class="field"><label for="csAddr2">Кошелёк для вывода</label>
+            <input id="csAddr2" placeholder="адрес, привязанный к счёту" autocomplete="off"></div>
           <div class="field"><label for="csReq">Реквизиты получателя — хватит последних цифр</label>
             <input id="csReq" placeholder="•••• 4417"></div>
           <div class="field"><label for="csName">Получатель, как в документе</label>
@@ -457,8 +486,9 @@ input[type=range]{width:100%;accent-color:var(--accent)}
         </div>
 
         <div class="cs-req">
-          <div class="cs-req-h">Расчёт заявки <span class="badge demo">LIVE</span></div>
+          <div class="cs-req-h">Расчёт заявки <span class="badge demo">демо</span></div>
           <div class="cs-kv"><span>Владелец кошелька</span><b id="csOwnOut">—</b></div>
+          <div class="cs-kv"><span>Вывод открыт</span><b id="csOutOpen">—</b></div>
           <div class="cs-kv"><span>Способ</span><b id="csOutM">—</b></div>
           <div class="cs-kv"><span>Сумма</span><b class="num" id="csOutS">—</b></div>
           <div class="cs-kv"><span>Сбор площадки</span><b class="num down" id="csOutF">—</b></div>
@@ -470,6 +500,12 @@ input[type=range]{width:100%;accent-color:var(--accent)}
     </div>
   </div>
 </div>
+
+<footer class="note" style="max-width:1180px;margin:0 auto;padding:26px 20px 34px;text-align:center">
+  Verdix AI Multi — учебный демонстрационный стенд. Не является брокером, биржей или
+  инвестиционной услугой: торговых счетов, реальных котировок и переводов денег здесь нет,
+  все цифры рассчитываются на стороне стенда.
+</footer>
 
 <div class="toast" id="toast"></div>
 
@@ -723,7 +759,7 @@ function logOf(a,limit){
 
 /* ============ состояние ============ */
 const S={creds:[],accounts:[],pairs:{},risks:{},sel:new Set(),open:new Set(),
-  params:{pair:"XAU/USD",hours:24,risk:"balance",share:0.6,dir:"up"},per:{}};
+  params:{pair:"XAU/USD",hours:24,k:1.3,share:0.6,dir:"up"},per:{}};
 const keyOf=a=>a.site+":"+a.acct;
 function loadCreds(){
   try{const r=JSON.parse(localStorage.getItem(LS)||"[]");if(Array.isArray(r))S.creds=r;}catch(e){}
@@ -737,23 +773,30 @@ function paramsFor(a){ return S.per[keyOf(a)]||S.params; }
 const VOL={"XAU/USD":1.00,"XAG/USD":1.35,"EUR/USD":0.55,"GBP/USD":0.70,
   "USD/JPY":0.65,"BTC/USD":2.10,"US500":0.75,"USOIL":1.20};
 const RISKD={calm:{day:0.009,dd:3},balance:{day:0.021,dd:7},turbo:{day:0.042,dd:14}};
+/* коэффициенты сессии: во столько раз вырастет депозит к концу горизонта.
+   Те же значения проверяет сервер, иначе он подставит 1,3. */
+const COEFS=[1.2,1.3,1.4,1.5,1.6,1.7,1.8,1.9,2,2.1,2.2,2.3,2.4,2.5];
+const coefOf=v=>{ const n=Math.round((Number(v)||0)*10)/10; return COEFS.indexOf(n)>=0?n:1.3; };
+/* чем выше коэффициент, тем резче кривая: от него зависят просадка и число сделок */
+const coefRisk=k=>k<=1.4?"calm":(k<=1.9?"balance":"turbo");
+const coefTxt=k=>"×"+String(k).replace(".",",");
 function forecast(balance,p,fees){
   const f=Object.assign({lot:3.5,swap:4.2,plat:1.5},fees||{});
-  const vol=VOL[p.pair]||1, r=RISKD[p.risk]||RISKD.balance;
+  const k=coefOf(p.k), risk=coefRisk(k), r=RISKD[risk];
   const days=Math.max(p.hours,1)/24;
   const work=balance*Math.max(0.1,Math.min(1,p.share));
-  const rate=r.day*(0.72+vol*0.38);
-  const gross=work*(Math.pow(1+rate,days)-1);
-  const perDay=TRADES_DAY[p.risk]||TRADES_DAY.balance;
+  const perDay=TRADES_DAY[risk];
   const trades=Math.max(4,Math.round(perDay*days));
   const commission=trades*0.3*f.lot;
   const swap=0.3*f.swap*days*Math.max(1,Math.round(perDay/6));
-  const service=Math.max(0,gross)*f.plat/100;
+  /* цель сессии задаёт коэффициент: вверх — умножаем депозит, вниз — делим */
+  const target=+( (p.dir==="down") ? balance/k : balance*k ).toFixed(2);
+  const gain=+(target-balance).toFixed(2);
+  const service=Math.max(0,gain)*f.plat/100;
   const fee=commission+swap+service;
-  /* сценарий «в минус»: рынок уходит против позиции, сборы площадки всё равно удерживаются */
-  const g=(p.dir==="down")?-gross:gross;
-  const gain=g-fee;
-  return {work,gross:g,fee,gain,trades,target:Math.max(0,balance+gain),
+  /* валовая прибыль — это итог плюс удержанные сборы площадки */
+  const gross=gain+fee;
+  return {work,gross,fee,gain,trades,target:Math.max(0,target),k,
     pct:balance>0?gain/balance*100:0,dd:r.dd,perDay};
 }
 
@@ -787,6 +830,19 @@ function renderKpis(){
   $("whoSum").textContent=usd(bal);
   $("whoCnt").textContent=(bw+nx)+" кошельков · "+live.length+" в работе";
 }
+/* вывод по кошельку: порог и привязанный адрес задаёт админка площадки */
+function outOk(a){
+  const po=(a&&a.payout)||{};
+  return !!po.addr && valOf(a)>=(Number(po.min)||0);
+}
+function outTxt(a){
+  const po=(a&&a.payout)||{};
+  if(!po.addr) return "закрыт";
+  const min=Number(po.min)||0;
+  if(valOf(a)<min) return "с "+usd(min);
+  return min>0 ? ("открыт от "+usd(min)) : "открыт";
+}
+
 function renderAccs(){
   const box=$("accs");
   if(!S.accounts.length){ box.innerHTML='<p class="muted" style="font-size:13.5px">Кошельки не подключены.</p>'; return; }
@@ -800,7 +856,7 @@ function renderAccs(){
     return '<div class="acc'+(S.sel.has(k)?" sel":"")+(S.open.has(k)?" open":"")+'" data-k="'+k+'">'+
       '<div class="acc-top" data-tog="'+k+'">'+
         '<div class="acc-chk" data-chk="'+k+'">✓</div>'+
-        '<div class="acc-name"><b>#'+a.acct+' '+siteBadge(a.site)+' <span class="badge demo">LIVE</span></b>'+
+        '<div class="acc-name"><b>#'+a.acct+' '+siteBadge(a.site)+' <span class="badge demo">демо</span></b>'+
           '<small>'+(a.name||"Клиент")+' · сервер '+a.srv+(w?' · сессия '+(w.d.pair||"")+(w.en>Date.now()?' · осталось '+fmtLeft(w.en-Date.now()):' · сессия завершена'):' · сессия не запущена')+'</small></div>'+
         '<div class="acc-fig"><b class="num">'+usd(cur)+'</b>'+
           '<span class="'+(day>=0?"up":"down")+'">за сутки '+sig(day)+'</span></div>'+
@@ -811,6 +867,7 @@ function renderAccs(){
           '<div><small>Выполнено плана</small><b>'+(w?(pr*100<10?(pr*100).toFixed(1):Math.round(pr*100))+"%":"—")+'</b></div>'+
           '<div><small>Инструмент</small><b>'+(w?(w.d.pair||"—"):"—")+'</b></div>'+
           '<div><small>Горизонт</small><b>'+(w?w.d.hours+" ч":"—")+'</b></div>'+
+          '<div><small>Вывод дохода</small><b class="'+(outOk(a)?"up":"down")+'">'+outTxt(a)+'</b></div>'+
         '</div>'+
         (w?'<div class="bar"><i style="width:'+(pr*100).toFixed(1)+'%"></i></div>':'')+
         '<div class="acc-row">'+
@@ -820,8 +877,8 @@ function renderAccs(){
           '<div><small>Направление</small><select data-f="dir" data-k="'+k+'">'+
             '<option value="up"'+((p.dir||"up")==="up"?" selected":"")+'>В плюс</option>'+
             '<option value="down"'+(p.dir==="down"?" selected":"")+'>В минус</option></select></div>'+
-          '<div><small>Риск</small><select data-f="risk" data-k="'+k+'">'+
-            Object.keys(S.risks).map(x=>'<option value="'+x+'"'+(x===p.risk?" selected":"")+'>'+S.risks[x].name+'</option>').join("")+'</select></div>'+
+          '<div><small>Коэффициент</small><select data-f="k" data-k="'+k+'">'+
+            COEFS.map(x=>'<option value="'+x+'"'+(x===coefOf(p.k)?" selected":"")+'>'+coefTxt(x)+'</option>').join("")+'</select></div>'+
           '<div><small>Доля депозита</small><input class="num" data-f="share" data-k="'+k+'" type="number" min="10" max="100" step="5" value="'+Math.round(p.share*100)+'"></div>'+
         '</div>'+
         '<label class="fix-row"><input type="checkbox" data-fix="'+k+'"'+
@@ -850,6 +907,7 @@ function renderAccs(){
       const f=el.dataset.f;
       if(f==="share") p.share=Math.max(0.1,Math.min(1,(Number(el.value)||60)/100));
       else if(f==="hours") p.hours=Math.max(1,Math.min(2160,Math.round(Number(el.value)||24)));
+      else if(f==="k") p.k=coefOf(el.value);
       else p[f]=el.value;
       S.per[k]=p; renderAll();
     };
@@ -944,8 +1002,9 @@ function renderForecast(){
   $("fcGross").textContent=sig(gross);
   $("fcFee").textContent="−"+usd(fee);
   $("fcTarget").textContent=usd(target);
-  const perDay=TRADES_DAY[S.params.risk]||TRADES_DAY.balance;
-  $("fcFreq").textContent="≈ "+perDay+" сделок в сутки · "+trades+" за период";
+  const perDay=TRADES_DAY[coefRisk(coefOf(S.params.k))];
+  $("fcFreq").textContent="≈ "+perDay+" сделок в сутки · "+trades+" за период · цель "+
+    coefTxt(coefOf(S.params.k))+" к депозиту";
 }
 function renderAll(){
   renderMktStop(); renderKpis(); renderAccs(); drawChart(); renderDeals(); renderLog(); renderForecast();
@@ -960,11 +1019,11 @@ function renderAll(){
    в них вписано слово DEMO, так что ни один кошелёк их не примет */
 const CS_NETS=[
   {k:"trc20",name:"USDT · TRC-20 (Tron)",     min:20,fee:"≈ 1 USDT",  eta:"до 2 часов",
-   addr:"TV3NoCvAhjiwm1KXgorcVaSqVQ6gZNY9aW", memoL:"Memo / тег", memo:"не требуется"},
+   addr:"TDEMOtrc20DEMOtrc20DEMOtrc20DEMO01", memoL:"Memo / тег", memo:"не требуется"},
   {k:"erc20",name:"USDT · ERC-20 (Ethereum)", min:50,fee:"≈ 6 USDT",  eta:"до 3 часов",
-   addr:"0x6B85B090868Ea29843c6216A036B16bf2dB7AFaC", memoL:"Контракт USDT", memo:"0xDEMO…erc20 (LIVE)"},
+   addr:"0xDEMOerc20DEMOerc20DEMOerc20DEMO02", memoL:"Контракт USDT", memo:"0xDEMO…erc20 (демо)"},
   {k:"bep20",name:"USDT · BEP-20 (BNB Chain)",min:20,fee:"≈ 0,5 USDT",eta:"до 2 часов",
-   addr:"0x6B85B090868Ea29843c6216A036B16bf2dB7AFaC", memoL:"Контракт USDT", memo:"0xDEMO…bep20 (LIVE)"}
+   addr:"0xDEMObep20DEMObep20DEMObep20DEMO03", memoL:"Контракт USDT", memo:"0xDEMO…bep20 (демо)"}
 ];
 const CS={tab:"in",net:"trc20",key:"",meth:{},sign:"",nameAuto:""};
 const csRef=p=>p+"-"+String(Date.now()).slice(-6)+"-"+Math.random().toString(36).slice(2,5).toUpperCase();
@@ -990,7 +1049,21 @@ function cashSync(){
   $("csOwn").textContent=who;
   $("csOwnIn").textContent=who;
   $("csOwnOut").textContent=who;
+  csOutState(a);
   csNamePre(a);
+}
+
+/* вывод по кошельку: порог и привязанный адрес приходят с площадки,
+   их задаёт администратор в админке. Здесь только показываем состояние. */
+function csOutState(a){
+  const box=$("csOutOpen"); if(!box) return;
+  const po=(a&&a.payout)||{};
+  const bal=a?valOf(a):0;
+  if(!a){ box.textContent="—"; box.className=""; return; }
+  if(!po.addr){ box.textContent="закрыт — кошелёк не привязан"; box.className="down"; return; }
+  if(po.min>0&&bal<po.min){ box.textContent="закрыт до "+usd(po.min); box.className="down"; return; }
+  box.textContent=po.min>0?("от "+usd(po.min)):"без ограничения суммы";
+  box.className="up";
 }
 
 /* имя и фамилия владельца кошелька: берём из профиля счёта на площадке */
@@ -1064,7 +1137,7 @@ function csDeposit(){
     refresh();
   };
   /* маршрут пополнения может быть ещё не поднят на сервере — тогда заявка
-     остаётся LIVEнстрационной и показывается только здесь */
+     остаётся демонстрационной и показывается только здесь */
   api("/api/hub/deposit",{method:"POST",body:JSON.stringify({
       key:c.key,amount:amt,net:CS.net,asset:"USDT"})})
     .then(done).catch(()=>done(null))
@@ -1075,15 +1148,18 @@ function csWithdraw(){
   const a=csAcct(), c=a&&credOf(a);
   const amt=Math.round((Number($("csOutAmt").value)||0)*100)/100;
   const req=($("csReq").value||"").trim();
+  const addr=($("csAddr2").value||"").trim();
   const err=m=>{ $("csOutErr").textContent=m||""; };
   if(!a||!c) return err("Сначала подключите кошелёк");
   if(!(amt>0)) return err("Укажите сумму вывода");
   if(amt>valOf(a)) return err("На кошельке только "+usd(valOf(a)));
+  if(!addr) return err("Укажите кошелёк для вывода — заявка принимается только на привязанный адрес");
   if(req.replace(/\D/g,"").length<4) return err("Укажите реквизиты — хватит последних четырёх цифр");
   err("");
   const go=$("csOutGo"); go.disabled=true; go.style.opacity=".6";
   api("/api/hub/withdraw",{method:"POST",body:JSON.stringify({
-      key:c.key,amount:amt,method:$("csMeth").value,req:req,name:($("csName").value||"").trim()})})
+      key:c.key,amount:amt,method:$("csMeth").value,req:req,addr:addr,
+      name:($("csName").value||"").trim()})})
     .then(j=>{
       $("csOutDone").innerHTML='<div class="cs-ok"><b>Заявка на вывод создана</b>'+
         "<p>Кошелёк #"+a.acct+" · "+usd(j.amount)+" · "+j.method+" · "+j.mask+
@@ -1161,13 +1237,15 @@ function buildForm(){
   $("dirNote").textContent=(S.params.dir==="down")
     ? ""
     : "";
-  $("fRisk").innerHTML=Object.keys(S.risks).map(k=>
-    '<button data-r="'+k+'"'+(k===S.params.risk?' class="on"':'')+'>'+S.risks[k].name+'</button>').join("");
-  $("fRisk").querySelectorAll("[data-r]").forEach(b=>b.onclick=()=>{
-    S.params.risk=b.dataset.r; buildForm(); renderForecast();});
-  const r=S.risks[S.params.risk]||{};
-  $("riskNote").textContent="Ожидаемая просадка до "+(r.dd||7)+"% · ≈ "+
-    (TRADES_DAY[S.params.risk]||18)+" сделок в сутки на кошелёк";
+  const kNow=coefOf(S.params.k);
+  $("fCoef").innerHTML=COEFS.map(x=>
+    '<button data-c="'+x+'"'+(x===kNow?' class="on"':'')+'>'+coefTxt(x)+'</button>').join("");
+  $("fCoef").querySelectorAll("[data-c]").forEach(b=>b.onclick=()=>{
+    S.params.k=Number(b.dataset.c); buildForm(); renderForecast();});
+  const rd=RISKD[coefRisk(kNow)];
+  $("riskNote").textContent=(S.params.dir==="down"?"Депозит уменьшится в "+String(kNow).replace(".",",")+" раза"
+    :"Депозит вырастет в "+String(kNow).replace(".",",")+" раза")+
+    " · ожидаемая просадка до "+rd.dd+"% · ≈ "+TRADES_DAY[coefRisk(kNow)]+" сделок в сутки на кошелёк";
   $("fShare").value=Math.round(S.params.share*100);
   $("shareVal").textContent=Math.round(S.params.share*100)+"%";
   $("fShare").oninput=()=>{
@@ -1201,7 +1279,8 @@ async function runKeys(keys,params){
   const names=list.map(x=>"#"+x.acct).join(", ");
   const pp=params||list[0].params;
   if(!confirm("Запустить сценарий на "+list.length+" кошельке(ах): "+names+"?\n\nИнструмент: "+
-    pp.pair+"\nГоризонт: "+pp.hours+" ч\nНаправление: "+
+    pp.pair+"\nГоризонт: "+pp.hours+" ч\nКоэффициент: "+coefTxt(coefOf(pp.k))+
+    "\nНаправление: "+
     (pp.dir==="down"?"В МИНУС — кошельки уйдут в убыток":"в плюс"))) return;
   try{
     const j=await api("/api/hub/start",{method:"POST",body:JSON.stringify({accounts:list})});
@@ -1349,6 +1428,61 @@ on("btnLink",async ()=>{
     renderLinked();
   }catch(e){ $("eAuth").textContent=e.message; }
 });
+/* ============ массовое создание кабинетов ============ */
+const REG={sites:{bw:true,nx:true}};
+function regWire(){
+  const box=$("regSites"); if(!box) return;
+  box.querySelectorAll("[data-s]").forEach(b=>{
+    b.classList.toggle("on",!!REG.sites[b.dataset.s]);
+    b.onclick=()=>{ REG.sites[b.dataset.s]=!REG.sites[b.dataset.s]; regWire(); };
+  });
+}
+/* строка списка: почта, пароль и необязательное имя через пробел или точку с запятой */
+function regParse(text){
+  return String(text||"").split(/\r?\n/).map(l=>l.trim()).filter(Boolean).map(l=>{
+    const p=l.split(/[\s;,]+/).filter(Boolean);
+    return {email:(p[0]||"").toLowerCase(),pass:p[1]||"",name:p.slice(2).join(" ")};
+  });
+}
+async function regRun(){
+  const err=m=>{ $("eReg").textContent=m||""; };
+  const items=regParse($("regList").value);
+  const sites=Object.keys(REG.sites).filter(k=>REG.sites[k]);
+  const key=($("regKey").value||"").trim();
+  if(!items.length) return err("Впишите хотя бы одну строку: почта и пароль");
+  if(!sites.length) return err("Выберите хотя бы одну площадку");
+  if(!key) return err("Нужен ключ администратора");
+  /* ключ уходит заголовком запроса, а в заголовок можно писать только латиницу */
+  if(/[^\x20-\xFF]/.test(key)) return err("Ключ администратора вводится латиницей и цифрами");
+  const bad=items.filter(x=>!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(x.email)||x.pass.length<4);
+  if(bad.length) return err("Проверьте строки: нужна почта и пароль не короче четырёх знаков ("+
+    bad.length+" строк с ошибкой)");
+  err("");
+  const btn=$("btnReg"); btn.disabled=true; btn.textContent="Создаём…";
+  try{
+    const r=await fetch("/api/hub/signup",{method:"POST",
+      headers:{"Content-Type":"application/json","x-admin-key":key},
+      body:JSON.stringify({items,sites})});
+    let j={}; try{ j=await r.json(); }catch(e){}
+    if(!r.ok) throw new Error(j.error||("Ошибка "+r.status));
+    let added=0;
+    (j.items||[]).forEach(x=>{
+      if(!x.ok||!x.key) return;
+      if(S.creds.some(c=>c.site===x.site&&String(c.acct)===String(x.acct))) return;
+      S.creds.push({site:x.site,acct:x.acct,key:x.key}); added++;
+    });
+    if(added){ saveCreds(); renderLinked(); }
+    $("regOut").innerHTML='<div class="cs-ok"><b>Готово: кабинетов создано '+(j.made||0)+
+      (added?", подключено к пульту "+added:"")+'</b><p>'+
+      (j.items||[]).map(x=>"#"+(x.acct||"—")+" · "+x.siteName+" · "+x.email+" — "+
+        (x.ok?"создан":x.error)).join("<br>")+"</p></div>";
+    if(j.made) toast("Создано кабинетов: "+j.made);
+  }catch(e){ err(e.message); }
+  btn.disabled=false; btn.textContent="Создать и подключить";
+}
+on("btnReg",regRun);
+regWire();
+
 ["inMail","inPass"].forEach(id=>{
   const el=$(id); if(el) el.onkeydown=e=>{ if(e.key==="Enter") $("btnLogin").click(); };
 });
