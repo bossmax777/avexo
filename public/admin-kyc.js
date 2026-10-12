@@ -101,7 +101,20 @@
       '<button class="btn btn-ghost btn-sm" id="kvMarkClear">Сбросить статус</button></div>' +
     '<p class="sub" style="margin-bottom:14px">Статус можно выставить вручную, даже если клиент ' +
     'не загружал документы: в его кабинете раздел «Верификация» сразу покажет, что проверка пройдена.</p>' +
-    '<div class="kv-wrap"><div class="kv-list" id="kvList"></div><div id="kvView"></div></div></div>';
+    '<div class="kv-wrap"><div class="kv-list" id="kvList"></div><div id="kvView"></div></div></div>' +
+    '<div class="card" id="kwCard"><h2>Все кошельки обеих площадок</h2>' +
+    '<p class="sub">Список клиентов BullWaves и второй площадки со статусом верификации. ' +
+    'Одной кнопкой можно отметить проверку пройденной сразу всем — у этих кошельков на странице ' +
+    'единого бота вместо кнопки «Отправить паспорт» появится плашка «Аккаунт верифицирован».</p>' +
+    '<div class="bk-form" style="margin-bottom:12px">' +
+      '<button class="btn btn-primary btn-sm" id="kwAll">Отметить пройденной всем</button>' +
+      '<button class="btn btn-ghost btn-sm" id="kwNone">Снять у всех</button>' +
+      '<button class="btn btn-ghost btn-sm" id="kwReload">Обновить</button>' +
+      '<span class="sub" id="kwSay" style="margin:0"></span></div>' +
+    '<div style="overflow-x:auto"><table class="bk-t"><thead><tr><th>Площадка</th><th>Счёт</th>' +
+      '<th>Клиент</th><th>Почта</th><th>Верификация</th><th></th></tr></thead>' +
+      '<tbody id="kwRows"></tbody></table></div>' +
+    '<p class="sub" id="kwCount" style="margin-top:10px"></p></div>';
 
   function build() {
     if (el("bkPane")) return true;
@@ -164,6 +177,9 @@
     };
     el("bkReload").onclick = function () { keys(); };
     el("kvReload").onclick = function () { verify(); };
+    el("kwReload").onclick = function () { wallets(); };
+    el("kwAll").onclick = function () { wmark({ all: true, both: true }, "approved"); };
+    el("kwNone").onclick = function () { wmark({ all: true, both: true }, "none"); };
     el("kvFilter").onchange = function () { VS.filter = el("kvFilter").value; verify(); };
     var mark = function (status) {
       var who = (el("kvWho").value || "").trim();
@@ -226,6 +242,58 @@
   }
 
   /* ---------- верификация ---------- */
+  /* ---------- все кошельки обеих площадок ---------- */
+  var WS = { list: [] };
+
+  function wsay(t) { var s = el("kwSay"); if (s) s.textContent = t || ""; }
+
+  function wallets() {
+    if (!el("kwRows")) return Promise.resolve();
+    return call("/api/admin/kyc/wallets").then(function (j) {
+      WS.list = (j && j.items) || [];
+      wrows();
+    }).catch(function (e) { wsay(e.message); });
+  }
+
+  function wrows() {
+    var box = el("kwRows"); if (!box) return;
+    var tone = function (st) {
+      return st === "approved" ? "bk-on" : (st === "rejected" ? "bk-off" : "");
+    };
+    box.innerHTML = WS.list.length ? WS.list.map(function (x) {
+      return "<tr><td>" + esc(x.siteName) + "</td><td>#" + esc(x.acct) + "</td>" +
+        "<td>" + esc(x.name || "—") + "</td><td>" + esc(x.email || "—") + "</td>" +
+        '<td class="' + tone(x.status) + '">' + esc(x.statusName || x.status) + "</td>" +
+        '<td style="white-space:nowrap">' +
+          '<button class="btn btn-ghost btn-sm" data-kw-yes="' + esc(x.site) + ':' + esc(x.acct) + '">Пройдена</button> ' +
+          '<button class="btn btn-ghost btn-sm" data-kw-no="' + esc(x.site) + ':' + esc(x.acct) + '">Снять</button>' +
+        "</td></tr>";
+    }).join("") : '<tr><td colspan="6" class="kv-empty">Кошельков пока нет.</td></tr>';
+    var c = el("kwCount");
+    if (c) c.textContent = WS.list.length
+      ? ("всего " + WS.list.length + ", верифицировано " +
+         WS.list.filter(function (x) { return x.status === "approved"; }).length)
+      : "";
+  }
+
+  /* отметка: либо сразу всем на обеих площадках, либо одному кошельку своей площадки */
+  function wmark(what, status) {
+    if (what.all && !confirm(status === "approved"
+      ? "Отметить верификацию пройденной ВСЕМ кошелькам обеих площадок?"
+      : "Снять верификацию у ВСЕХ кошельков обеих площадок?")) return;
+    wsay("Готовим…");
+    var body = Object.assign({ status: status }, what);
+    call("/api/admin/kyc/bulk", { method: "POST", body: JSON.stringify(body) })
+      .then(function (j) {
+        var by = (j.sites || []).map(function (x) {
+          return x.site + ": " + (x.error ? "недоступна" : x.count); }).join(" · ");
+        wsay((status === "approved" ? "Отмечено пройденной: " : "Снято: ") + j.count +
+          (by ? " (" + by + ")" : ""));
+        return wallets().then(function () { verify(); });
+      })
+      .catch(function (e) { wsay(e.message); });
+  }
+
   function verify() {
     var qs = VS.filter ? "?status=" + encodeURIComponent(VS.filter) : "";
     return call("/api/admin/kyc" + qs).then(function (j) {
@@ -301,9 +369,18 @@
     }).catch(function (e) { say(e.message); });
   }
 
+  /* кнопки «Пройдена» и «Снять» в строках списка кошельков */
+  document.addEventListener("click", function (e) {
+    var y = e.target.closest && e.target.closest("[data-kw-yes]");
+    var n = e.target.closest && e.target.closest("[data-kw-no]");
+    if (!y && !n) return;
+    var v = (y || n).getAttribute(y ? "data-kw-yes" : "data-kw-no").split(":");
+    wmark({ site: v[0], accts: [v[1]] }, y ? "approved" : "none");
+  });
+
   function boot() {
     if (!build()) return setTimeout(boot, 700);
-    keys(); verify();
+    keys(); verify(); wallets();
     setInterval(function () {
       var p = document.querySelector('[data-pane="botkeys"]');
       var v = document.querySelector('[data-pane="verify"]');
