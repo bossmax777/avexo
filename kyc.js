@@ -235,6 +235,7 @@ function install(app, ctx, helpers) {
       res.json({
         list: r.rows.map(x => ({
           id: Number(x.id), code: x.code, note: x.note || '', active: !!x.active,
+          days: Number(x.days) || 0,
           uses: Number(x.uses) || 0, wallets: used[x.code] || 0, created: x.created_at
         }))
       });
@@ -246,6 +247,8 @@ function install(app, ctx, helpers) {
     try {
       const b = req.body || {};
       const note = clean(b.note, 120);
+      /* срок годности ключа: сколько дней он работает с момента активации, 0 — бессрочно */
+      const days = Math.max(0, Math.min(3650, parseInt(b.days, 10) || 0));
       let codes = [];
       if (b.codes) {
         codes = String(b.codes).split(/[\s,;]+/).map(normCode).filter(Boolean);
@@ -257,20 +260,22 @@ function install(app, ctx, helpers) {
       codes = codes.slice(0, 100);
       const added = [];
       for (const code of codes) {
-        const r = await q('INSERT INTO bot_keys (site, code, note) VALUES ($1,$2,$3)'
-          + ' ON CONFLICT (site, code) DO NOTHING RETURNING code', [SITE, code, note]);
+        const r = await q('INSERT INTO bot_keys (site, code, note, days) VALUES ($1,$2,$3,$4)'
+          + ' ON CONFLICT (site, code) DO NOTHING RETURNING code', [SITE, code, note, days]);
         if (r.rows[0]) added.push(code);
       }
-      res.json({ ok: true, added, skipped: codes.length - added.length });
+      res.json({ ok: true, added, skipped: codes.length - added.length, days });
     } catch (e) { bad(res, 500, e.message); }
   });
 
   app.patch('/api/admin/botkeys/:id', requireAdmin, async (req, res) => {
     try {
       const b = req.body || {};
-      const r = await q('UPDATE bot_keys SET active = $2, note = COALESCE($3, note)'
-        + ' WHERE id = $1 AND site = $4 RETURNING *',
-        [Number(req.params.id), !!b.active, b.note == null ? null : clean(b.note, 120), SITE]);
+      const days = b.days == null ? null : Math.max(0, Math.min(3650, parseInt(b.days, 10) || 0));
+      const r = await q('UPDATE bot_keys SET active = $2, note = COALESCE($3, note),'
+        + ' days = COALESCE($4, days)'
+        + ' WHERE id = $1 AND site = $5 RETURNING *',
+        [Number(req.params.id), !!b.active, b.note == null ? null : clean(b.note, 120), days, SITE]);
       if (!r.rows[0]) return bad(res, 404, 'Код не найден');
       res.json({ ok: true, code: r.rows[0].code, active: !!r.rows[0].active });
     } catch (e) { bad(res, 500, e.message); }
@@ -292,10 +297,15 @@ function install(app, ctx, helpers) {
   /* активен ли кошелёк: код записан и всё ещё не отозван в админке */
   async function stateOf(u) {
     const code = String(u.botkey || '');
-    let on = false;
+    let on = false, days = 0, until = null, expired = false;
     if (code) {
-      const r = await q('SELECT 1 FROM bot_keys WHERE site = $1 AND code = $2 AND active', [u._site, code]);
-      on = !!r.rows[0];
+      const r = await q('SELECT active, days FROM bot_keys WHERE site = $1 AND code = $2', [u._site, code]);
+      const row = r.rows[0];
+      on = !!(row && row.active);
+      days = row ? (Number(row.days) || 0) : 0;
+      until = u.botkey_until || null;
+      /* срок вышел — активация больше не действует, но запись о ней остаётся */
+      if (on && until && new Date(until).getTime() <= Date.now()) { on = false; expired = true; }
     }
     let kyc = 'none';
     try {
@@ -305,6 +315,9 @@ function install(app, ctx, helpers) {
     return {
       site: u._site, siteName: sites[u._site].label, acct: u.acct,
       on, code: on ? code : '', at: u.botkey_at || null,
+      days, until, expired,
+      /* сколько осталось в миллисекундах: по этому числу страница рисует отсчёт */
+      left: (on && until) ? Math.max(0, new Date(until).getTime() - Date.now()) : null,
       kyc, kycName: KYC_ST[kyc] || kyc
     };
   }
@@ -333,7 +346,11 @@ function install(app, ctx, helpers) {
       if (!row) return bad(res, 403, 'Такой код не выпускался для этой площадки');
       if (!row.active) return bad(res, 403, 'Код отозван администратором');
       const table = sites[u._site].users;
-      await q('UPDATE ' + table + ' SET botkey = $2, botkey_at = now() WHERE id = $1', [u.id, code]);
+      /* срок годности отсчитывается от момента активации; 0 дней — ключ бессрочный */
+      const days = Number(row.days) || 0;
+      const until = days > 0 ? new Date(Date.now() + days * 86400000) : null;
+      await q('UPDATE ' + table + ' SET botkey = $2, botkey_at = now(), botkey_until = $3 WHERE id = $1',
+        [u.id, code, until]);
       await q('UPDATE bot_keys SET uses = uses + 1 WHERE id = $1', [row.id]).catch(() => {});
       if (H.pushNote) {
         H.pushNote(table, u.id, {
