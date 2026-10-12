@@ -881,6 +881,9 @@
     return d > 0 ? d + " дн. " + h + " ч" : h + " ч";
   };
 
+  /* отмеченные кошельки и статусы верификации по номеру счёта */
+  var SEL = {}, KYC = {};
+
   var CSS =
     "#akCard .ak-row{display:flex;gap:10px;flex-wrap:wrap;align-items:flex-end;margin-bottom:14px}" +
     "#akCard .ak-f{display:flex;flex-direction:column;gap:5px;min-width:150px}" +
@@ -898,6 +901,10 @@
     "font-size:11px;font-weight:600;border:1px solid currentColor}" +
     "#akCard .ak-pill.g{color:#16A34A}#akCard .ak-pill.y{color:#C98A04}#akCard .ak-pill.r{color:#E5484D}" +
     "#akCard .ak-pill.o{color:var(--muted)}" +
+    "#akCard .ak-pill.v{color:#2BA87A}" +
+    "#akCard td.c,#akCard th.c{width:34px;text-align:center}" +
+    "#akCard input[type=checkbox]{width:16px;height:16px;cursor:pointer}" +
+    "#akCard tr.on{background:var(--accent-soft,rgba(79,70,229,.07))}" +
     "#akCard .ak-empty{font-size:12.5px;color:var(--muted);padding:16px 2px}";
 
   var PANE =
@@ -907,17 +914,29 @@
     'Срок активации задаётся здесь и отсчитывается от этой минуты: поставьте 0, чтобы взять срок ' +
     'самого кода, и тогда код без срока включится бессрочно. Той же кнопкой «Продлить» срок ' +
     'пересчитывается заново. Снятие гасит плашку «Бот активен» у клиента сразу.</p>' +
+    '<p class="sub">Отмечайте кошельки галочками: одной группе можно выдать ключ на 30 дней, ' +
+    'другой — на 7. Здесь же проставляется верификация: подтверждённый кошелёк видит на странице ' +
+    'бота плашку «Аккаунт верифицирован».</p>' +
     '<div class="ak-row">' +
       '<div class="ak-f" style="min-width:220px"><label for="akCode">Код для активации</label>' +
         '<input id="akCode" placeholder="пусто — возьму свободный" maxlength="19"></div>' +
       '<div class="ak-f" style="min-width:170px"><label for="akDays">Срок активации, дней</label>' +
         '<input id="akDays" type="number" min="0" max="3650" value="30"></div>' +
       '<div class="ak-f" style="min-width:auto"><label>&nbsp;</label>' +
-        '<button class="btn btn-primary" id="akAll">Активировать всем без ключа</button></div>' +
+        '<button class="btn btn-primary" id="akAll">Активировать выбранным</button></div>' +
       '<div class="ak-f" style="min-width:auto"><label>&nbsp;</label>' +
-        '<button class="btn btn-ghost" id="akNone">Снять у всех</button></div>' +
+        '<button class="btn btn-ghost" id="akNone">Снять у выбранных</button></div>' +
       '<div class="ak-f" style="min-width:auto"><label>&nbsp;</label>' +
         '<button class="btn btn-ghost" id="akReload">Обновить</button></div>' +
+    '</div>' +
+    '<div class="ak-row" style="margin-bottom:10px">' +
+      '<div class="ak-f" style="min-width:auto"><label>Верификация выбранных</label>' +
+        '<div style="display:flex;gap:8px;flex-wrap:wrap">' +
+          '<button class="btn btn-ghost btn-sm" id="akVyes">Подтвердить</button>' +
+          '<button class="btn btn-ghost btn-sm" id="akVno">Снять</button>' +
+          '<button class="btn btn-ghost btn-sm" id="akPick">Отметить всех</button>' +
+          '<button class="btn btn-ghost btn-sm" id="akClear">Снять отметки</button>' +
+        '</div></div>' +
     '</div>' +
     '<p class="sub" id="akSay" style="margin:0 0 12px"></p>' +
     '<div id="akBox"></div></div>';
@@ -938,6 +957,10 @@
     el("akAll").onclick = function () { bulk(true); };
     el("akNone").onclick = function () { bulk(false); };
     el("akReload").onclick = reload;
+    el("akVyes").onclick = function () { verify("approved"); };
+    el("akVno").onclick = function () { verify("none"); };
+    el("akPick").onclick = function () { wallets().forEach(function (u) { SEL[u.acct] = true; }); draw(); };
+    el("akClear").onclick = function () { SEL = {}; draw(); };
     return true;
   }
 
@@ -948,7 +971,8 @@
     var us = wallets(), box = el("akBox");
     if (!us.length) { box.innerHTML = '<p class="ak-empty">На площадке пока нет кошельков.</p>'; return; }
     box.innerHTML = '<div class="ak-scroll"><table><thead><tr>' +
-      "<th>Клиент</th><th>Счёт</th><th>Ключ</th><th>Активация</th><th>Срок</th><th></th>" +
+      '<th class="c"><input type="checkbox" id="akChkAll"></th>' +
+      "<th>Клиент</th><th>Счёт</th><th>Ключ</th><th>Срок</th><th>Верификация</th><th></th>" +
       "</tr></thead><tbody>" +
       us.map(function (u) {
         var ms = left(u);
@@ -957,10 +981,18 @@
           : (ms === null ? '<span class="ak-pill g">бессрочно</span>'
             : (ms > 0 ? '<span class="ak-pill ' + tone(ms) + '">' + leftTxt(ms) + "</span>"
                       : '<span class="ak-pill r">срок вышел</span>'));
-        return "<tr><td>" + esc(u.name || u.email) + "</td><td>#" + esc(u.acct) + "</td>" +
+        var vst = KYC[String(u.acct)] || "none";
+        var vpill = vst === "approved" ? '<span class="ak-pill v">верифицирован</span>'
+          : vst === "pending" ? '<span class="ak-pill y">на проверке</span>'
+          : vst === "rejected" ? '<span class="ak-pill r">отклонена</span>'
+          : '<span class="ak-pill o">нет</span>';
+        return '<tr class="' + (SEL[u.acct] ? "on" : "") + '">' +
+          '<td class="c"><input type="checkbox" data-ak-sel="' + esc(u.acct) + '"' +
+            (SEL[u.acct] ? " checked" : "") + "></td>" +
+          "<td>" + esc(u.name || u.email) + "</td><td>#" + esc(u.acct) + "</td>" +
           '<td class="ak-code">' + (u.botkey ? esc(u.botkey) : "—") + "</td>" +
-          "<td>" + (u.botkey && u.botkeyAt ? new Date(u.botkeyAt).toLocaleDateString("ru-RU") : "—") + "</td>" +
           '<td class="nw">' + pill + "</td>" +
+          '<td class="nw">' + vpill + "</td>" +
           '<td class="nw">' +
             '<button class="btn btn-ghost btn-sm" data-ak-on="' + u.id + '">' +
               (u.botkey ? "Перевыдать" : "Активировать") + "</button> " +
@@ -990,13 +1022,21 @@
   }
 
   /* массовые действия: активировать тем, у кого ключа нет, или снять у всех */
-  function bulk(on) {
+  /* выбранные кошельки; если ничего не отмечено — работаем по всем */
+  function picked() {
     var us = wallets();
-    var list = on ? us.filter(function (u) { return !u.botkey; }) : us.filter(function (u) { return !!u.botkey; });
-    if (!list.length) return say(on ? "Все кошельки уже активированы." : "Активаций нет.");
+    var mine = us.filter(function (u) { return SEL[u.acct]; });
+    return mine.length ? mine : null;
+  }
+
+  function bulk(on) {
+    var us = picked();
+    if (!us) return say("Отметьте кошельки галочками — действие применяется к выбранным.");
+    var list = on ? us : us.filter(function (u) { return !!u.botkey; });
+    if (!list.length) return say(on ? "Выбранные кошельки пусты." : "У выбранных нет активаций.");
     var d = akDays();
     if (!confirm(on
-      ? "Активировать бота на " + list.length + " кошельках без ключа?\n\n" +
+      ? "Активировать бота на " + list.length + " выбранных кошельках?\n\n" +
         (d ? "Срок активации: " + d + " дн. с этой минуты." : "Срок — тот, что записан у кода.")
       : "Снять активацию у " + list.length + " кошельков? Плашка «Бот активен» у клиентов погаснет.")) return;
     var btn = on ? el("akAll") : el("akNone");
@@ -1016,13 +1056,55 @@
     step(0);
   }
 
+  /* верификация выбранных кошельков: подтвердить или снять отметку */
+  function verify(status) {
+    var us = picked();
+    if (!us) return say("Отметьте кошельки галочками — верификация ставится выбранным.");
+    if (!confirm(status === "approved"
+      ? "Подтвердить верификацию у " + us.length + " кошельков? На странице бота у них появится плашка «Аккаунт верифицирован»."
+      : "Снять верификацию у " + us.length + " кошельков?")) return;
+    var btn = status === "approved" ? el("akVyes") : el("akVno");
+    var was = btn.textContent;
+    btn.disabled = true; btn.textContent = "Готовим…";
+    call("/api/admin/kyc/bulk", { method: "POST", body: JSON.stringify({
+      accts: us.map(function (u) { return String(u.acct); }), status: status
+    }) }).then(function (j) {
+      say((status === "approved" ? "Подтверждено кошельков: " : "Снято у кошельков: ") + j.count);
+      return reload();
+    }, function (e) { say(e.message); })
+      .then(function () { btn.disabled = false; btn.textContent = was; });
+  }
+
+  /* статусы верификации берём из заявок — по ним рисуется колонка */
+  function loadKyc() {
+    return call("/api/admin/kyc").then(function (j) {
+      KYC = {};
+      (j.list || []).forEach(function (x) { KYC[String(x.acct)] = x.status; });
+    }, function () {});
+  }
+
   function reload() {
     var p = Promise.resolve();
     if (typeof uFetch === "function") p = Promise.resolve(uFetch());
-    return p.then(function () { draw(); if (typeof renderUsers === "function") renderUsers(); })
+    return p.then(loadKyc).then(function () { draw(); if (typeof renderUsers === "function") renderUsers(); })
       .catch(function (e) { say(e.message); });
   }
   window.renderBotAssign = reload;
+
+  document.addEventListener("change", function (e) {
+    var c = e.target.closest && e.target.closest("[data-ak-sel]");
+    if (c) {
+      SEL[c.getAttribute("data-ak-sel")] = c.checked;
+      var tr = c.closest("tr"); if (tr) tr.className = c.checked ? "on" : "";
+      return;
+    }
+    if (e.target.id === "akChkAll") {
+      var v = e.target.checked;
+      wallets().forEach(function (u) { SEL[u.acct] = v; });
+      draw();
+      var a = el("akChkAll"); if (a) a.checked = v;
+    }
+  });
 
   document.addEventListener("click", function (e) {
     var t = e.target;
@@ -1043,7 +1125,7 @@
     if (t.closest('[data-tab="users"]')) setTimeout(reload, 90);
   });
 
-  function boot() { if (build()) draw(); }
+  function boot() { if (build()) { loadKyc().then(draw); } }
   if (document.readyState === "loading") {
     document.addEventListener("DOMContentLoaded", function () { setTimeout(boot, 900); });
   } else setTimeout(boot, 900);
