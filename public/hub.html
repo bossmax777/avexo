@@ -102,11 +102,31 @@ button,input,select{font:inherit;color:inherit}
 .err{color:#FF9DA1;font-size:13px;min-height:18px;margin:4px 0 8px}
 
 /* ---- сводка ---- */
-.kpis{display:grid;grid-template-columns:repeat(auto-fit,minmax(190px,1fr));gap:12px;margin-bottom:16px}
-.kpi{background:var(--surface);border:1px solid var(--line);border-radius:var(--radius);padding:15px 17px}
-.kpi small{display:block;color:var(--dim);font-size:11.5px;text-transform:uppercase;letter-spacing:.05em}
-.kpi b{display:block;font-size:22px;margin-top:6px;font-family:"IBM Plex Mono",monospace}
-.kpi span{display:block;font-size:12px;color:var(--muted);margin-top:3px}
+.kpis{display:grid;grid-template-columns:repeat(auto-fit,minmax(214px,1fr));gap:12px;margin-bottom:16px}
+/* каждая плитка со своим цветом: он задаётся переменной --k прямо в разметке
+   и подхватывается полоской сверху, значком и подсветкой фона */
+.kpi{position:relative;overflow:hidden;background:var(--surface);border:1px solid var(--line);
+  border-radius:var(--radius);padding:15px 17px 16px;
+  background-image:radial-gradient(120% 100% at 100% 0,color-mix(in srgb,var(--k) 13%,transparent),transparent 62%);
+  transition:border-color .16s ease,transform .16s ease}
+.kpi::before{content:"";position:absolute;inset:0 0 auto 0;height:2px;
+  background:linear-gradient(90deg,var(--k),color-mix(in srgb,var(--k) 18%,transparent))}
+.kpi:hover{border-color:color-mix(in srgb,var(--k) 46%,var(--line));transform:translateY(-1px)}
+.kpi-h{display:flex;align-items:center;gap:8px;min-height:18px}
+.kpi-ic{flex:none;width:21px;height:21px;border-radius:7px;display:grid;place-items:center;
+  color:var(--k);background:color-mix(in srgb,var(--k) 15%,transparent);
+  border:1px solid color-mix(in srgb,var(--k) 34%,transparent)}
+.kpi-ic svg{width:12px;height:12px;stroke:currentColor;fill:none;stroke-width:2;
+  stroke-linecap:round;stroke-linejoin:round}
+.kpi small{display:block;color:var(--dim);font-size:11px;text-transform:uppercase;letter-spacing:.06em}
+.kpi b{display:block;font-size:23px;margin-top:9px;font-family:"IBM Plex Mono",monospace;
+  font-variant-numeric:tabular-nums;letter-spacing:-.01em}
+.kpi span{display:block;font-size:12px;color:var(--muted);margin-top:4px}
+@supports not (color:color-mix(in srgb,#000 10%,transparent)){
+  .kpi{background-image:none}
+  .kpi-ic{background:var(--surface-2);border-color:var(--line)}
+  .kpi:hover{border-color:var(--accent)}
+}
 
 /* ---- карточки кошельков ---- */
 .acc{border:1px solid var(--line);border-radius:var(--radius);background:var(--surface-2);margin-bottom:12px}
@@ -811,6 +831,21 @@ function fmtLeft(ms){
   const h=Math.floor(ms/3600000),m=Math.floor(ms%3600000/60000),d=Math.floor(h/24);
   return d>0 ? d+" д "+(h%24)+" ч" : h+" ч "+m+" мин";
 }
+/* значки плиток: простые контуры, цвет берут от плитки */
+const KPI_IC={
+  wallet:'<path d="M3 7h14a2 2 0 0 1 2 2v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/><path d="M3 7V6a2 2 0 0 1 2-2h9"/><circle cx="15.5" cy="12.5" r="1.1"/>',
+  day:'<path d="M3 15l5-5 3.5 3.5L19 6"/><path d="M14 6h5v5"/>',
+  chart:'<path d="M4 19V9"/><path d="M10 19V5"/><path d="M16 19v-6"/>',
+  bolt:'<path d="M12 3 5.5 13H11l-1 8 6.5-10H11z"/>'
+};
+/* одна плитка сводки: цвет, значок, подпись, число и пояснение */
+function kpi(color,icon,label,value,tone,note){
+  return '<div class="kpi" style="--k:'+color+'">'+
+    '<div class="kpi-h"><span class="kpi-ic"><svg viewBox="0 0 22 22">'+icon+'</svg></span>'+
+    '<small>'+label+'</small></div>'+
+    '<b class="num'+(tone?" "+tone:"")+'">'+value+'</b><span>'+note+'</span></div>';
+}
+
 function renderKpis(){
   const live=S.accounts.filter(a=>!a.error&&winOf(a));
   const bal=S.accounts.filter(a=>!a.error).reduce((s,a)=>s+valOf(a),0);
@@ -821,14 +856,14 @@ function renderKpis(){
   const bw=S.accounts.filter(a=>!a.error&&a.site==="bw").length;
   const nx=S.accounts.filter(a=>!a.error&&a.site==="nx").length;
   $("kpis").innerHTML=
-    '<div class="kpi"><small>Суммарный капитал</small><b class="num">'+usd(bal)+'</b>'+
-      '<span>'+(bw+nx)+' кошельков · BullWaves '+bw+' · FxPRO '+nx+'</span></div>'+
-    '<div class="kpi"><small>Доход за торговые сутки</small><b class="num '+(day>=0?"up":"down")+'">'+sig(day)+'</b>'+
-      '<span>последний торговый день, все счета</span></div>'+
-    '<div class="kpi"><small>Результат сессий</small><b class="num '+(pl>=0?"up":"down")+'">'+sig(pl)+'</b>'+
-      '<span>от старта текущих сценариев</span></div>'+
-    '<div class="kpi"><small>Активных сессий</small><b class="num">'+live.length+'</b>'+
-      '<span>'+(live.length?"помощник ведёт сделки":"ни один сценарий не запущен")+'</span></div>';
+    kpi("#7C5CFF",KPI_IC.wallet,"Суммарный капитал",usd(bal),"",
+        (bw+nx)+" кошельков · BullWaves "+bw+" · FxPRO "+nx)+
+    kpi("#2196B0",KPI_IC.day,"Доход за торговые сутки",sig(day),day>=0?"up":"down",
+        "последний торговый день, все счета")+
+    kpi("#2BA87A",KPI_IC.chart,"Результат сессий",sig(pl),pl>=0?"up":"down",
+        "от старта текущих сценариев")+
+    kpi("#BE8716",KPI_IC.bolt,"Активных сессий",String(live.length),"",
+        live.length?"помощник ведёт сделки":"ни один сценарий не запущен");
   $("pillLive").classList.toggle("hidden",!live.length);
   $("pillCnt").textContent=live.length;
   $("whoSum").textContent=usd(bal);
