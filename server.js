@@ -50,6 +50,8 @@ const toUser = r => r && ({
   tx: r.tx || [],
   hist: r.hist || [],
   apikey: r.apikey || '',
+  botkey: r.botkey || '',
+  botkeyAt: r.botkey_at || null,
   payoutAddr: r.payout_addr || '',
   payoutMin: Number(r.payout_min) || 0,
   botkeyUntil: r.botkey_until || null,
