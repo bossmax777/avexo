@@ -259,7 +259,7 @@ input[type=range]{width:100%;accent-color:var(--accent)}
       </svg>
       Verdix AI <i>Multi</i>
     </span>
-    <span class="pill demo"><i class="dot"></i>LIVE</span>
+    <span class="pill demo"><i class="dot"></i>Live</span>
     <span class="sp"></span>
     <span class="pill live hidden" id="pillLive"><i class="dot"></i><b id="pillCnt">0</b>&nbsp;<span id="pillWord">подключённых аккаунтов</span></span>
     <div class="who hidden" id="who"><b id="whoSum">—</b><small id="whoCnt">—</small></div>
@@ -277,7 +277,7 @@ input[type=range]{width:100%;accent-color:var(--accent)}
       <h1>Один пульт для двух площадок</h1>
       <button class="btn btn-sm hidden" id="btnBack" title="Вернуться в пульт">✕ Закрыть</button>
     </div>
-   
+    
 
     <div class="field"><label>Почта от кабинета</label>
       <input id="inMail" type="email" autocomplete="username" placeholder="you@mail.com"></div>
@@ -334,7 +334,7 @@ input[type=range]{width:100%;accent-color:var(--accent)}
       <b id="mktStopT">Биржа закрыта</b>
       <span id="mktStopS">Торги приостановлены</span>
     </div>
-    <span class="mkt-demo">LIVE</span>
+    <span class="mkt-demo">Live</span>
   </div>
 
   <div class="kpis" id="kpis"></div>
@@ -441,7 +441,7 @@ input[type=range]{width:100%;accent-color:var(--accent)}
 <div class="cs-modal" id="csModal" hidden>
   <div class="cs-win" id="cash" role="dialog" aria-modal="true" aria-label="Касса">
     <div class="panel-head">
-      <h3>Касса — пополнение и вывод <span class="badge demo">LIVE</span></h3>
+      <h3>Касса — пополнение и вывод <span class="badge demo">Live</span></h3>
       <button class="btn btn-sm" id="csClose" title="Закрыть">✕</button>
     </div>
 
@@ -473,7 +473,7 @@ input[type=range]{width:100%;accent-color:var(--accent)}
         </div>
 
         <div class="cs-req">
-          <div class="cs-req-h">Реквизиты для перевода <span class="badge demo">LIVE</span></div>
+          <div class="cs-req-h">Реквизиты для перевода <span class="badge demo">Live</span></div>
           <div class="cs-kv"><span>Владелец кошелька</span><b id="csOwnIn">—</b></div>
           <div class="cs-kv"><span>Сеть</span><b id="csNetName">—</b></div>
           <div class="cs-kv"><span>Актив</span><b>USDT</b></div>
@@ -481,10 +481,10 @@ input[type=range]{width:100%;accent-color:var(--accent)}
           <div class="cs-kv"><span>Комиссия сети</span><b class="num" id="csNetFee">—</b></div>
           <div class="cs-kv"><span>Зачисление</span><b id="csEta">—</b></div>
           <div class="cs-kv"><span id="csMemoL">Memo / тег</span><b id="csMemo">—</b></div>
-          <label class="cs-addr-l">Адрес пополнения <span class="badge demo">LIVE</span></label>
+          <label class="cs-addr-l">Адрес пополнения <span class="badge demo">Live</span></label>
           <div class="cs-addr"><code id="csAddr">—</code>
             <button class="btn btn-sm" id="csCopy">Копировать</button></div>
-          
+        
         </div>
       </div>
     </div>
@@ -508,7 +508,7 @@ input[type=range]{width:100%;accent-color:var(--accent)}
         </div>
 
         <div class="cs-req">
-          <div class="cs-req-h">Расчёт заявки <span class="badge demo">LIVE</span></div>
+          <div class="cs-req-h">Расчёт заявки <span class="badge demo">Live</span></div>
           <div class="cs-kv"><span>Владелец кошелька</span><b id="csOwnOut">—</b></div>
           <div class="cs-kv"><span>Вывод открыт</span><b id="csOutOpen">—</b></div>
           <div class="cs-kv"><span>Способ</span><b id="csOutM">—</b></div>
@@ -524,7 +524,7 @@ input[type=range]{width:100%;accent-color:var(--accent)}
 </div>
 
 <footer class="note" style="max-width:1180px;margin:0 auto;padding:26px 20px 34px;text-align:center">
- 
+  Verdix AI Multi 
 </footer>
 
 <div class="toast" id="toast"></div>
@@ -703,15 +703,22 @@ function progOf(a,t){
   const w=winOf(a); if(!w) return null;
   return Math.max(0,Math.min(1,mktElapsed(w.st,t||Date.now())/w.tspan));
 }
+/* сессия доработала свой горизонт: время вышло, хотя сценарий ещё не остановлен */
+function overOf(a){ const w=winOf(a); return !!w&&Date.now()>=w.en; }
 function valOf(a,t){
   const w=winOf(a); if(!w) return Number(a.balance)||0;
-  const pr=Math.max(0,Math.min(1,mktElapsed(w.st,t||Date.now())/w.tspan));
-  /* кривая сессии рисуется от депозита на момент запуска, но баланс кошелька
-     с тех пор мог измениться — итог дня из админки, пополнение, вывод.
-     Поэтому сдвигаем кривую на эту разницу: на пульте видно фактический
-     баланс площадки плюс прирост текущей сессии. */
-  const shift=(Number(a.balance)||0)-(Number(w.d.from)||0);
-  return Math.max(0,dynCurve(w.d,pr,w.st,w.tspan)+shift);
+  const bal=Number(a.balance)||0;
+  const at=t||Date.now();
+  const over=Date.now()>=w.en;
+  /* сессия уже закончилась — показываем то, что реально записано на площадке,
+     а не плановую цель сценария */
+  if(over&&at>=w.en) return bal;
+  /* кривая считается от депозита на момент запуска, но баланс кошелька с тех пор
+     мог измениться: итог дня из админки, пополнение, вывод. Поэтому сдвигаем
+     кривую так, чтобы она шла к фактическому балансу, а не от старого депозита. */
+  const base=over?(Number(w.d.to)||0):(Number(w.d.from)||0);
+  const pr=Math.max(0,Math.min(1,mktElapsed(w.st,at)/w.tspan));
+  return Math.max(0,dynCurve(w.d,pr,w.st,w.tspan)+(bal-base));
 }
 /* доход за сегодня: разница значения сценария от начала суток */
 function todayOf(a){
@@ -894,7 +901,8 @@ function accWord(n){
 }
 
 function renderKpis(){
-  const live=S.accounts.filter(a=>!a.error&&winOf(a));
+  /* в работе — только сессии, у которых горизонт ещё не закончился */
+  const live=S.accounts.filter(a=>!a.error&&winOf(a)&&!overOf(a));
   const bal=S.accounts.filter(a=>!a.error).reduce((s,a)=>s+valOf(a),0);
   const day=S.accounts.filter(a=>!a.error).reduce((s,a)=>s+todayOf(a),0);
   /* точка отсчёта — баланс, записанный на площадке: разница с кривой и есть
@@ -948,7 +956,7 @@ function renderAccs(){
     return '<div class="acc'+(S.sel.has(k)?" sel":"")+(S.open.has(k)?" open":"")+'" data-k="'+k+'">'+
       '<div class="acc-top" data-tog="'+k+'">'+
         '<div class="acc-chk" data-chk="'+k+'">✓</div>'+
-        '<div class="acc-name"><b>#'+a.acct+' '+siteBadge(a.site)+' <span class="badge demo">LIVE</span></b>'+
+        '<div class="acc-name"><b>#'+a.acct+' '+siteBadge(a.site)+' <span class="badge demo">Live</span></b>'+
           '<small>'+(a.name||"Клиент")+' · сервер '+a.srv+(w?' · сессия '+(w.d.pair||"")+(w.en>Date.now()?' · осталось '+fmtLeft(w.en-Date.now()):' · сессия завершена'):' · сессия не запущена')+'</small></div>'+
         '<div class="acc-fig"><b class="num">'+usd(cur)+'</b>'+
           '<span class="'+(day>=0?"up":"down")+'">за сутки '+sig(day)+'</span></div>'+
@@ -1015,7 +1023,9 @@ function renderAccs(){
 }
 function drawChart(){
   const svg=$("chart"), W=900, H=230;
+  /* график рисуем и по завершённым сессиям — иначе история пропадала бы */
   const live=S.accounts.filter(a=>!a.error&&winOf(a));
+  const run=live.filter(a=>!overOf(a));
   if(!live.length){
     svg.innerHTML='<text x="450" y="115" text-anchor="middle" fill="#6B7689" font-size="14" font-family="IBM Plex Sans">Сводный график появится после запуска сценария</text>';
     $("eqMeta").textContent=accWord(S.accounts.filter(a=>!a.error).length)+
@@ -1045,8 +1055,8 @@ function drawChart(){
     (dp?'<path d="'+dp+'" fill="none" stroke="#2BD67B" stroke-width="2" stroke-dasharray="6 6" opacity=".85"/>':'')+
     '<circle cx="'+x(pts[pts.length-1][0]).toFixed(1)+'" cy="'+y(pts[pts.length-1][1]).toFixed(1)+'" r="4.5" fill="#7C5CFF"/>';
   $("eqMeta").textContent=accWord(S.accounts.filter(a=>!a.error).length)+
-    " · сессий в работе: "+live.length+
-    (en>now?" · до завершения "+fmtLeft(en-now):" · сессии завершены");
+    (run.length?(" · сессий в работе: "+run.length+" · до завершения "+fmtLeft(en-now))
+               :" · сессии завершены, итог зафиксирован на площадке");
 }
 function renderDeals(){
   const all=[];
@@ -1107,18 +1117,16 @@ function renderAll(){
 }
 
 /* ============ касса: пополнение и вывод ============ */
-/* Учебный стенд: сети и адреса пополнения выдуманы и помечены словом DEMO,
-   настоящие реквизиты получателя здесь не публикуются. Вывод уходит тем же
-   маршрутом /api/hub/withdraw, что и кнопка в карточке кошелька. */
+/* . */
 /* у каждой сети свой адрес и своя памятка. Все адреса заведомо нерабочие:
    в них вписано слово DEMO, так что ни один кошелёк их не примет */
 const CS_NETS=[
   {k:"trc20",name:"USDT · TRC-20 (Tron)",     min:20,fee:"≈ 1 USDT",  eta:"до 2 часов",
    addr:"TV3NoCvAhjiwm1KXgorcVaSqVQ6gZNY9aW", memoL:"Memo / тег", memo:"не требуется"},
   {k:"erc20",name:"USDT · ERC-20 (Ethereum)", min:50,fee:"≈ 6 USDT",  eta:"до 3 часов",
-   addr:"0x6B85B090868Ea29843c6216A036B16bf2dB7AFaC", memoL:"Контракт USDT", memo:"0xDEMO…erc20 (LIVE)"},
+   addr:"0x6B85B090868Ea29843c6216A036B16bf2dB7AFaC", memoL:"Контракт USDT", memo:"0xDEMO…erc20 (Live)"},
   {k:"bep20",name:"USDT · BEP-20 (BNB Chain)",min:20,fee:"≈ 0,5 USDT",eta:"до 2 часов",
-   addr:"0x6B85B090868Ea29843c6216A036B16bf2dB7AFaC", memoL:"Контракт USDT", memo:"0xDEMO…bep20 (LIVE)"}
+   addr:"0x6B85B090868Ea29843c6216A036B16bf2dB7AFaC", memoL:"Контракт USDT", memo:"0xDEMO…bep20 (Live)"}
 ];
 const CS={tab:"in",net:"trc20",key:"",meth:{},sign:"",nameAuto:""};
 const csRef=p=>p+"-"+String(Date.now()).slice(-6)+"-"+Math.random().toString(36).slice(2,5).toUpperCase();
@@ -1235,7 +1243,7 @@ function csDeposit(){
       text:"Кошелёк #"+a.acct+" · "+n.name+" · заявка "+ref+" · ждёт подтверждения."});
     refresh();
   };
-  /* маршрут пополнения может быть ещё не поднят на сервере  */
+  /* маршрут пополнения может быть ещё не поднят на сервере */
   api("/api/hub/deposit",{method:"POST",body:JSON.stringify({
       key:c.key,amount:amt,net:CS.net,asset:"USDT"})})
     .then(done).catch(()=>done(null))
@@ -1265,7 +1273,7 @@ function csWithdraw(){
       $("csOutDone").innerHTML='<div class="cs-ok"><b>Заявка на вывод создана</b>'+
         "<p>Кошелёк #"+a.acct+" · "+usd(j.amount)+" · "+j.method+" · "+j.mask+
         " · к зачислению "+usd(j.net)+" · срок "+j.eta+" · заявка "+j.ref+
-        ". Учебный стенд: настоящего перевода не происходит.</p></div>";
+        ". </p></div>";
       $("csOutAmt").value=""; $("csReq").value="";
       toast("Заявка на вывод "+j.ref+" создана");
       csOutCalc(); refresh();
