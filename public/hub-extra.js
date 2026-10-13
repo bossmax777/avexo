@@ -147,7 +147,7 @@
         (a.name || "") + '"></div>' +
         '<div class="of-calc" id="ofCalc"></div>' +
         '<p class="note">Сервер сохраняет только последние четыре знака реквизитов — полный номер ' +
-        "не хранится и не показывается. Это учебный стенд: настоящих переводов не происходит.</p>" +
+        "не хранится и не показывается.</p>" +
         '<div class="err" id="ofErr"></div>' +
         '<button class="btn btn-primary btn-full" id="ofGo" style="margin-top:10px">' +
         "Создать заявку на вывод</button></div>";
