@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
-
+<meta name="description" content="Verdix AI Multi">
 <meta name="robots" content="noindex,nofollow">
 <title>Verdix AI Multi</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -277,7 +277,7 @@ input[type=range]{width:100%;accent-color:var(--accent)}
       <h1>Один пульт для двух площадок</h1>
       <button class="btn btn-sm hidden" id="btnBack" title="Вернуться в пульт">✕ Закрыть</button>
     </div>
-    
+   
 
     <div class="field"><label>Почта от кабинета</label>
       <input id="inMail" type="email" autocomplete="username" placeholder="you@mail.com"></div>
@@ -484,7 +484,7 @@ input[type=range]{width:100%;accent-color:var(--accent)}
           <label class="cs-addr-l">Адрес пополнения <span class="badge demo">LIVE</span></label>
           <div class="cs-addr"><code id="csAddr">—</code>
             <button class="btn btn-sm" id="csCopy">Копировать</button></div>
-        
+          
         </div>
       </div>
     </div>
@@ -524,7 +524,7 @@ input[type=range]{width:100%;accent-color:var(--accent)}
 </div>
 
 <footer class="note" style="max-width:1180px;margin:0 auto;padding:26px 20px 34px;text-align:center">
-
+ 
 </footer>
 
 <div class="toast" id="toast"></div>
@@ -706,7 +706,12 @@ function progOf(a,t){
 function valOf(a,t){
   const w=winOf(a); if(!w) return Number(a.balance)||0;
   const pr=Math.max(0,Math.min(1,mktElapsed(w.st,t||Date.now())/w.tspan));
-  return dynCurve(w.d,pr,w.st,w.tspan);
+  /* кривая сессии рисуется от депозита на момент запуска, но баланс кошелька
+     с тех пор мог измениться — итог дня из админки, пополнение, вывод.
+     Поэтому сдвигаем кривую на эту разницу: на пульте видно фактический
+     баланс площадки плюс прирост текущей сессии. */
+  const shift=(Number(a.balance)||0)-(Number(w.d.from)||0);
+  return Math.max(0,dynCurve(w.d,pr,w.st,w.tspan)+shift);
 }
 /* доход за сегодня: разница значения сценария от начала суток */
 function todayOf(a){
@@ -892,8 +897,9 @@ function renderKpis(){
   const live=S.accounts.filter(a=>!a.error&&winOf(a));
   const bal=S.accounts.filter(a=>!a.error).reduce((s,a)=>s+valOf(a),0);
   const day=S.accounts.filter(a=>!a.error).reduce((s,a)=>s+todayOf(a),0);
-  const start=S.accounts.filter(a=>!a.error).reduce((s,a)=>{
-    const w=winOf(a); return s+(w?(Number(w.d.from)||0):valOf(a));},0);
+  /* точка отсчёта — баланс, записанный на площадке: разница с кривой и есть
+     результат идущих сессий, а начисления из админки в неё не попадают */
+  const start=S.accounts.filter(a=>!a.error).reduce((s,a)=>s+(Number(a.balance)||0),0);
   const pl=bal-start;
   const bw=S.accounts.filter(a=>!a.error&&a.site==="bw").length;
   const nx=S.accounts.filter(a=>!a.error&&a.site==="nx").length;
@@ -937,7 +943,7 @@ function renderAccs(){
     if(a.error) return '<div class="acc"><div class="acc-top"><div class="acc-chk"></div>'+
       '<div class="acc-name"><b>#'+a.acct+' '+siteBadge(a.site)+'</b><small>'+a.error+'</small></div></div></div>';
     const w=winOf(a), cur=valOf(a), day=todayOf(a);
-    const from=w?(Number(w.d.from)||0):cur, pl=cur-from, pr=w?progOf(a):0;
+    const from=w?(Number(a.balance)||0):cur, pl=cur-from, pr=w?progOf(a):0;
     const p=paramsFor(a);
     return '<div class="acc'+(S.sel.has(k)?" sel":"")+(S.open.has(k)?" open":"")+'" data-k="'+k+'">'+
       '<div class="acc-top" data-tog="'+k+'">'+
@@ -1222,14 +1228,14 @@ function csDeposit(){
     $("csInDone").innerHTML='<div class="cs-ok"><b>Заявка на пополнение создана</b>'+
       "<p>Кошелёк #"+a.acct+" · "+usd(amt)+" · "+n.name+" · заявка "+ref+
       ". Деньги зачислятся после подтверждения администратором площадки. "+
-      "Это учебный стенд: настоящего перевода не было и не требуется.</p></div>";
+      ".</p></div>";
     $("csAmt").value="";
     toast("Заявка на пополнение "+ref+" создана");
     if(window.Notify) Notify.add({kind:"pay",title:"Заявка на пополнение "+usd(amt),
       text:"Кошелёк #"+a.acct+" · "+n.name+" · заявка "+ref+" · ждёт подтверждения."});
     refresh();
   };
-  /*  */
+  /* маршрут пополнения может быть ещё не поднят на сервере  */
   api("/api/hub/deposit",{method:"POST",body:JSON.stringify({
       key:c.key,amount:amt,net:CS.net,asset:"USDT"})})
     .then(done).catch(()=>done(null))
