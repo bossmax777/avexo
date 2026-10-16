@@ -757,14 +757,18 @@ async function hubFees(site) {
   } catch (e) { return { fees: Object.assign({}, FEES), srv: '' }; }
 }
 /* коэффициенты сессии: шаг 0,1 от 1,2 до 2,5 — во столько раз растёт депозит */
+/* самые спокойные ступени: рост почти незаметный, такие сессии не вызывают вопросов */
+const HUB_COEFS_MIN = [1.02, 1.04, 1.06, 1.08, 1.1, 1.15];
 const HUB_COEFS = [1.2, 1.3, 1.4, 1.5, 1.6, 1.7, 1.8, 1.9, 2, 2.1, 2.2, 2.3, 2.4, 2.5];
 /* по криптопарам волатильность выше, поэтому лестница продолжается до x10 с шагом 0,5 */
 const HUB_COEFS_X = [3, 3.5, 4, 4.5, 5, 5.5, 6, 6.5, 7, 7.5, 8, 8.5, 9, 9.5, 10];
 function hubCoefs(pair) {
-  return pairKind(pair) === 'crypto' ? HUB_COEFS.concat(HUB_COEFS_X) : HUB_COEFS;
+  return pairKind(pair) === 'crypto'
+    ? HUB_COEFS_MIN.concat(HUB_COEFS, HUB_COEFS_X)
+    : HUB_COEFS_MIN.concat(HUB_COEFS);
 }
 function hubCoef(v, pair) {
-  const n = Math.round((Number(v) || 0) * 10) / 10;
+  const n = Math.round((Number(v) || 0) * 100) / 100;
   return hubCoefs(pair).indexOf(n) >= 0 ? n : 1.3;
 }
 /* чем выше коэффициент, тем резче кривая: это влияет только на рисунок сессии */
