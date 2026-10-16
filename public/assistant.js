@@ -226,19 +226,19 @@
   function capFit(mode, list, k, pair) {
     var r = { k: num(k) || 1.3, list: (list || []).slice(), cut: 0 };
     if (mode !== "count") r.k = capCoef(r.list, 1, pair);
-    if (mode === "count" || gainOf(r.list, r.k, 1, pair) > CAP) {
+    if (mode === "count" || gainOf(r.list, r.k, null, pair) > CAP) {
       var c = capCount(r.list, r.k, 1, pair);
       r.cut += r.list.length - c.count;
       r.list = c.list;
     }
     /* крайний случай: и после обрезки порог выше — опускаем коэффициент до спокойного */
-    if (gainOf(r.list, r.k, 1, pair) > CAP) {
+    if (gainOf(r.list, r.k, null, pair) > CAP) {
       r.k = capCoef(r.list, 1, pair);
       var c2 = capCount(r.list, r.k, 1, pair);
       r.cut += r.list.length - c2.count;
       r.list = c2.list;
     }
-    r.gain = gainOf(r.list, r.k, 1, pair);
+    r.gain = gainOf(r.list, r.k, null, pair);
     return r;
   }
   /* применяем правку сразу: коэффициент в общий сценарий, выбор кошельков и
@@ -380,7 +380,7 @@
     if (typeof S === "undefined" || !S.params) return;
     var list = sel();
     if (!list.length) return;
-    var g = gainOf(list, coefNow(), 1, S.params.pair);
+    var g = gainOf(list, coefNow(), null, S.params.pair);
     if (g <= CAP) { CAP_INIT = true; return; }
     if (!CAP_INIT) {
       CAP_INIT = true;
@@ -413,7 +413,7 @@
       }).filter(Boolean);
       var p2 = params || (typeof S !== "undefined" ? S.params : {}) || {};
       var k2 = (typeof coefOf === "function") ? coefOf(p2.k, p2.pair) : num(p2.k) || 1.3;
-      var g = gainOf(list, k2, 1, p2.pair);
+      var g = gainOf(list, k2, num(p2.share) || 0.6, p2.pair);
       if (g > CAP) {
         capWarn({ list: list, k: k2, pair: p2.pair, gain: g, force: true });
         say("<b>Запуск придержал.</b> Сценарий даёт " + money(g) + " за сутки — выше порога " +
@@ -999,25 +999,26 @@
       var need = 1 + Math.abs(+want) / 100;
       var best = ladder.reduce(function (p1, k) {
         return Math.abs(k - need) < Math.abs(p1 - need) ? k : p1; }, ladder[0]);
-      var wantGain = bal * (capK(best, pair) - 1);
+      var wantGain = bal * share * (capK(best, pair) - 1);
       if (wantGain > CAP) {
         var fit = capCoef(list, 1, pair);
         return say("<b>Столько за сутки ставить не стоит.</b> " + esc(want) + "% по " + esc(pair) +
           " — это " + money(wantGain) + " за сутки, выше порога " + money(CAP) +
           ", с которого площадки проверяют аккаунты и могут закрыть вывод." +
           "<br>Максимум, который я советую на эти кошельки: <b>×" + String(fit).replace(".", ",") +
-          "</b> — " + money(gainOf(list, fit, 1, pair)) + " за сутки. " +
+          "</b> — " + money(gainOf(list, fit, null, pair)) + " за сутки. " +
           "Если нужно больше — разложите по дням или оставьте в работе часть кошельков.");
       }
       return say("<b>Чтобы получить около " + esc(want) + "% за " + hours + " ч</b> по " + esc(pair) +
         " нужен коэффициент <b>×" + String(best).replace(".", ",") + "</b>." +
-        "<br>На " + money(bal) + " это примерно " + sig(bal * (capK(best, pair) - 1)) + " за сессию." +
+        "<br>На " + money(bal) + " при доле " + Math.round(share * 100) + "% это примерно " +
+        sig(bal * share * (capK(best, pair) - 1)) + " за сессию." +
         (kindOf(pair) !== "crypto" && need > 2.5
           ? " Выше ×2,5 по этой паре не ставится — возьмите криптопару, там лестница до ×10."
           : ""));
     }
     var rows = ladder.map(function (k) {
-      var gain = bal * (capK(k, pair) - 1);
+      var gain = bal * share * (capK(k, pair) - 1);
       var dd = k <= 1.4 ? 3 : (k <= 1.9 ? 7 : 14);
       return { k: k, gain: gain, dd: dd, over: gain > CAP };
     });
@@ -1402,7 +1403,7 @@
     var n = m.list.length || 1;
     var w = warmInfo(m.list);
     var pair = (typeof S !== "undefined" && S.params && S.params.pair) || "XAU/USD";
-    var gain = gainOf(sel(), coefNow(), 1, pair);
+    var gain = gainOf(sel(), coefNow(), null, pair);
     var v = 42, up = [], down = [];
     var keyP = 14 * (m.keys / n); v += keyP;
     if (m.keys < n) up.push(["активировать ключи на " + (n - m.keys) + " кошельк(ах)", 14 - keyP]);
@@ -1427,7 +1428,7 @@
     if (sPen >= 1) down.push(["в одном кошельке " + Math.round(m.maxShare * 100) + "% капитала", sPen]);
     var capPen = Math.min(25, gain > CAP ? 25 * ((gain - CAP) / CAP) + 8 : 0); v -= capPen;
     if (capPen >= 1) {
-      down.push(["выбранный сценарий даёт " + money(gain) + " за сутки — выше порога " + money(CAP), capPen]);
+      down.push(["по прогнозу сценарий даёт " + money(gain) + " за сутки — выше порога " + money(CAP), capPen]);
     }
     var coldRun = w.cold.filter(working).length;
     if (coldRun) {
@@ -1521,9 +1522,10 @@
       "<span>Средний коэффициент<b>×" + m.avgK.toFixed(2).replace(".", ",") + "</b></span>" +
       "<span>Прогретых кошельков<b class='" + (w.cold.length && w.pct >= 50 ? "down" : "up") + "'>" +
       w.warm.length + " из " + w.n + (w.cold.length ? " · в прогреве " + w.cold.length : "") + "</b></span>" +
-      "<span>Итог дня по сценарию<b class='" + (hc.gain > CAP ? "down" : "up") + "'>" +
+      "<span>Прогноз сценария за сутки<b class='" + (hc.gain > CAP ? "down" : "up") + "'>" +
       money(hc.gain) + "</b></span>" +
-      "<span>Итог за сегодня<b class='" + (m.day >= 0 ? "up" : "down") + "'>" + sig(m.day) + "</b></span>" +
+      "<span>Фактический итог за сегодня<b class='" + (m.day >= 0 ? "up" : "down") + "'>" +
+      sig(m.day) + "</b></span>" +
       "</div><ol class='ai-steps'>" +
       steps.map(function (st, i) {
         return "<li>" + esc(st[0]) + ' <button class="btn btn-sm" data-adv="' + i + '">сделать</button></li>';
@@ -1573,16 +1575,17 @@
       var share = num(w.share) || 0.3;
       var grp = runnable(w.pair);
       var kk = capK(num(w.k), w.pair);
+      var shd = Math.max(0.1, Math.min(1, num(w.share) || 0.3));
       /* в один день портфель не должен давать больше порога: берём кошельки
          от меньшего депозита, пока итог дня укладывается в потолок */
       var sorted = grp.slice().sort(function (x, y) { return bal[kOf(x)] - bal[kOf(y)]; });
       var use = [], g = 0;
       sorted.forEach(function (a) {
-        var add = bal[kOf(a)] * (kk - 1);
+        var add = bal[kOf(a)] * shd * (kk - 1);
         if (g + add > CAP) return;
         use.push(a); g += add;
       });
-      use.forEach(function (a) { bal[kOf(a)] += bal[kOf(a)] * (kk - 1); });
+      use.forEach(function (a) { bal[kOf(a)] += bal[kOf(a)] * shd * (kk - 1); });
       var cut = grp.length - use.length;
       gain += g;
       /* два дня подряд та же пара тем же составом — повод для модерации */
@@ -1796,7 +1799,7 @@
     var list = runnable(w.pair);
     if (!list.length) { if (manual) say("Нет кошельков, которым доступна пара этого дня."); return; }
     var bad = sel().filter(function (a) { return list.indexOf(a) < 0; });
-    var gDay = gainOf(list, num(w.k) || 1.6, 1, w.pair);
+    var gDay = gainOf(list, num(w.k) || 1.6, num(w.share) || 0.6, w.pair);
     var trimmed = 0;
     if (gDay > CAP) {
       /* порог держим сами: оставляем в работе столько кошельков, сколько в него помещается */
@@ -1844,7 +1847,7 @@
       .filter(function (a) { return !(typeof winOf === "function" && winOf(a)); });
     if (!list.length) return;
     /* автозапуск никогда не выходит за порог суточного дохода */
-    if (gainOf(list, num(w.k) || 1.6, 1, w.pair) > CAP) {
+    if (gainOf(list, num(w.k) || 1.6, num(w.share) || 0.6, w.pair) > CAP) {
       logEvent("Автозапуск придержан: план дня выше порога " + money(CAP) + " за сутки", "warn", "risk");
       say("<b>Автозапуск придержал.</b> План на сегодня даёт больше " + money(CAP) +
         " за сутки — такие сценарии площадки проверяют. Поправьте план, и я запущу.");
