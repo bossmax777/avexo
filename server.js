@@ -217,10 +217,6 @@ app.post('/api/me/apikey', async (req, res) => {
    прогноз по выбранным параметрам и включает сценарий роста демо-кошелька. */
 const BOT_PAIRS = {
   'XAU/USD': { name: 'Золото', vol: 1.00, kind: 'gold' },
-  'XAG/USD': { name: 'Серебро', vol: 1.35, kind: 'metal' },
-  'EUR/USD': { name: 'Евро / Доллар', vol: 0.55, kind: 'fx' },
-  'GBP/USD': { name: 'Фунт / Доллар', vol: 0.70, kind: 'fx' },
-  'USD/JPY': { name: 'Доллар / Иена', vol: 0.65, kind: 'fx' },
   'BTC/USD': { name: 'Bitcoin', vol: 2.10, kind: 'crypto' },
   'ETH/USD': { name: 'Ethereum', vol: 2.60, kind: 'crypto' },
   'SOL/USD': { name: 'Solana', vol: 3.20, kind: 'crypto' },
@@ -228,9 +224,7 @@ const BOT_PAIRS = {
   'AAPL':    { name: 'Apple', vol: 0.95, kind: 'stock' },
   'TSLA':    { name: 'Tesla', vol: 1.70, kind: 'stock' },
   'NVDA':    { name: 'NVIDIA', vol: 1.55, kind: 'stock' },
-  'MSFT':    { name: 'Microsoft', vol: 0.90, kind: 'stock' },
-  'US500':   { name: 'S&P 500', vol: 0.75, kind: 'index' },
-  'USOIL':   { name: 'WTI Crude', vol: 1.20, kind: 'commodity' }
+  'MSFT':    { name: 'Microsoft', vol: 0.90, kind: 'stock' }
 };
 /* пара с золотом открыта только кошелькам с активным ключом бота */
 function pairKind(pair) { const p = BOT_PAIRS[pair]; return (p && p.kind) || 'fx'; }
@@ -1153,6 +1147,47 @@ app.post('/api/hub/fix', async (req, res) => {
       const x = await hubFixOne(u._site, u, now);
       if (x) out.push(Object.assign({ ok: true }, x));
       else out.push({ site: u._site, acct: u.acct, ok: false, error: 'Нечего фиксировать: сценарий выключен или за сегодня уже записано' });
+    }
+    res.json({ ok: true, items: out });
+  } catch (e) { bad(res, 500, e.message); }
+});
+
+/* история итогов по дням: то же, что видит клиент в кабинете.
+   Берём записи «Результат дня» (фиксация сессии) и «Итог торгового дня»
+   (массовая разноска из админки) — так пульт показывает реальные цифры
+   за прошлые даты, а не рисунок текущей кривой. */
+function histMoney(v) {
+  const n = String(v == null ? '' : v).replace(/\s/g, '').replace('−', '-').replace(/[^0-9.,+-]/g, '').replace(',', '.');
+  const x = Number(n);
+  return Number.isFinite(x) ? x : 0;
+}
+function histRu(d) { return String(d || '').trim(); }        /* даты хранятся как ДД.ММ.ГГГГ */
+app.post('/api/hub/history', async (req, res) => {
+  try {
+    const b = req.body || {};
+    const days = Math.max(1, Math.min(120, parseInt(b.days, 10) || 30));
+    const list = hubList(b);
+    const out = [];
+    for (const a of list) {
+      const u = await hubUser(a);
+      if (!u) { out.push({ site: a.site, acct: a.acct, error: 'Ключ не подходит' }); continue; }
+      const rows = [];
+      (Array.isArray(u.hist) ? u.hist : []).forEach(r => {
+        if (!Array.isArray(r) || String(r[1] || '').indexOf('Результат дня') < 0) return;
+        rows.push({ date: histRu(r[0]), pair: r[2] || '', amount: histMoney(r[3]), kind: 'session' });
+      });
+      (Array.isArray(u.tx) ? u.tx : []).forEach(r => {
+        if (!Array.isArray(r) || String(r[1] || '').indexOf('Итог торгового дня') < 0) return;
+        rows.push({ date: histRu(r[0]), pair: 'XAU/USD', amount: histMoney(r[2]), kind: 'admin' });
+      });
+      /* на одну дату может прийтись и сессия, и разноска — складываем */
+      const byDay = {};
+      rows.forEach(r => { byDay[r.date] = (byDay[r.date] || 0) + r.amount; });
+      out.push({
+        site: u._site, siteName: HUB_SITES[u._site].label, acct: u.acct, name: u.name || '',
+        balance: Number(u.balance) || 0,
+        days: Object.keys(byDay).slice(0, days).map(d => ({ date: d, amount: +byDay[d].toFixed(2) }))
+      });
     }
     res.json({ ok: true, items: out });
   } catch (e) { bad(res, 500, e.message); }
