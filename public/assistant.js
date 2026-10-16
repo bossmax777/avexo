@@ -273,9 +273,9 @@
   function warmInfo(list) {
     var warm = [], cold = [];
     (list || []).forEach(function (a) {
-      /* прогретым считаем только счёт, который набрал объём: «вывод возможен,
-         но не рекомендуется» — это ещё прогрев */
-      (outState(a).tone === "warm" ? warm : cold).push(a);
+      /* прогретым считаем счёт, который набрал объём и не имеет оговорок:
+         новорег или свежий вывод — это ещё не прогрев */
+      (outState(a).ready ? warm : cold).push(a);
     });
     var n = (list || []).length || 1;
     return { warm: warm, cold: cold, n: (list || []).length,
@@ -908,16 +908,17 @@
     return pullHist().then(function () {
       var rows = list.map(function (a) {
         var st = outState(a);
-        var rec = (st.tone === "warm") ? "выводить можно"
+        var rec = (st.tone === "new") ? "не трогать: аккаунт моложе " + NEW_DAYS + " дней"
+          : (st.ready) ? "выводить можно"
           : (st.tone === "ok") ? "возможен, но не рекомендую: прогрев сбросится"
           : (st.tone === "wait") ? "подождать: заявки подряд площадка проверяет"
           : (st.tone === "cold") ? "не рекомендую: прогрев сбросится"
           : "закрыт администратором";
         return { a: a, st: st, rec: rec };
       });
-      var ok = rows.filter(function (r) { return r.st.tone === "warm"; });
-      var soon = rows.filter(function (r) { return r.st.tone === "ok"; });
-      var no = rows.filter(function (r) { return ["cold", "wait", "off"].indexOf(r.st.tone) >= 0; });
+      var ok = rows.filter(function (r) { return r.st.ready; });
+      var soon = rows.filter(function (r) { return !r.st.ready && r.st.tone === "ok"; });
+      var no = rows.filter(function (r) { return !r.st.ready && r.st.tone !== "ok"; });
       var sum = ok.reduce(function (s2, r) { return s2 + num(r.a.balance); }, 0);
       say("<b>Вывод средств: " + ok.length + " кошельк(ов) прогреты и готовы</b> · на них " + money(sum) +
         "<table><tr><th>Клиент</th><th>Кошелёк</th><th>Площадка</th><th>Баланс</th><th>Статус</th>" +
@@ -2161,6 +2162,7 @@
     var t = new Date(+p2[2], +p2[1] - 1, +p2[0]).getTime();
     return isNaN(t) ? null : Math.floor((Date.now() - t) / 86400000);
   }
+  var NEW_DAYS = 30;         /* до месяца с регистрации — новорег */
   function outState(a) {
     var h = histOf(a);
     var bal = num(a.balance);
@@ -2171,49 +2173,73 @@
     }).filter(function (x) { return x.ago !== null; }).sort(function (x, y) { return x.ago - y.ago; });
     var lastOut = outs.length ? outs[0].ago : null;
     var open = (typeof outOk === "function") ? outOk(a) : false;
-    /* сколько осталось до прогрева: дней с регистрации и денег на счёте */
     var daysLeft = (age === null) ? null : Math.max(0, WARM_DAYS - age);
+    var newLeft = (age === null) ? null : Math.max(0, NEW_DAYS - age);
     var needSum = Math.max(0, WARM_SUM - bal);
-    var base = { outs: outs, lastOut: lastOut, age: age, bal: bal,
-                 daysLeft: daysLeft, needSum: needSum, gapLeft: null };
-    function mk(tone, title, why, rec) {
-      return Object.assign({}, base, { tone: tone, title: title, why: why, rec: rec });
+    var gapLeft = (lastOut !== null && lastOut <= OUT_GAP) ? Math.max(0, OUT_GAP + 1 - lastOut) : null;
+
+    /* собираем все статусы, которые подходят кошельку: их бывает несколько сразу —
+       например счёт уже прогрет, но вывод был пару дней назад */
+    var tags = [], why = [], rec = [];
+    if (age !== null && age < NEW_DAYS) {
+      tags.push("new");
+      why.push("новорег: кошельку " + age + " дн. из " + NEW_DAYS);
+      rec.push("вообще не трогать — аккаунт моложе месяца, любой вывод с него сразу идёт на проверку" +
+        (newLeft ? " (ещё " + newLeft + " дн.)" : ""));
     }
-    /* порядок проверок — от жёстких запретов к рекомендациям */
     if (!open) {
-      return mk("off", "Вывод закрыт",
-        (typeof outTxt === "function" ? outTxt(a) : "нет привязанного адреса или сумма ниже порога"),
-        "выводить нельзя: порог суммы и адрес задаёт администратор площадки");
+      tags.push("off");
+      why.push(typeof outTxt === "function" ? outTxt(a) : "нет привязанного адреса или сумма ниже порога");
+      rec.push("выводить нельзя: порог суммы и адрес задаёт администратор площадки");
     }
-    if (lastOut !== null && lastOut <= OUT_GAP) {
-      base.gapLeft = Math.max(0, OUT_GAP + 1 - lastOut);
-      return mk("wait", "Недавний вывод",
-        "последняя заявка " + lastOut + " дн. назад (" + outs[0].date + ", " + money(outs[0].amount) + ")",
-        "не рекомендую: заявки подряд площадка проверяет. Подождать ещё " +
-          Math.max(0, OUT_GAP + 1 - lastOut) + " дн.");
+    if (gapLeft !== null) {
+      tags.push("wait");
+      why.push("последняя заявка " + lastOut + " дн. назад (" + outs[0].date + ", " + money(outs[0].amount) + ")");
+      rec.push("не рекомендую: заявки подряд площадка проверяет, подождать ещё " + gapLeft + " дн.");
     }
     if (bal >= WARM_SUM) {
-      return mk("warm", "Кошелёк прогрет",
-        "на счёте " + money(bal) + (age !== null ? ", возраст " + age + " дн." : ""),
-        "вывод доступен — счёт набрал объём, вопросов к заявке не будет");
-    }
-    if (bal > OUT_MIN) {
-      return mk("ok", "Вывод возможен, но не рекомендуется",
-        "на счёте " + money(bal) + (age !== null ? ", возраст " + age + " дн." : ""),
-        "заявку примут, но прогрев сбросится: не хватает " + money(needSum) +
-          (daysLeft ? " и " + daysLeft + " дн. до " + WARM_DAYS + "-дневного срока" : ""));
-    }
-    return mk("cold", "Прогрев не завершён",
-      "на счёте " + money(bal) + " — меньше " + money(OUT_MIN) +
-        (age !== null ? ", кошельку " + age + " дн." : ""),
-      "выводить рано: до прогрева не хватает " + money(needSum) +
+      tags.push("warm");
+      why.push("на счёте " + money(bal) + (age !== null ? ", возраст " + age + " дн." : ""));
+      rec.push("по сумме вывод доступен — счёт набрал объём");
+    } else if (bal > OUT_MIN) {
+      tags.push("ok");
+      why.push("на счёте " + money(bal) + (age !== null ? ", возраст " + age + " дн." : ""));
+      rec.push("заявку примут, но прогрев сбросится: не хватает " + money(needSum) +
+        (daysLeft ? " и " + daysLeft + " дн. до " + WARM_DAYS + "-дневного срока" : ""));
+    } else {
+      tags.push("cold");
+      why.push("на счёте " + money(bal) + " — меньше " + money(OUT_MIN) +
+        (age !== null ? ", кошельку " + age + " дн." : ""));
+      rec.push("выводить рано: до прогрева не хватает " + money(needSum) +
         (daysLeft ? " и " + daysLeft + " дн." : ""));
+    }
+    /* главный статус — самый строгий из найденных */
+    var order = ["new", "off", "wait", "cold", "ok", "warm"];
+    var tone = order.filter(function (t) { return tags.indexOf(t) >= 0; })[0] || "cold";
+    var titles = { new: "Новорег — не трогать", off: "Вывод закрыт", wait: "Недавний вывод",
+                   cold: "Прогрев не завершён", ok: "Вывод возможен, но не рекомендуется",
+                   warm: "Кошелёк прогрет" };
+    /* для показа убираем то, что и так следует из главного статуса: у закрытого
+       вывода сумма роли не играет, а у новорега прогрев по определению не завершён */
+    var disp = tags.filter(function (t) {
+      if (tags.indexOf("off") >= 0 && ["warm", "ok", "cold"].indexOf(t) >= 0) return false;
+      if (tags.indexOf("new") >= 0 && t === "cold") return false;
+      return true;
+    });
+    if (!disp.length) disp = [tone];
+    return { tone: tone, tags: tags, disp: disp, title: titles[tone],
+             why: why.join("; "), rec: rec.join(". "),
+             outs: outs, lastOut: lastOut, age: age, bal: bal,
+             daysLeft: daysLeft, newLeft: newLeft, needSum: needSum, gapLeft: gapLeft,
+             /* к выводу готов только прогретый счёт без оговорок */
+             ready: tags.indexOf("warm") >= 0 && tags.length === 1 };
   }
   var TONES = {
     warm: ["Прогрет, вывод доступен", "#2BA87A"],
     ok:   ["Вывод возможен, не рекомендуется", "#5B8CFF"],
     cold: ["Прогрев не завершён", "#E2B23A"],
     wait: ["Недавний вывод", "#A78BFA"],
+    new:  ["Новорег — не трогать", "#E06C9F"],
     off:  ["Вывод закрыт", "#E5484D"]
   };
   var HEAT_PICK = "";
@@ -2225,18 +2251,28 @@
     });
     var by = {};
     Object.keys(TONES).forEach(function (t) { by[t] = 0; });
-    cells.forEach(function (c) { by[c.st.tone] = (by[c.st.tone] || 0) + 1; });
-    var ready = cells.filter(function (c) { return c.st.tone === "warm" || c.st.tone === "ok"; });
+    /* кошелёк попадает в каждый свой статус: их может быть два сразу */
+    cells.forEach(function (c) {
+      (c.st.disp || c.st.tags || [c.st.tone]).forEach(function (t) { by[t] = (by[t] || 0) + 1; });
+    });
+    var ready = cells.filter(function (c) { return c.st.ready; });
     var sum = ready.reduce(function (s2, c) { return s2 + num(c.a.balance); }, 0);
     var html =
       '<div class="panel-head"><h3>Тепловая карта вывода</h3>' +
-      '<span class="muted">' + ready.length + " из " + list.length + " кошельков готовы · " +
-      money(sum) + "</span></div>" +
+      '<span class="muted">' + ready.length + " из " + list.length + " готовы к выводу · " +
+      money(sum) + (by["new"] ? " · новорегов " + by["new"] : "") + "</span></div>" +
       (list.length
         ? '<div class="heat">' + cells.map(function (c, i) {
+            /* если статусов два (например прогрет, но недавно выводили) — красим
+               квадрат по диагонали в оба цвета */
+            var tg = (c.st.disp || c.st.tags || [c.st.tone]).slice(0, 2);
+            var style = tg.length > 1
+              ? ' style="background:linear-gradient(135deg,' + TONES[tg[0]][1] + '33 0 50%,' +
+                TONES[tg[1]][1] + '33 50% 100%);border-color:' + TONES[tg[0]][1] + '"'
+              : "";
             return '<button class="heat-c ' + c.st.tone + (HEAT_PICK === kOf(c.a) ? " pick" : "") +
-              '" data-heat="' + i + '" title="#' +
-              esc(c.a.acct) + " · " + esc(c.st.title) + "\">" +
+              '" data-heat="' + i + '"' + style + ' title="#' +
+              esc(c.a.acct) + " · " + tg.map(function (t) { return TONES[t][0]; }).join(" + ") + "\">" +
               "<b>#" + esc(String(c.a.acct).slice(-4)) + "</b>" +
               "<span>" + money(num(c.a.balance)).replace(/,\d\d$/, "") + "</span></button>";
           }).join("") + "</div>"
@@ -2245,7 +2281,9 @@
         return '<span class="heat-l ' + t + '"><i></i>' + TONES[t][0] + " — " + (by[t] || 0) + "</span>";
       }).join("") + "</div>" +
       '<div id="heatInfo" class="note" style="margin-top:10px">Нажмите на квадрат — покажу даты выводов, ' +
-      "рекомендацию и сколько осталось до прогрева. " +
+      "рекомендацию и сколько осталось до прогрева. Квадрат с двумя цветами — два статуса сразу " +
+      "(например счёт прогрет, но вывод был пару дней назад). Новорег — моложе " + NEW_DAYS +
+      " дней: такие кошельки лучше не трогать вовсе. " +
       "почему именно такой статус. Прогретым считаю счёт от " + money(WARM_SUM) +
       "; свежим — моложе " + WARM_DAYS + " дней; выводы учитываю по истории кабинета, " +
       "включая разнесённые из админки.</div>";
@@ -2254,7 +2292,7 @@
           var info = box2.querySelector("#heatInfo");
           if (info) {
             var st = c.st;
-            var warmLine = st.tone === "warm"
+            var warmLine = st.ready
               ? "Счёт прогрет: на нём " + money(st.bal) + ", это выше " + money(WARM_SUM) + "."
               : "До прогрева: не хватает " + money(st.needSum) +
                 (st.daysLeft === null ? "" : (st.daysLeft > 0
@@ -2263,7 +2301,8 @@
             info.className = "note" + (st.tone === "off" || st.tone === "cold" || st.tone === "wait"
               ? " pair-warn" : "");
             info.innerHTML = "<b>#" + esc(c.a.acct) + " · " + esc(c.a.siteName || c.a.site) + " — " +
-              esc(st.title) + "</b><br>" + esc(st.why) +
+              (st.disp || st.tags || [st.tone]).map(function (t) { return esc(TONES[t][0]); }).join(" + ") +
+              "</b><br>" + esc(st.why) +
               "<br><b>" + (st.tone === "warm" ? "Рекомендация: " : "Почему не рекомендую: ") + "</b>" +
               esc(st.rec) +
               "<br>" + warmLine +
@@ -2273,7 +2312,7 @@
                   }).join("; ") + (st.outs.length > 4 ? " и ещё " + (st.outs.length - 4) : "")
                 : "<br>Выводов по этому кошельку в истории нет.") +
               (st.gapLeft ? "<br>Следующую заявку лучше подать через " + st.gapLeft + " дн." : "") +
-              (st.tone === "warm"
+              (st.ready
                 ? "<br>Заявка создаётся кнопкой «Вывести средства» в карточке кошелька."
                 : "");
           }
@@ -2425,6 +2464,8 @@
     ".heat-c.ok{border-color:#5B8CFF;background:rgba(91,140,255,.16)}" +
     ".heat-c.cold{border-color:#E2B23A;background:rgba(226,178,58,.16)}" +
     ".heat-c.wait{border-color:#A78BFA;background:rgba(167,139,250,.2)}" +
+    ".heat-c.new{border-color:#E06C9F;background:rgba(224,108,159,.2)}" +
+    ".heat-c.new b{color:#F7C2D8}" +
     ".heat-c.wait b{color:#D6C9FF}" +
     ".heat-c:hover{transform:translateY(-1px)}" +
     ".heat-c:focus-visible,.heat-c:active,.heat-c.pick{box-shadow:0 0 0 2px var(--accent) inset;outline:0}" +
@@ -2434,7 +2475,8 @@
     ".heat-l{display:inline-flex;align-items:center;gap:6px}" +
     ".heat-l i{width:9px;height:9px;border-radius:3px;display:inline-block}" +
     ".heat-l.warm i{background:#2BA87A}.heat-l.ok i{background:#5B8CFF}" +
-    ".heat-l.cold i{background:#E2B23A}.heat-l.wait i{background:#A78BFA}.heat-l.off i{background:#E5484D}" +
+    ".heat-l.cold i{background:#E2B23A}.heat-l.wait i{background:#A78BFA}" +
+    ".heat-l.new i{background:#E06C9F}.heat-l.off i{background:#E5484D}" +
     ".cap-ovl{position:fixed;inset:0;z-index:10050;background:rgba(60,6,10,.86);display:flex;" +
     "align-items:center;justify-content:center;padding:20px;backdrop-filter:blur(3px)}" +
     ".cap-win{max-width:560px;width:100%;background:var(--surface);border:2px solid #E5484D;" +

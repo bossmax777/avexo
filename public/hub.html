@@ -118,24 +118,28 @@ button,input,select{font:inherit;color:inherit}
 .kpis{display:grid;grid-template-columns:repeat(auto-fit,minmax(214px,1fr));gap:12px;margin-bottom:16px}
 /* полоса статуса мировых торгов: три рынка со своим расписанием, время — местное */
 /* выбор кошельков для сценария: список с балансами и пометкой занятых */
-.wpick{border:1px solid var(--line);border-radius:12px;background:var(--surface-2);overflow:hidden}
-.wpick>summary{cursor:pointer;padding:10px 12px;font-size:12.8px;list-style:none;display:flex;
-  align-items:center;justify-content:space-between;gap:10px}
+.wpick{border:1px solid var(--line);border-radius:13px;background:var(--surface-2);overflow:hidden}
+.wpick>summary{cursor:pointer;padding:11px 13px;font-size:12.8px;list-style:none;display:flex;
+  align-items:center;justify-content:space-between;gap:10px;font-weight:600}
 .wpick>summary::-webkit-details-marker{display:none}
-.wpick>summary::after{content:"▾";color:var(--muted);font-size:12px}
+.wpick>summary::after{content:"▾";color:var(--muted);font-size:12px;font-weight:400}
 .wpick[open]>summary::after{content:"▴"}
-.wpick-act{display:flex;gap:7px;padding:0 12px 9px;flex-wrap:wrap}
-.wpick-list{max-height:260px;overflow:auto;border-top:1px solid var(--line)}
-.wp-i{display:flex;align-items:center;gap:9px;padding:8px 12px;font-size:12.3px;
-  border-bottom:1px solid rgba(255,255,255,.04);cursor:pointer}
+.wpick-act{display:flex;gap:7px;padding:0 13px 10px;flex-wrap:wrap}
+.wpick-list{max-height:268px;overflow:auto;border-top:1px solid var(--line);
+  scrollbar-width:thin}
+.wp-i{display:grid;grid-template-columns:18px auto 1fr auto;align-items:center;gap:9px;
+  padding:0 13px;height:38px;font-size:12.4px;border-bottom:1px solid rgba(255,255,255,.04);
+  cursor:pointer;white-space:nowrap}
 .wp-i:last-child{border-bottom:0}
-.wp-i:hover{background:rgba(255,255,255,.03)}
-.wp-i.busy{opacity:.55;cursor:default}
-.wp-i input{flex:none}
-.wp-i b{font-weight:600}
-.wp-i .wp-bal{margin-left:auto;font-variant-numeric:tabular-nums;color:var(--text)}
-.wp-i .wp-tag{font-size:10.5px;color:var(--muted);border:1px solid var(--line);border-radius:999px;
-  padding:1px 7px;white-space:nowrap}
+.wp-i:hover{background:rgba(255,255,255,.035)}
+.wp-i.on{background:rgba(124,92,255,.10)}
+.wp-i.busy{opacity:.5;cursor:not-allowed;background:none}
+.wp-i input{flex:none;margin:0;width:15px;height:15px;accent-color:var(--accent)}
+.wp-i b{font-weight:600;font-variant-numeric:tabular-nums}
+.wp-i .badge{font-size:9.5px;padding:2px 7px}
+.wp-i .wp-bal{justify-self:end;font-variant-numeric:tabular-nums;color:var(--text);font-weight:600}
+.wp-i .wp-tag{justify-self:start;font-size:10.5px;color:var(--muted);border:1px solid var(--line);
+  border-radius:999px;padding:1px 8px;white-space:nowrap}
 .mkt-bar{background:var(--surface);border:1px solid var(--line);border-radius:var(--radius);
   padding:14px 17px 15px;margin-bottom:16px}
 .mkt-bar-h{display:flex;align-items:baseline;gap:10px;flex-wrap:wrap;margin-bottom:12px}
@@ -1345,17 +1349,21 @@ function renderLog(){
 }
 /* кошелёк занят другим сценарием: пока он работает, в общий сценарий его не берём */
 function busyOf(a){ return !!winOf(a); }
+/* сводка в заголовке списка: обновляется и отдельно от самого списка */
+function whoSummary(){
+  const sum=$("whoSum"); if(!sum) return;
+  const pick=S.accounts.filter(a=>!a.error&&S.sel.has(keyOf(a)));
+  sum.textContent=pick.length
+    ? pick.length+" кошельк(ов) в сценарии · "+usd(pick.reduce((s2,a)=>s2+valOf(a),0))
+    : "кошельки не выбраны";
+}
 function renderWho(){
   const box=$("whoList"); if(!box) return;
+  whoSummary();
   const list=S.accounts.filter(a=>!a.error);
   const free=list.filter(a=>!busyOf(a));
   const sig=list.map(a=>keyOf(a)+(S.sel.has(keyOf(a))?"1":"0")+(busyOf(a)?"b":"f")+valOf(a).toFixed(0)).join("|");
-  const sum=$("whoSum");
-  if(sum){
-    const n=selected().length;
-    sum.textContent=n?(n+" кошельк(ов) в сценарии · "+usd(selected().reduce((s2,a)=>s2+valOf(a),0)))
-      :"кошельки не выбраны";
-  }
+  whoSummary();
   const note=$("whoNote");
   if(note){
     const busy=list.length-free.length;
@@ -1367,24 +1375,27 @@ function renderWho(){
   if(box.__sig===sig) return;
   box.__sig=sig;
   box.innerHTML=list.map(a=>{
-    const k=keyOf(a), busy=busyOf(a);
-    return '<label class="wp-i'+(busy?" busy":"")+'" data-wp="'+k+'">'+
-      '<input type="checkbox"'+(S.sel.has(k)?" checked":"")+(busy?" disabled":"")+'>'+
-      '<b>#'+a.acct+'</b> '+siteBadge(a.site)+
-      (busy?'<span class="wp-tag">в сценарии '+((a.dyn||{}).pair||"")+'</span>':'')+
+    const k=keyOf(a), busy=busyOf(a), on=S.sel.has(k);
+    return '<label class="wp-i'+(busy?" busy":(on?" on":""))+'" data-wp="'+k+'">'+
+      '<input type="checkbox"'+(on?" checked":"")+(busy?" disabled":"")+'>'+
+      '<b>#'+a.acct+'</b>'+siteBadge(a.site)+
+      '<span class="wp-tag">'+(busy?'в сценарии '+((a.dyn||{}).pair||""):(a.name||"клиент"))+'</span>'+
       '<span class="wp-bal">'+usd(valOf(a))+'</span></label>';
-  }).join("")||'<p class="muted" style="font-size:12.5px;padding:10px 12px">Кошельки не подключены.</p>';
+  }).join("")||'<p class="muted" style="font-size:12.5px;padding:12px 13px">Кошельки не подключены.</p>';
   box.querySelectorAll("[data-wp] input").forEach(el=>{
     el.onchange=()=>{
       const k=el.closest("[data-wp]").dataset.wp;
       el.checked?S.sel.add(k):S.sel.delete(k);
-      renderAccs(true); renderForecast(); renderWho();
+      const row=el.closest("[data-wp]");
+      if(row) row.classList.toggle("on",el.checked);
+      renderAccs(true); renderForecast(); whoSummary();
     };
   });
 }
 function renderForecast(){
   const sel=selected();
   $("selMeta").textContent=sel.length?sel.length+" выбрано":"кошельки не выбраны";
+  whoSummary();
   $("fcCnt").textContent=sel.length;
   if(!sel.length){
     ["fcGain","fcBase","fcGross","fcFee","fcTarget"].forEach(id=>$(id).textContent="—");
