@@ -1561,10 +1561,6 @@
       out.push(["Вывод закрыт у " + (m.list.length - m.out) + " кошельк(ов): порог суммы и адрес задаёт администратор",
         function () { doPayout(); }]);
     }
-    if (!out.length) {
-      out.push(["Портфель в порядке: ключи активны, лимиты стоят, коэффициенты спокойные",
-        function () { doScenario(""); }]);
-    }
     return out.slice(0, 4);
   }
 
@@ -1594,10 +1590,12 @@
       money(hc.gain) + "</b></span>" +
       "<span>Итог за " + (m.dayDate === ruDay() ? "сегодня" : m.dayDate) +
       " (факт)<b class='" + (m.day >= 0 ? "up" : "down") + "'>" + sig(m.day) + "</b></span>" +
-      "</div><ol class='ai-steps'>" +
-      steps.map(function (st, i) {
-        return "<li>" + esc(st[0]) + ' <button class="btn btn-sm" data-adv="' + i + '">сделать</button></li>';
-      }).join("") + "</ol></div></div>" +
+      "</div>" +
+      (steps.length
+        ? "<ol class='ai-steps'>" + steps.map(function (st, i) {
+            return "<li>" + esc(st[0]) + ' <button class="btn btn-sm" data-adv="' + i + '">сделать</button></li>';
+          }).join("") + "</ol>"
+        : "") + "</div></div>" +
       /* адаптивный разбор: что поднимет индекс и что его тянет вниз */
       '<div class="ai-why">' +
       '<div class="ai-why-c up"><b>Что поднимет индекс до 100</b>' +
