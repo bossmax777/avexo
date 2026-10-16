@@ -58,15 +58,8 @@
         b.textContent = "Отчёт за сутки в Telegram";
         var pre = document.createElement("div");
         pre.id = "repPre"; pre.hidden = true;
-        var p = document.createElement("p");
-        p.className = "note"; p.style.marginTop = "8px";
-        p.textContent = "Отчёт за сутки по каждому кошельку уходит в Telegram автоматически вместе " +
-          "с фиксацией итога дня. Кнопка выше отправляет его по выбранным кошелькам сразу; для работы " +
-          "нужны TELEGRAM_BOT_TOKEN и TELEGRAM_CHAT_ID в переменных приложения.";
         fix.parentNode.insertBefore(b, fix.nextSibling);
         b.parentNode.insertBefore(pre, b.nextSibling);
-        var last = fix.parentNode.querySelectorAll("p.note");
-        (last.length ? last[last.length - 1] : pre).insertAdjacentElement("afterend", p);
         b.onclick = function () { sendReport(); };
       }
     }
