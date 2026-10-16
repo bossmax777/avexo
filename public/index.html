@@ -11,7 +11,9 @@
 <link rel="apple-touch-icon" href="img/logo.png">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Sora:wght@400;600;700&family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500;600&family=Noto+Sans:wdth,wght@84,400;84,700&display=swap">
+<!-- шрифты не задерживают отрисовку: страница сразу рисуется системным шрифтом -->
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Sora:wght@400;600;700&family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500;600&family=Noto+Sans:wdth,wght@84,400;84,700&display=swap" media="print" onload="this.media='all'">
+<noscript><link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Sora:wght@400;600;700&family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500;600&family=Noto+Sans:wdth,wght@84,400;84,700&display=swap"></noscript>
 <style>
 :root{
   --bg:#FFFFFF;
@@ -997,7 +999,8 @@ footer a:hover{color:var(--accent)}
     <p class="disclaimer" id="cfgDisclaimer">
       Предупреждение о рисках: торговля производными финансовыми инструментами с кредитным плечом связана с
       высоким риском и подходит не всем инвесторам. Вы можете потерять весь вложенный капитал.
-      
+      Страница является учебным прототипом интерфейса: бренд, лицензии, котировки, отзывы и статистика вымышлены,
+      счета и платежи не существуют, персональные данные не собираются и никуда не передаются.
     </p>
   </div>
 </footer>
