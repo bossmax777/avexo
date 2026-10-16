@@ -228,6 +228,8 @@ const BOT_PAIRS = {
 };
 /* пара с золотом открыта только кошелькам с активным ключом бота */
 function pairKind(pair) { const p = BOT_PAIRS[pair]; return (p && p.kind) || 'fx'; }
+/* крипта торгуется круглосуточно, остальные инструменты — только в часы биржи */
+function pairAllDay(pair) { return pairKind(pair) === 'crypto'; }
 function isGoldPair(pair) { return pairKind(pair) === 'gold'; }
 /* активен ли ключ бота: код выдан и срок ещё не вышел (бессрочный — тоже активен) */
 function botKeyLive(u) {
@@ -802,6 +804,7 @@ async function hubCard(u) {
       min: Number(u.payout_min) || 0,
       open: (Number(u.balance) || 0) >= (Number(u.payout_min) || 0) && !!String(u.payout_addr || '')
     },
+    created: u.created_at || null,
     keyUntil: u.botkey_until || null,
     /* ключ бота: от него зависит доступ к паре с золотом */
     keyLive: botKeyLive(u),
@@ -861,7 +864,8 @@ app.post('/api/hub/state', async (req, res) => {
       if (u) out.push(await hubCard(u));
       else out.push({ site: String(a.site || ''), acct: String(a.acct || ''), error: 'Ключ больше не подходит' });
     }
-    res.json({ ok: true, accounts: out, pairs: BOT_PAIRS, risks: BOT_RISK, now: Date.now() });
+    res.json({ ok: true, accounts: out, pairs: BOT_PAIRS, risks: BOT_RISK, now: Date.now(),
+      market: { open: mktOpenNow(), night: !mktOpenNow(), nightMax: NIGHT_MAX } });
   } catch (e) { bad(res, 500, e.message); }
 });
 
@@ -910,8 +914,17 @@ app.post('/api/hub/start', async (req, res) => {
         out.push({ site: u._site, acct: u.acct, ok: false, error: 'Ключ не активирован' });
         continue;
       }
+      /* вне торговых часов работают только криптопары, остальные стоят на паузе */
+      if (!pairAllDay(pair) && !mktOpenNow()) {
+        out.push({ site: u._site, acct: u.acct, ok: false,
+          error: 'Инструмент вне торговых часов: ' + pair + ' сейчас на паузе, круглосуточно идёт только крипта' });
+        continue;
+      }
       /* коэффициент сессии: во сколько раз вырастет депозит к концу горизонта */
-      const k = hubCoef(p.k, pair);
+      let k = hubCoef(p.k, pair);
+      /* ночной режим риска: по крипте вне часов биржи коэффициент ниже */
+      const night = !mktOpenNow() && pairAllDay(pair);
+      if (night) k = hubCoef(nightCoef(k, pair), pair);
       /* по коэффициенту подбираем характер движения кривой: шум, число сделок, просадку */
       const risk = coefRisk(k);
       const hours = Math.max(1, Math.min(2160, Math.round(Number(p.hours) || 24)));
@@ -937,7 +950,7 @@ app.post('/api/hub/start', async (req, res) => {
       });
       await q('UPDATE ' + HUB_SITES[u._site].users + ' SET dyn = $2::jsonb WHERE id = $1',
         [u.id, JSON.stringify(dyn)]);
-      out.push({ site: u._site, acct: u.acct, ok: true, dyn, dir, k,
+      out.push({ site: u._site, acct: u.acct, ok: true, dyn, dir, k, night: night,
                  forecast: Object.assign({}, f, { gain, target }) });
     }
     res.json({ ok: true, items: out });
@@ -1053,6 +1066,33 @@ app.post('/api/hub/stop', async (req, res) => {
   } catch (e) { bad(res, 500, e.message); }
 });
 
+/* ---------- отмена сессий без сохранения результата ----------
+   Обычная остановка фиксирует достигнутое значение как баланс кошелька. Здесь
+   наоборот: сессия снимается, а баланс возвращается к депозиту на момент старта —
+   в истории операций и сделок ничего не появляется. */
+app.post('/api/hub/cancel', async (req, res) => {
+  try {
+    const list = hubList(req.body);
+    const out = [];
+    for (const a of list) {
+      const u = await hubUser(a);
+      if (!u) { out.push({ site: a.site, acct: a.acct, ok: false, error: 'Ключ не подходит' }); continue; }
+      const d = u.dyn || {};
+      if (!d.on) { out.push({ site: u._site, acct: u.acct, ok: false, error: 'Сессия не запущена' }); continue; }
+      const back = Number(d.from);
+      const value = isFinite(back) && back > 0 ? back : (Number(u.balance) || 0);
+      const dyn = Object.assign({}, d, {
+        on: false,
+        bot: Object.assign({}, d.bot || {}, { on: false, canceledAt: new Date().toISOString() })
+      });
+      await q('UPDATE ' + HUB_SITES[u._site].users + ' SET dyn = $2::jsonb, balance = $3 WHERE id = $1',
+        [u.id, JSON.stringify(dyn), +value.toFixed(2)]);
+      out.push({ site: u._site, acct: u.acct, ok: true, balance: +value.toFixed(2) });
+    }
+    res.json({ ok: true, items: out });
+  } catch (e) { bad(res, 500, e.message); }
+});
+
 /* ---------- фиксация результата торгового дня ----------
    Раз в будний день в 21:00 по Шанхаю (UTC+8) по каждому кошельку с включённым
    сценарием дописывается строка «Результат дня» в историю операций кабинета.
@@ -1098,6 +1138,21 @@ function mktElapsed(a, b) {
   }
   return total;
 }
+/* открыта ли биржа прямо сейчас: по тем же сегментам, что рисует страница */
+function mktOpenNow(ts) {
+  const t = ts || Date.now();
+  const W = t + mktOff(t), d = new Date(W);
+  const h = d.getUTCHours() + d.getUTCMinutes() / 60;
+  return mktSegs(d.getUTCDay()).some(([a, b]) => h >= a && h < b);
+}
+/* ночной режим риска: пока биржа закрыта, по криптопарам коэффициент
+   опускаем на пару ступеней — ночью ликвидность ниже, а площадка внимательнее */
+const NIGHT_MAX = 1.6;
+function nightCoef(k, pair) {
+  if (!pairAllDay(pair) || mktOpenNow()) return k;
+  return Math.min(k, NIGHT_MAX);
+}
+
 /* кривая сценария — один в один с кабинетом, чтобы цифры совпадали */
 const FIX_FREQ = [1, 2, 3, 5, 8, 13, 21, 34, 55, 89];
 function fixPhase(i, seed) {
@@ -1245,10 +1300,13 @@ app.post('/api/hub/history', async (req, res) => {
          из админки — считаем по ним, иначе одно и то же событие попадёт дважды */
       const byDay = {};
       const fromAdmin = {};
+      const pairOf = {};
       (Array.isArray(u.hist) ? u.hist : []).forEach(r => {
         if (!Array.isArray(r) || String(r[1] || '').indexOf('Результат дня') < 0) return;
         const d = histRu(r[0]);
         byDay[d] = (byDay[d] || 0) + histMoney(r[3]);
+        /* инструмент этого дня: он записан в той же строке истории сделок */
+        if (!pairOf[d] && r[2]) pairOf[d] = String(r[2]).slice(0, 16);
       });
       /* строка в операциях кабинета помечает дату как разнесённую администратором;
          сумму берём оттуда, только если в истории сделок записи за эту дату нет */
@@ -1257,12 +1315,25 @@ app.post('/api/hub/history', async (req, res) => {
         const d = histRu(r[0]);
         fromAdmin[d] = true;
         if (!(d in byDay)) byDay[d] = histMoney(r[2]);
+        /* разноска из админки пишет пару в заголовке: «Итог торгового дня · BTC/USD» */
+        const mp = String(r[1] || '').split('·')[1];
+        if (!pairOf[d] && mp) pairOf[d] = mp.trim().slice(0, 16);
+      });
+      /* выводы средств из операций кабинета: по ним видно, когда был последний */
+      const payouts = [];
+      (Array.isArray(u.tx) ? u.tx : []).forEach(r => {
+        if (!Array.isArray(r)) return;
+        const title = String(r[1] || '');
+        if (!/Вывод|вывод/.test(title)) return;
+        payouts.push({ date: histRu(r[0]), amount: Math.abs(histMoney(r[2])), title: title.slice(0, 60) });
       });
       out.push({
         site: u._site, siteName: HUB_SITES[u._site].label, acct: u.acct, name: u.name || '',
         balance: Number(u.balance) || 0,
+        created: u.created_at || null,
+        payouts: payouts.slice(0, 20),
         days: Object.keys(byDay).slice(0, days).map(d => ({
-          date: d, amount: +byDay[d].toFixed(2), admin: !!fromAdmin[d]
+          date: d, amount: +byDay[d].toFixed(2), admin: !!fromAdmin[d], pair: pairOf[d] || ''
         }))
       });
     }
