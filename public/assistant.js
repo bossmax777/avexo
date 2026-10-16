@@ -79,18 +79,19 @@
     ".ai-m.me{align-self:flex-end;background:var(--accent);color:#0b0d16;font-weight:600;border-bottom-right-radius:5px}" +
     ".ai-m.bot{align-self:flex-start;background:var(--surface-2);border:1px solid var(--line);border-bottom-left-radius:5px}" +
     ".ai-m ul{margin:7px 0 0;padding-left:16px}.ai-m li{margin:3px 0}" +
-    ".ai-m table{width:100%;border-collapse:collapse;margin-top:9px;font-size:11.9px;table-layout:auto;" +
+    ".ai-m table{width:100%;border-collapse:collapse;margin-top:9px;font-size:11.6px;table-layout:fixed;" +
     "background:rgba(255,255,255,.02);border:1px solid var(--line);border-radius:12px;overflow:hidden}" +
     ".ai-m th{position:sticky;top:0;text-align:left;color:var(--muted);font-weight:600;padding:7px 9px;" +
-    "font-size:10.5px;text-transform:uppercase;letter-spacing:.05em;background:var(--surface-2);" +
-    "border-bottom:1px solid var(--line);white-space:nowrap}" +
+    "font-size:10.2px;text-transform:uppercase;letter-spacing:.04em;background:var(--surface-2);" +
+    "border-bottom:1px solid var(--line);overflow-wrap:anywhere}" +
     ".ai-m td{padding:7px 9px;border-bottom:1px solid rgba(255,255,255,.05);vertical-align:top;" +
-    "font-variant-numeric:tabular-nums}" +
+    "font-variant-numeric:tabular-nums;white-space:normal;overflow-wrap:anywhere}" +
     ".ai-m tr:last-child td{border-bottom:0}" +
     ".ai-m tr:hover td{background:rgba(255,255,255,.025)}" +
     ".ai-m td:first-child,.ai-m th:first-child{padding-left:11px}" +
     ".ai-m td:last-child,.ai-m th:last-child{padding-right:11px}" +
     ".ai-m .up{color:#6FE0B0}.ai-m .down{color:#F3A2A2}" +
+    ".ai-m .dim{color:var(--muted);font-size:10.8px}" +
     ".ai-do{margin-top:9px;display:flex;gap:7px;flex-wrap:wrap}" +
     ".ai-do button{font:inherit;font-size:11.8px;padding:7px 11px;border-radius:10px;cursor:pointer;" +
     "border:0;background:var(--accent);color:#0b0d16;font-weight:700}" +
@@ -702,12 +703,11 @@
         : "<b>Сценарий выглядит спокойно.</b> Итог за сутки " + money(total) +
           " — в пределах порога " + money(CAP) + ", коэффициенты соразмерны прогреву счетов.");
     var m = say("<b>Разбор перед запуском: " + list.length + " кошельк(ов)</b>" +
-      "<table><tr><th>Кошелёк</th><th>Пара</th><th>Коэф.</th><th>Итог за сутки</th><th>Прогрев</th>" +
-      "<th>Комментарий</th></tr>" +
+      "<table><tr><th>Кошелёк</th><th>Пара и коэф.</th><th>Итог за сутки</th><th>Комментарий</th></tr>" +
       rows.slice(0, 14).map(function (r) {
-        return "<tr><td>#" + esc(r.a.acct) + "</td><td>" + esc(r.pair) + "</td><td>×" +
+        return "<tr><td>#" + esc(r.a.acct) + "</td><td>" + esc(r.pair) + " ×" +
           String(r.k).replace(".", ",") + "</td><td>" + sig(r.gain) + "</td><td>" +
-          (r.warm ? "прогрет" : "в прогреве") + "</td><td>" + esc(r.note) + "</td></tr>";
+          esc(r.note) + "</td></tr>";
       }).join("") + "</table>" +
       (rows.length > 14 ? "<br>и ещё " + (rows.length - 14) + " кошельк(ов)." : "") +
       (rows.length - ready.length
@@ -801,7 +801,9 @@
     return pullHist().then(function (items) {
       if (!items.length) return fill(m, "История пустая — по этим кошелькам ещё нет записанных итогов дня.");
       var range = (t.match(/за\s*(\d+)\s*(дн|день|дня|дней)/) || [])[1];
-      if (range) return fill(m, rangeHtml(items, Math.min(30, +range)));
+      if (!range && /недел/.test(t)) range = 7;
+      if (!range && /(месяц|30 дней)/.test(t)) range = 30;
+      if (range) return fill(m, rangeHtml(items, Math.min(60, +range)));
       var date = dateFrom(t);
       var rows = items.map(function (it) {
         var row = dayRow(it, date);
@@ -830,12 +832,12 @@
         have.length + " из " + items.length +
         "<ul>" + Object.keys(bySite).map(function (n) {
           return "<li>" + esc(n) + " — " + sig(bySite[n]) + "</li>"; }).join("") + "</ul>" +
-        "<table><tr><th>Клиент</th><th>Кошелёк</th><th>Площадка</th><th>Пара</th><th>Итог</th></tr>" +
+        "<table><tr><th>Кошелёк и клиент</th><th>Пара</th><th>Итог</th></tr>" +
         all.map(function (r) {
           var row = r.row || {};
-          return "<tr><td>" + esc(r.it.name || "—") + "</td><td>#" + esc(r.it.acct) + "</td><td>" +
-            esc(r.it.siteName || r.it.site) + "</td><td>" + esc(row.pair || "—") + "</td><td>" +
-            sig(r.g) + "</td></tr>"; }).join("") + "</table>" +
+          return "<tr><td>#" + esc(r.it.acct) + "<br><span class='dim'>" + esc(r.it.name || "—") + " · " +
+            esc(r.it.siteName || r.it.site) + "</span></td><td>" + esc(row.pair || "—") + "</td><td class='" +
+            (r.g >= 0 ? "up" : "down") + "'>" + sig(r.g) + "</td></tr>"; }).join("") + "</table>" +
         (posted ? "<br>Из них проставлено площадкой за этот день: " + posted + " кошельк(ов)." : "") +
         (down.length
           ? "<br>Просадка у " + down.length + ": " + down.slice(0, 8).map(function (r) {
@@ -844,20 +846,33 @@
     });
   }
   function rangeHtml(items, n) {
-    var byDay = {};
+    var byDay = {}, bySite = {};
     items.forEach(function (it) {
-      (it.days || []).forEach(function (d) { byDay[d.date] = (byDay[d.date] || 0) + d.amount; });
+      var site = it.siteName || it.site;
+      (it.days || []).forEach(function (d) {
+        byDay[d.date] = (byDay[d.date] || 0) + d.amount;
+        bySite[site] = (bySite[site] || 0) + d.amount;
+      });
     });
     var days = Object.keys(byDay).sort(function (a, b) {
       var pa = a.split("."), pb = b.split(".");
       return (pb[2] + pb[1] + pb[0]) > (pa[2] + pa[1] + pa[0]) ? 1 : -1;
     }).slice(0, n);
     var sum = days.reduce(function (s2, d) { return s2 + byDay[d]; }, 0);
+    var best = days.slice().sort(function (x, y) { return byDay[y] - byDay[x]; })[0];
+    var worst = days.slice().sort(function (x, y) { return byDay[x] - byDay[y]; })[0];
+    var avg = days.length ? sum / days.length : 0;
     return "<b>Итоги за последние " + days.length + " дн.: " + sig(sum) + "</b>" +
+      "<ul>" + Object.keys(bySite).map(function (k) {
+        return "<li>" + esc(k) + " — " + sig(bySite[k]) + "</li>"; }).join("") + "</ul>" +
       "<table><tr><th>Дата</th><th>Итог</th></tr>" +
       days.map(function (d) {
-        return "<tr><td>" + esc(d) + "</td><td>" + sig(byDay[d]) + "</td></tr>"; }).join("") + "</table>" +
-      "<br>В расчёте и фиксация сессий, и разноска итогов дня из админки по обеим площадкам.";
+        return "<tr><td>" + esc(d) + "</td><td class='" + (byDay[d] >= 0 ? "up" : "down") + "'>" +
+          sig(byDay[d]) + "</td></tr>"; }).join("") + "</table>" +
+      "<br>Средний день — " + sig(avg) +
+      (best ? ", лучший " + esc(best) + " (" + sig(byDay[best]) + ")" : "") +
+      (worst && worst !== best ? ", слабый " + esc(worst) + " (" + sig(byDay[worst]) + ")" : "") +
+      ".<br>В расчёте и фиксация сессий, и разноска итогов дня по обеим площадкам.";
   }
 
   function doBalances() {
@@ -890,6 +905,127 @@
           return "#" + esc(a.acct); }).join(", ") + ". Пришлите коды — активирую." : ""));
     });
   }
+  var KEY_WARN = 7;   /* за сколько дней предупреждать об окончании ключа */
+  /* ключи, у которых срок на исходе */
+  function keysSoon() {
+    return accs().filter(live).map(function (a) {
+      var st = stOf(a);
+      var left = (st.left === null || st.left === undefined) ? null : num(st.left);
+      return { a: a, left: left, until: st.until,
+               days: left === null ? null : Math.floor(left / 86400000) };
+    }).filter(function (x) { return x.days !== null && x.days <= KEY_WARN; })
+      .sort(function (x, y) { return x.left - y.left; });
+  }
+  /* полный разбор рисков: что прямо сейчас может привести к проверке счёта */
+  function doRisks() {
+    return pullState().then(function () {
+      var m = metrics(), hc = healthCalc(m), w = hc.warm;
+      var list = [];
+      if (hc.gain > CAP) {
+        list.push(["Сценарий выше порога", "выбранный состав даёт " + money(hc.gain) +
+          " за сутки — выше " + money(CAP) + ", с которого площадки берут аккаунты на проверку"]);
+      } else if (hc.gain > DAY_TARGET) {
+        list.push(["Доход выше спокойного уровня", "по расчёту " + money(hc.gain) +
+          " за сутки; я держу предложения в пределах " + money(DAY_TARGET)]);
+      }
+      var coldHot = w.cold.filter(function (a) {
+        var pp = (typeof paramsFor === "function") ? paramsFor(a) : {};
+        return capK(pp.k, pp.pair || "XAU/USD") > COLD_MAX;
+      });
+      if (coldHot.length) {
+        list.push([coldHot.length + " непрогретых с высоким коэффициентом",
+          "по ним стоит ×" + String(COLD_MAX).replace(".", ",") + " и ниже: " +
+          coldHot.slice(0, 6).map(function (a) { return "#" + esc(a.acct); }).join(", ") +
+          (coldHot.length > 6 ? " и др." : "")]);
+      }
+      var news = m.list.filter(function (a) { return outState(a).tone === "new"; });
+      if (news.length) {
+        list.push([news.length + " новорегов", "аккаунты первой недели: торговать можно, " +
+          "вывод с них не трогаем совсем"]);
+      }
+      var ks = keysSoon();
+      if (ks.length) {
+        list.push(["Ключи заканчиваются у " + ks.length + " кошельк(ов)",
+          ks.slice(0, 6).map(function (x) {
+            return "#" + esc(x.a.acct) + " — " + (x.days <= 0 ? "сегодня" : "через " + x.days + " дн.");
+          }).join(", ") + ". Коды выдаёт администратор, пришлите их в чат"]);
+      }
+      var noKey = m.list.length - m.keys;
+      if (noKey > 0) list.push([noKey + " кошельк(ов) без ключа", "по ним закрыта золотая пара"]);
+      if (m.kycNeed && m.kycNeed.length) {
+        list.push([m.kycNeed.length + " без верификации",
+          "площадка может запросить документы при выводе — могу отправить заявки"]);
+      }
+      var closed = m.list.filter(function (a) {
+        var pp = (typeof paramsFor === "function") ? paramsFor(a) : {};
+        return typeof pairOpen === "function" && !pairOpen(pp.pair || "XAU/USD");
+      });
+      if (closed.length) {
+        list.push([closed.length + " кошельк(ов) с парой вне торговых часов",
+          "сейчас запустятся только криптопары"]);
+      }
+      var down = m.run.filter(function (a) {
+        var d = (a && a.dyn) || {};
+        var cur = (typeof valOf === "function") ? valOf(a) : num(a.balance);
+        return num(d.from) > 0 && cur < num(d.from) * 0.995;
+      });
+      if (down.length) {
+        list.push([down.length + " сессий в минусе", "счёт ниже депозита на старте: " +
+          down.slice(0, 6).map(function (a) { return "#" + esc(a.acct); }).join(", ")]);
+      }
+      if (m.total > 0 && m.day < 0) list.push(["Минус по дню", sig(m.day) + " по портфелю"]);
+      if (!list.length) {
+        return say("<b>Рисков не вижу.</b> Коэффициенты спокойные, порог " + money(CAP) +
+          " не превышен, ключи в силе, по непрогретым счетам минимальные ступени. " +
+          "Индекс устойчивости — " + hc.score + " из 100.");
+      }
+      var mm = say("<b>Риски сейчас: " + list.length + "</b> · индекс устойчивости " + hc.score +
+        " из 100" +
+        "<table><tr><th>Что не так</th><th>Подробности</th></tr>" +
+        list.map(function (x) {
+          return "<tr><td><b>" + esc(x[0]) + "</b></td><td>" + x[1] + "</td></tr>";
+        }).join("") + "</table>");
+      var btns = [];
+      if (coldHot.length) {
+        btns.push(["Снизить непрогретым до ×" + String(COLD_MAX).replace(".", ","), function () {
+          coldHot.forEach(function (a) {
+            var pp = Object.assign({ pair: "XAU/USD", hours: 24, share: 0.6, dir: "up" },
+              (typeof paramsFor === "function") ? paramsFor(a) : {}, { k: COLD_MAX });
+            S.per[kOf(a)] = pp;
+          });
+          if (typeof renderAll === "function") renderAll();
+          renderPanels();
+          say("Готово: непрогретым кошелькам стоит ×" + String(COLD_MAX).replace(".", ",") + ".");
+        }]);
+      }
+      if (m.kycNeed && m.kycNeed.length) btns.push(["Отправить заявки на верификацию", function () { doKyc(); }, true]);
+      if (noKey > 0 || ks.length) btns.push(["Прислать коды ключей", function () { askCodes(); }, true]);
+      if (btns.length) act(mm, btns);
+    });
+  }
+  /* напоминание об окончании ключей: раз в день, без повторов */
+  var KEY_SEEN = "";
+  function keyTick() {
+    if (!accs().length) return;
+    var stamp = dayStamp();
+    if (KEY_SEEN === stamp) return;
+    var ks = keysSoon();
+    if (!ks.length) { KEY_SEEN = stamp; return; }
+    KEY_SEEN = stamp;
+    logEvent("Ключи заканчиваются у " + ks.length + " кошельков", "warn", "risk");
+    var mm = say("<b>Напоминание: ключи заканчиваются.</b> У " + ks.length +
+      " кошельк(ов) активация действует меньше " + KEY_WARN + " дней:" +
+      "<ul>" + ks.slice(0, 8).map(function (x) {
+        return "<li>#" + esc(x.a.acct) + " · " + esc(x.a.siteName || x.a.site) + " — " +
+          (x.days <= 0 ? "последний день" : "осталось " + x.days + " дн.") +
+          (x.until ? " (до " + new Date(x.until).toLocaleDateString("ru-RU") + ")" : "") + "</li>";
+      }).join("") + "</ul>" +
+      (ks.length > 8 ? "и ещё " + (ks.length - 8) + ". " : "") +
+      "Когда срок выйдет, золотая пара по этим кошелькам закроется. Коды выдаёт администратор — " +
+      "пришлите их сюда, и я продлю активацию.");
+    act(mm, [["Пришлю коды", function () { askCodes(); }],
+             ["Позже", function () {}, true]]);
+  }
   function doKycInfo() {
     return pullState().then(function () {
       var list = accs(), by = { approved: [], pending: [], none: [], rejected: [] };
@@ -921,11 +1057,10 @@
       var no = rows.filter(function (r) { return !r.st.ready && r.st.tone !== "ok"; });
       var sum = ok.reduce(function (s2, r) { return s2 + num(r.a.balance); }, 0);
       say("<b>Вывод средств: " + ok.length + " кошельк(ов) прогреты и готовы</b> · на них " + money(sum) +
-        "<table><tr><th>Клиент</th><th>Кошелёк</th><th>Площадка</th><th>Баланс</th><th>Статус</th>" +
-        "<th>Рекомендация</th></tr>" +
+        "<table><tr><th>Кошелёк и клиент</th><th>Баланс</th><th>Статус</th><th>Что делать</th></tr>" +
         rows.map(function (r) {
-          return "<tr><td>" + esc(nameOf(r.a)) + "</td><td>#" + esc(r.a.acct) + "</td><td>" +
-            esc(r.a.siteName || r.a.site) + "</td><td>" + money(num(r.a.balance)) + "</td><td>" +
+          return "<tr><td>#" + esc(r.a.acct) + "<br><span class='dim'>" + esc(nameOf(r.a)) + " · " +
+            esc(r.a.siteName || r.a.site) + "</span></td><td>" + money(num(r.a.balance)) + "</td><td>" +
             esc(r.st.title) + "</td><td>" + esc(r.rec) + "</td></tr>";
         }).join("") + "</table>" +
         "<br><b>Что советую:</b> " +
@@ -1114,18 +1249,24 @@
   }
   /* если вопрос совсем незнакомый — отвечаем сводкой состояния и подсказкой */
   function doFallback() {
-    var list = accs(), on = list.filter(live).length;
-    var run = list.filter(function (a) { return (typeof winOf === "function") && winOf(a); }).length;
-    var total = list.reduce(function (s2, a) { return s2 + num(a.balance); }, 0);
-    say("Отвечаю в рамках пульта — вот как сейчас обстоят дела: кошельков " + list.length +
-      ", капитал " + money(total) + ", сессий в работе " + run + ", ключ активен у " + on + "." +
-      "<br>Спросите про итоги за дату, ключи, верификацию, вывод, пары и коэффициенты, " +
-      "журнал сделок или фиксацию итога дня — или скажите, что сделать: " +
-      "«разложи по стратегиям», «запусти», «останови», «какой сценарий даст +8% за день».");
+    say("<b>Доступ ограничен.</b> Я работаю только с данными пульта и вашими правами: " +
+      "аналитика по кошелькам и итогам, сценарии и их запуск, ключи, верификация, вывод. " +
+      "На вопросы вне этого круга ответить не могу." +
+      "<br>Сформулируйте задачу по пульту — например «подбери наилучший сценарий», " +
+      "«сводка за неделю», «какие риски», «отправь заявки на верификацию».");
   }
 
   function doHelp() {
-    say("Я помощник внутри пульта и работаю вашими правами — в админку не хожу. Умею так:<ul>" +
+    say("Я помощник пульта: считаю аналитику по вашим кошелькам и беру на себя рутину. " +
+      "Работаю вашими правами — в админку площадки не хожу, поэтому коды активации и ключ " +
+      "администратора присылаете вы. На вопросы вне пульта отвечаю «доступ ограничен».<ul>" +
+      "<li>«Подбери наилучший сценарий» — разложу кошельки по парам и коэффициентам в пределах " +
+      "дневного лимита и проставлю в карточки</li>" +
+      "<li>«Какие риски» — разбор: порог дохода, непрогретые с высокими иксами, новореги, " +
+      "сроки ключей, верификация, закрытые рынки, сессии в минусе</li>" +
+      "<li>«Сводка за вчера / за 7 дней / за 30 дней» — по обеим площадкам, с клиентом, парой " +
+      "и суммой по каждому кошельку</li>" +
+      "<li>Сам напомню, когда у ключей остаётся меньше недели</li>" +
       "<li>«Посоветуй стратегию на день» — разложу кошельки по парам и проставлю в карточки</li>" +
       "<li>«Активируй ключи» — пришлите коды в чат, включу ими бота</li>" +
       "<li>«Отправь заявки на верификацию» — соберу заявки из ваших снимков</li>" +
@@ -1167,6 +1308,9 @@
     if (/(зафиксир|запиши|итог дня)/.test(t) && /(всем|обеих|двум|площадк)/.test(t)) return fixDayAll();
     if (/(зафиксир|фиксац)/.test(t) && !/когда|как|во сколько/.test(t)) return doFix();
     if (/(сценари|что даст|какой результат|прогноз)/.test(t) || /\d+\s*%/.test(t)) return doScenario(t);
+    if (/(подбер|лучш|оптимальн|наилучш)/.test(t) && /(сценар|стратег|вариант|план)/.test(t)) return doAdvice();
+    if (/(риск|что не так|проблем|опасн|проверь портфель)/.test(t)) return doRisks();
+    if (/(ключ)/.test(t) && /(срок|истека|заканчива|продли)/.test(t)) return doKeysInfo();
     if (/(стратег|совет|что поставить|разложи|предлож|рекоменд)/.test(t)) return doAdvice();
     if (/(telegram|телеграм)/.test(t)) return doFaq("telegram") || doHelp();
     if (/(заработал|вчера|позавчера|сводк|просадк|отч[её]т по дням|итог за|за \d{1,2}[.\/]\d{1,2}|за \d+\s*дн)/.test(t)
@@ -1185,15 +1329,16 @@
   }
 
   /* ---------- панель ---------- */
+  /* чипы в окне — то, что спрашивают чаще всего; действия вынесены в командную строку */
   var CHIPS = [
-    ["Стратегия на день", "Посоветуй стратегию на день"],
-    ["Активировать ключи", "Активируй ключи тем, у кого нет"],
-    ["Заявки на верификацию", "Отправь заявки на верификацию"],
-    ["Итог вчера", "Сколько заработали вчера и у кого просадка?"],
-    ["Что с ключами", "Что с ключами и сроками?"],
+    ["Подобрать сценарий", "Подбери наилучший сценарий на день"],
+    ["Какие риски", "Какие сейчас риски?"],
+    ["Сводка за вчера", "Сколько заработали вчера и у кого просадка?"],
+    ["Сводка за неделю", "Покажи отчёт за 7 дней"],
+    ["Сводка за месяц", "Покажи отчёт за 30 дней"],
+    ["Сроки ключей", "Что с ключами и сроками?"],
+    ["Верификация", "Что с верификацией?"],
     ["Можно ли выводить", "Можно ли выводить средства?"],
-    ["Запустить сессии", "Запусти по выбранным кошелькам"],
-    ["Остановить сессии", "Останови сессии по выбранным"],
     ["Что умеешь", "Что умеешь?"]
   ];
   /* очистка переписки по кнопке: то же, что происходит само в 00:00 */
@@ -2357,24 +2502,20 @@
   }
 
   /* ---------- 5. командная строка помощника ---------- */
+  /* командная строка — именно действия: собрать, запустить, зафиксировать, завести */
   var CMDS = [
-    ["разложи по стратегиям", "Разложи аккаунты по стратегиям"],
-    ["план на сегодня", "Применить план на сегодня"],
-    ["итог вчера", "Сколько заработали вчера и у кого просадка?"],
-    ["отчёт за 7 дней", "Покажи отчёт за 7 дней"],
-    ["что даст сценарий", "Что даст сценарий на день?"],
-    ["хочу +8% за день", "Хочу +8% за день"],
-    ["активируй ключи", "Активируй ключи тем, у кого нет"],
-    ["заявки на верификацию", "Отправь заявки на верификацию"],
-    ["запусти сессии", "Запусти по выбранным кошелькам"],
-    ["останови всё", "Останови сессии по выбранным"],
-    ["зафиксируй день", "Зафиксируй итог дня"],
-    ["итог дня всем площадкам", "Запиши итог дня всем кошелькам обеих площадок"],
+    ["подобрать сценарий", "Подбери наилучший сценарий на день"],
+    ["применить план на сегодня", "Применить план на сегодня"],
+    ["запустить по выбранным", "Запусти по выбранным кошелькам"],
+    ["остановить сессии", "Останови сессии по выбранным"],
+    ["зафиксировать день", "Зафиксируй итог дня"],
+    ["итог дня обеим площадкам", "Запиши итог дня всем кошелькам обеих площадок"],
     ["отменить все сценарии", "Отмени все сценарии с фиксацией результата"],
-    ["что с ключами", "Что с ключами и сроками?"],
-    ["можно ли выводить", "Можно ли выводить средства?"],
+    ["активировать ключи", "Активируй ключи тем, у кого нет"],
+    ["заявки на верификацию", "Отправь заявки на верификацию"],
+    ["завести 10 кабинетов", "Подготовь 10 кабинетов"],
     ["карта вывода", "Покажи тепловую карту вывода"],
-    ["какие пары есть", "Какие пары есть?"]
+    ["хочу +8% за день", "Хочу +8% за день"]
   ];
   function cmdCard() {
     var html =
@@ -2561,6 +2702,7 @@
   setInterval(function () { if ($("aiPanels") && !document.hidden) pullHist().then(renderPanels); }, 60000);
   setInterval(function () { if ($("aiPanels")) pullPrefs(); }, 30000);
   setInterval(midnightTick, 30000);
+  setInterval(function () { if ($("aiPanels") && !document.hidden) keyTick(); }, 60000);
   setInterval(function () { if ($("aiPanels") && !document.hidden) { guardRun(); capTick(); } }, 4000);
   setInterval(function () { if ($("aiPanels")) { autoTick(); } }, 7000);
 })();
