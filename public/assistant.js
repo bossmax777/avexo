@@ -57,10 +57,16 @@
   function stOf(a) { return ST[a.site + ":" + a.acct] || {}; }
 
   var CSS =
-    "#aiDock{position:fixed;right:18px;bottom:18px;width:min(680px,calc(100vw - 36px));z-index:9990;" +
+    "#aiDock{position:fixed;right:18px;bottom:18px;width:min(860px,calc(100vw - 36px));z-index:9990;" +
     "display:flex;flex-direction:column;border:1px solid var(--line);border-radius:18px;" +
     "background:var(--surface);box-shadow:0 26px 70px rgba(0,0,0,.5);overflow:hidden}" +
     "#aiDock.min{width:260px}" +
+    "#aiDock.big{width:calc(100vw - 36px);max-width:1320px;left:18px;right:18px;margin:0 auto}" +
+    "#aiDock.big #aiBody{max-height:calc(100vh - 230px)}" +
+    ".ai-ic{font:inherit;font-size:11.5px;border:1px solid var(--line);background:var(--surface-2);" +
+    "color:var(--muted);border-radius:9px;padding:4px 9px;cursor:pointer;flex:none}" +
+    ".ai-ic:hover{border-color:var(--accent);color:var(--text)}" +
+    "#aiDock.min .ai-ic:not(#aiMin){display:none}" +
     "@media (max-width:760px){#aiDock{right:10px;left:10px;bottom:10px;width:auto}}" +
     "#aiHead{display:flex;align-items:center;gap:11px;padding:14px 16px;border-bottom:1px solid var(--line);" +
     "cursor:pointer;background:linear-gradient(180deg,rgba(124,92,255,.10),transparent)}" +
@@ -68,7 +74,8 @@
     "#aiDock.min #aiBody,#aiDock.min #aiFoot,#aiDock.min .ai-chips{display:none}" +
     "#aiBody{max-height:min(64vh,620px);overflow:auto;padding:15px 16px;display:flex;flex-direction:column;gap:10px;" +
     "scrollbar-width:thin}" +
-    ".ai-m{max-width:97%;padding:11px 13px;border-radius:14px;font-size:12.9px;line-height:1.55}" +
+    ".ai-m{max-width:100%;padding:12px 14px;border-radius:14px;font-size:12.9px;line-height:1.55}" +
+    ".ai-m.bot{width:100%;box-sizing:border-box}" +
     ".ai-m.me{align-self:flex-end;background:var(--accent);color:#0b0d16;font-weight:600;border-bottom-right-radius:5px}" +
     ".ai-m.bot{align-self:flex-start;background:var(--surface-2);border:1px solid var(--line);border-bottom-left-radius:5px}" +
     ".ai-m ul{margin:7px 0 0;padding-left:16px}.ai-m li{margin:3px 0}" +
@@ -275,11 +282,12 @@
              pct: Math.round(cold.length / n * 100) };
   }
   /* текст про прогрев: он нужен и в окне предупреждения, и в рекомендациях */
-  function warmNote(list) {
+  function warmNote(list, what) {
     var w = warmInfo(list);
+    var kind = what || "кошельков";
     if (!w.n) return "";
     if (w.cold.length && w.pct >= 50) {
-      return "<b>Прогрев: " + w.cold.length + " из " + w.n + " кошельков ещё не прогреты</b> — " +
+      return "<b>Прогрев: " + w.cold.length + " из " + w.n + " " + kind + " ещё не прогреты</b> — " +
         "на счёте нет " + money(WARM_SUM) + " или не прошло " + WARM_DAYS + " дней с регистрации. " +
         "Это большинство выбранных аккаунтов: если запустить сценарий на всех сразу, по непрогретым " +
         "счетам выйдет резкий скачок на молодом аккаунте — такие площадка с высокой вероятностью " +
@@ -287,10 +295,10 @@
         (w.warm.length ? " (" + w.warm.length + " кошельк(ов))" : "") + ", остальным дать отлежаться.";
     }
     if (w.cold.length) {
-      return "Прогрев: " + w.cold.length + " из " + w.n + " кошельков ещё не прогреты — " +
+      return "Прогрев: " + w.cold.length + " из " + w.n + " " + kind + " ещё не прогреты — " +
         "по ним лучше держать спокойный коэффициент, иначе аккаунт уйдёт на проверку.";
     }
-    return "Прогрев: все выбранные кошельки отлежались и набрали объём — вопросов к ним не будет.";
+    return "Прогрев: все " + kind + " отлежались и набрали объём — вопросов к ним не будет.";
   }
   var CAP_SEEN = "";
   function capWarn(opts) {
@@ -1182,6 +1190,15 @@
     ["Остановить сессии", "Останови сессии по выбранным"],
     ["Что умеешь", "Что умеешь?"]
   ];
+  /* очистка переписки по кнопке: то же, что происходит само в 00:00 */
+  function clearChat() {
+    if (!(CFG.chat || []).length) return say("Переписка и так пустая.");
+    if (!window.confirm("Очистить переписку с помощником? Сообщения и ответы будут удалены.")) return;
+    CFG.chat = []; CFG.chatDay = dayStamp(); saveCfg();
+    var box = $("aiBody"); if (box) box.innerHTML = "";
+    pushPrefs();
+    say("Чат очищен. Пишите задачу — начнём заново.");
+  }
   function dock() {
     if ($("aiDock")) return;
     var d = document.createElement("aside");
@@ -1189,7 +1206,9 @@
     d.innerHTML =
       '<div id="aiHead"><span id="aiDot"></span><span style="flex:1"><b>Помощник пульта</b>' +
       "<small>подскажет и сделает в рамках вашего доступа</small></span>" +
-      '<span id="aiMin" style="color:var(--muted);font-size:17px">–</span></div>' +
+      '<button id="aiClear" class="ai-ic" title="Очистить чат">Очистить</button>' +
+      '<button id="aiBig" class="ai-ic" title="Развернуть на весь экран">⤢</button>' +
+      '<button id="aiMin" class="ai-ic" title="Свернуть">–</button></div>' +
       '<div id="aiBody"></div>' +
       '<div class="ai-chips">' + CHIPS.map(function (c, i) {
         return '<button data-c="' + i + '">' + esc(c[0]) + "</button>";
@@ -1203,7 +1222,10 @@
       "разложу аккаунты по стратегиям и запущу сессии. Права у меня ваши — в админку площадки я не хожу, " +
       "поэтому коды активации и ключ администратора присылаете вы. Переписка очищается каждый день в 00:00.");
     $("aiHead").onclick = function (e) {
-      if (e.target && e.target.id === "aiMin") { d.classList.toggle("min"); return; }
+      var id = e.target && e.target.id;
+      if (id === "aiMin") { d.classList.toggle("min"); return; }
+      if (id === "aiBig") { d.classList.remove("min"); d.classList.toggle("big"); return; }
+      if (id === "aiClear") { clearChat(); return; }
       if (d.classList.contains("min")) d.classList.remove("min");
     };
     d.querySelectorAll("[data-c]").forEach(function (b) {
@@ -1498,7 +1520,8 @@
     }
     var wi0 = warmInfo(sel());
     if (wi0.cold.length && wi0.warm.length && wi0.pct >= 50) {
-      out.push(["Оставить в работе только прогретые кошельки — " + wi0.warm.length + " из " + wi0.n,
+      out.push(["Оставить в работе только прогретые кошельки — " + wi0.warm.length + " из " +
+        wi0.n + " выбранных",
         function () {
           if (typeof S === "undefined") return;
           S.sel.clear(); wi0.warm.forEach(function (a) { S.sel.add(kOf(a)); });
@@ -1568,7 +1591,10 @@
           }).join("") + "</ul>"
         : "<p>Рисков не вижу: иксы спокойные, порог не превышен, непрогретые счета не в работе.</p>") +
       "</div></div>" +
-      '<p class="note" style="margin-top:9px">' + warmNote(sel()) + "</p>" +
+      '<p class="note" style="margin-top:9px">' + warmNote(m.list, "подключённых кошельков") +
+      (sel().length !== m.list.length
+        ? " В выборе сейчас " + sel().length + " из " + m.list.length + " — расчёты сценария идут по ним."
+        : "") + "</p>" +
       "";
     return { html: html, wire: function (box) {
       box.querySelectorAll("[data-adv]").forEach(function (b) {
