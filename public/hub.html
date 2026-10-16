@@ -929,8 +929,9 @@ function forecast(balance,p,fees){
   const trades=Math.max(4,Math.round(perDay*days));
   const commission=trades*0.3*f.lot;
   const swap=0.3*f.swap*days*Math.max(1,Math.round(perDay/6));
-  /* цель сессии задаёт коэффициент: вверх — умножаем депозит, вниз — делим */
-  const target=+( (p.dir==="down") ? balance/k : balance*k ).toFixed(2);
+  /* цель сессии задаёт коэффициент, но применяется он к рабочей части депозита:
+     в работе только доля, остальное лежит нетронутым */
+  const target=+( (p.dir==="down") ? balance-work*(1-1/k) : balance+work*(k-1) ).toFixed(2);
   const gain=+(target-balance).toFixed(2);
   const service=Math.max(0,gain)*f.plat/100;
   const fee=commission+swap+service;
@@ -1188,7 +1189,8 @@ function renderForecast(){
   $("fcTarget").textContent=usd(target);
   const perDay=TRADES_DAY[coefRisk(coefOf(S.params.k,S.params.pair))];
   $("fcFreq").textContent="≈ "+perDay+" сделок в сутки · "+trades+" за период · цель "+
-    coefTxt(coefOf(S.params.k,S.params.pair))+" к депозиту";
+    coefTxt(coefOf(S.params.k,S.params.pair))+" к рабочей части ("+
+    Math.round(Math.max(0.1,Math.min(1,S.params.share))*100)+"% депозита)";
 }
 function renderAll(){
   renderMktStop(); renderKpis(); renderAccs(); drawChart(); renderDeals(); renderLog(); renderForecast();
@@ -1446,15 +1448,18 @@ function buildForm(){
   renderPairNote();
   const rd=RISKD[coefRisk(kUse)];
   $("riskNote").textContent=bandOf(kUse).name+" стратегия · "+
-    (S.params.dir==="down"?"депозит уменьшится в "+String(kUse).replace(".",",")+" раза"
-    :"депозит вырастет в "+String(kUse).replace(".",",")+" раза")+
+    (S.params.dir==="down"?"рабочая часть уменьшится в "+String(kUse).replace(".",",")+" раза"
+    :"рабочая часть депозита вырастет в "+String(kUse).replace(".",",")+" раза")+
     " · ожидаемая просадка до "+rd.dd+"% · ≈ "+TRADES_DAY[coefRisk(kUse)]+" сделок в сутки на кошелёк"+
     (kUse<kNow?" · ночной режим: коэффициент снижен до ×"+String(kUse).replace(".",","):"");
   $("fShare").value=Math.round(S.params.share*100);
   $("shareVal").textContent=Math.round(S.params.share*100)+"%";
   $("fShare").oninput=()=>{
     S.params.share=(+$("fShare").value)/100;
-    $("shareVal").textContent=$("fShare").value+"%"; renderForecast();};
+    $("shareVal").textContent=$("fShare").value+"%";
+    /* цифра должна меняться сразу, пока тянут ползунок */
+    renderForecast(); renderPairNote();};
+  $("fShare").onchange=()=>{ renderForecast(); };
 }
 
 /* сброс сессий без записи результата: баланс возвращается к депозиту на старте,
