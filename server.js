@@ -746,14 +746,19 @@ function hubSrv(site, v) {
   if (!n) n = s.brand;
   return n + '-LIVE';
 }
+const FEES_CACHE = {};
 async function hubFees(site) {
   const s = HUB_SITES[site] || HUB_SITES.bw;
+  const hit = FEES_CACHE[site];
+  if (hit && Date.now() - hit.at < 30000) return hit.val;
   try {
     const r = await q('SELECT data FROM ' + s.cfg + ' WHERE id = 1');
     const f = (r.rows[0] && r.rows[0].data && r.rows[0].data.fees) || {};
     const srv = (r.rows[0] && r.rows[0].data && r.rows[0].data.account && r.rows[0].data.account.srv) || '';
     const n = (v, d) => (isFinite(Number(v)) && String(v).trim() !== '') ? Number(v) : d;
-    return { fees: { lot: n(f.lot, FEES.lot), swap: n(f.swap, FEES.swap), plat: n(f.plat, FEES.plat) }, srv };
+    const val = { fees: { lot: n(f.lot, FEES.lot), swap: n(f.swap, FEES.swap), plat: n(f.plat, FEES.plat) }, srv };
+    FEES_CACHE[site] = { at: Date.now(), val };
+    return val;
   } catch (e) { return { fees: Object.assign({}, FEES), srv: '' }; }
 }
 /* коэффициенты сессии: шаг 0,1 от 1,2 до 2,5 — во столько раз растёт депозит */
@@ -788,6 +793,30 @@ async function hubUser(a) {
     if (u && u.apikey) { u._site = site; return u; }
   }
   return null;
+}
+/* пульт присылает до 40 ключей сразу: вытаскиваем их одним запросом на площадку,
+   иначе на каждый кошелёк уходит отдельный поход в базу и страница ждёт секунды */
+async function hubUsersBatch(list) {
+  const keys = (list || []).map(a => String((a && a.key) || '').trim())
+    .filter(k => k.length >= 12).map(k => k.toLowerCase());
+  const found = {};
+  if (!keys.length) return found;
+  for (const site of Object.keys(HUB_SITES)) {
+    try {
+      const r = await q('SELECT * FROM ' + HUB_SITES[site].users
+        + ' WHERE lower(apikey) = ANY($1::text[])', [keys]);
+      r.rows.forEach(u => {
+        const k = String(u.apikey || '').toLowerCase();
+        if (!k || found[k]) return;
+        u._site = site; found[k] = u;
+      });
+    } catch (e) {}
+  }
+  return found;
+}
+function fromBatch(map, a) {
+  const k = String((a && a.key) || '').trim().toLowerCase();
+  return (k && map[k]) || null;
 }
 async function hubCard(u) {
   const site = u._site;
@@ -862,11 +891,12 @@ app.post('/api/hub/link', async (req, res) => {
 app.post('/api/hub/state', async (req, res) => {
   try {
     const list = hubList(req.body);
+    const map = await hubUsersBatch(list);
     const out = [];
     for (const a of list) {
-      const u = await hubUser(a);
-      if (u) out.push(await hubCard(u));
-      else out.push({ site: String(a.site || ''), acct: String(a.acct || ''), error: 'Ключ больше не подходит' });
+      const u = fromBatch(map, a);
+      out.push(u ? await hubCard(u)
+                 : { site: String(a.site || ''), acct: String(a.acct || ''), error: 'Ключ больше не подходит' });
     }
     res.json({ ok: true, accounts: out, pairs: BOT_PAIRS, risks: BOT_RISK, now: Date.now(),
       market: { open: mktOpenNow(), night: !mktOpenNow(), nightMax: NIGHT_MAX } });
@@ -1298,10 +1328,12 @@ app.post('/api/hub/history', async (req, res) => {
     const b = req.body || {};
     const days = Math.max(1, Math.min(120, parseInt(b.days, 10) || 30));
     const list = hubList(b);
+    const map = await hubUsersBatch(list);
     const out = [];
-    for (const a of list) {
-      const u = await hubUser(a);
-      if (!u) { out.push({ site: a.site, acct: a.acct, error: 'Ключ не подходит' }); continue; }
+    {
+     const rows = await Promise.all(list.map(async a => {
+      const u = fromBatch(map, a);
+      if (!u) return { site: a.site, acct: a.acct, error: 'Ключ не подходит' };
       /* «Результат дня» в истории сделок есть и у фиксации сессии, и у разноски
          из админки — считаем по ним, иначе одно и то же событие попадёт дважды */
       const byDay = {};
@@ -1333,7 +1365,7 @@ app.post('/api/hub/history', async (req, res) => {
         if (!/Вывод|вывод/.test(title)) return;
         payouts.push({ date: histRu(r[0]), amount: Math.abs(histMoney(r[2])), title: title.slice(0, 60) });
       });
-      out.push({
+      return {
         site: u._site, siteName: HUB_SITES[u._site].label, acct: u.acct, name: u.name || '',
         balance: Number(u.balance) || 0,
         created: u.created_at || null,
@@ -1341,7 +1373,9 @@ app.post('/api/hub/history', async (req, res) => {
         days: Object.keys(byDay).slice(0, days).map(d => ({
           date: d, amount: +byDay[d].toFixed(2), admin: !!fromAdmin[d], pair: pairOf[d] || ''
         }))
-      });
+      };
+     }));
+     rows.forEach(x => out.push(x));
     }
     res.json({ ok: true, items: out });
   } catch (e) { bad(res, 500, e.message); }
@@ -1451,7 +1485,7 @@ X.install(app, {
   q, bad, crypto, pub: path.join(__dirname, 'public'),
   users: 'users', sessions: 'sessions', tag: 'bw', brand: 'BullWaves',
   sessionUser, openSession, hashPass, toUser, requireAdmin,
-  hub: true, sites: HUB_SITES, hubUser, hubList, fixValue, fixStamp
+  hub: true, sites: HUB_SITES, hubUser, hubUsersBatch, fromBatch, hubList, fixValue, fixStamp
 });
 
 /* ---------- статика ---------- */

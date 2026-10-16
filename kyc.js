@@ -447,6 +447,7 @@ function install(app, ctx, helpers) {
   /* ---------- страница единого бота ---------- */
   if (!ctx.hub) return;
   const { hubUser, hubList, sites } = ctx;
+  const hubUsersBatch = ctx.hubUsersBatch, fromBatch = ctx.fromBatch;
 
   /* активен ли кошелёк: код записан и всё ещё не отозван в админке */
   async function stateOf(u) {
@@ -480,11 +481,13 @@ function install(app, ctx, helpers) {
   app.post('/api/hub/bot/state', async (req, res) => {
     try {
       const list = hubList(req.body);
-      const out = [];
-      for (const a of list) {
-        const u = await hubUser(a);
-        if (u) out.push(await stateOf(u));
-      }
+      /* ключи и верификацию собираем одной пачкой: по одному кошельку это
+         десятки походов в базу и заметная задержка на странице пульта */
+      const map = (hubUsersBatch && fromBatch) ? await hubUsersBatch(list) : null;
+      const users = await Promise.all(list.map(async a =>
+        map ? fromBatch(map, a) : await hubUser(a)));
+      const states = await Promise.all(users.map(async u => u ? await stateOf(u) : null));
+      const out = states.filter(Boolean);
       res.json({ items: out });
     } catch (e) { bad(res, 500, e.message); }
   });
