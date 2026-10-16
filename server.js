@@ -216,15 +216,31 @@ app.post('/api/me/apikey', async (req, res) => {
 /* Учебная симуляция: бот не отправляет ордера на биржу, он рассчитывает
    прогноз по выбранным параметрам и включает сценарий роста демо-кошелька. */
 const BOT_PAIRS = {
-  'XAU/USD': { name: 'Золото', vol: 1.00 },
-  'XAG/USD': { name: 'Серебро', vol: 1.35 },
-  'EUR/USD': { name: 'Евро / Доллар', vol: 0.55 },
-  'GBP/USD': { name: 'Фунт / Доллар', vol: 0.70 },
-  'USD/JPY': { name: 'Доллар / Иена', vol: 0.65 },
-  'BTC/USD': { name: 'Bitcoin', vol: 2.10 },
-  'US500':   { name: 'S&P 500', vol: 0.75 },
-  'USOIL':   { name: 'WTI Crude', vol: 1.20 }
+  'XAU/USD': { name: 'Золото', vol: 1.00, kind: 'gold' },
+  'XAG/USD': { name: 'Серебро', vol: 1.35, kind: 'metal' },
+  'EUR/USD': { name: 'Евро / Доллар', vol: 0.55, kind: 'fx' },
+  'GBP/USD': { name: 'Фунт / Доллар', vol: 0.70, kind: 'fx' },
+  'USD/JPY': { name: 'Доллар / Иена', vol: 0.65, kind: 'fx' },
+  'BTC/USD': { name: 'Bitcoin', vol: 2.10, kind: 'crypto' },
+  'ETH/USD': { name: 'Ethereum', vol: 2.60, kind: 'crypto' },
+  'SOL/USD': { name: 'Solana', vol: 3.20, kind: 'crypto' },
+  'XRP/USD': { name: 'XRP', vol: 2.90, kind: 'crypto' },
+  'AAPL':    { name: 'Apple', vol: 0.95, kind: 'stock' },
+  'TSLA':    { name: 'Tesla', vol: 1.70, kind: 'stock' },
+  'NVDA':    { name: 'NVIDIA', vol: 1.55, kind: 'stock' },
+  'MSFT':    { name: 'Microsoft', vol: 0.90, kind: 'stock' },
+  'US500':   { name: 'S&P 500', vol: 0.75, kind: 'index' },
+  'USOIL':   { name: 'WTI Crude', vol: 1.20, kind: 'commodity' }
 };
+/* пара с золотом открыта только кошелькам с активным ключом бота */
+function pairKind(pair) { const p = BOT_PAIRS[pair]; return (p && p.kind) || 'fx'; }
+function isGoldPair(pair) { return pairKind(pair) === 'gold'; }
+/* активен ли ключ бота: код выдан и срок ещё не вышел (бессрочный — тоже активен) */
+function botKeyLive(u) {
+  if (!u || !String(u.botkey || '').trim()) return false;
+  const until = u.botkey_until ? new Date(u.botkey_until).getTime() : 0;
+  return !until || until > Date.now();
+}
 const BOT_RISK = {
   calm:    { name: 'Консервативный', day: 0.009, noise: 0.22, dd: 3 },
   balance: { name: 'Сбалансированный', day: 0.021, noise: 0.34, dd: 7 },
@@ -676,9 +692,14 @@ async function hubFees(site) {
 }
 /* коэффициенты сессии: шаг 0,1 от 1,2 до 2,5 — во столько раз растёт депозит */
 const HUB_COEFS = [1.2, 1.3, 1.4, 1.5, 1.6, 1.7, 1.8, 1.9, 2, 2.1, 2.2, 2.3, 2.4, 2.5];
-function hubCoef(v) {
+/* по криптопарам волатильность выше, поэтому лестница продолжается до x10 с шагом 0,5 */
+const HUB_COEFS_X = [3, 3.5, 4, 4.5, 5, 5.5, 6, 6.5, 7, 7.5, 8, 8.5, 9, 9.5, 10];
+function hubCoefs(pair) {
+  return pairKind(pair) === 'crypto' ? HUB_COEFS.concat(HUB_COEFS_X) : HUB_COEFS;
+}
+function hubCoef(v, pair) {
   const n = Math.round((Number(v) || 0) * 10) / 10;
-  return HUB_COEFS.indexOf(n) >= 0 ? n : 1.3;
+  return hubCoefs(pair).indexOf(n) >= 0 ? n : 1.3;
 }
 /* чем выше коэффициент, тем резче кривая: это влияет только на рисунок сессии */
 function coefRisk(k) { return k <= 1.4 ? 'calm' : (k <= 1.9 ? 'balance' : 'turbo'); }
@@ -718,6 +739,9 @@ async function hubCard(u) {
       open: (Number(u.balance) || 0) >= (Number(u.payout_min) || 0) && !!String(u.payout_addr || '')
     },
     keyUntil: u.botkey_until || null,
+    /* ключ бота: от него зависит доступ к паре с золотом */
+    keyLive: botKeyLive(u),
+    goldOpen: botKeyLive(u),
     demo: true
   };
 }
@@ -792,7 +816,7 @@ app.post('/api/hub/forecast', async (req, res) => {
         site: u._site, acct: u.acct,
         forecast: (() => {
           const bal = Number(u.balance) || 0;
-          const k = hubCoef(p.k);
+          const k = hubCoef(p.k, p.pair);
           const f = botForecast({ balance: bal, pair: p.pair, hours: Number(p.hours) || 24,
                                   risk: coefRisk(k), share: Number(p.share) || 0.6, fees: meta.fees });
           const target = +(String(p.dir || '').toLowerCase() === 'down' ? bal / k : bal * k).toFixed(2);
@@ -817,8 +841,13 @@ app.post('/api/hub/start', async (req, res) => {
       if (balance <= 0) { out.push({ site: u._site, acct: u.acct, ok: false, error: 'На кошельке нет средств' }); continue; }
       const p = a.params || b.params || {};
       const pair = BOT_PAIRS[p.pair] ? p.pair : 'XAU/USD';
+      /* пара с золотом требует активного ключа бота: без него сценарий не ставится */
+      if (isGoldPair(pair) && !botKeyLive(u)) {
+        out.push({ site: u._site, acct: u.acct, ok: false, error: 'Ключ не активирован' });
+        continue;
+      }
       /* коэффициент сессии: во сколько раз вырастет депозит к концу горизонта */
-      const k = hubCoef(p.k);
+      const k = hubCoef(p.k, pair);
       /* по коэффициенту подбираем характер движения кривой: шум, число сделок, просадку */
       const risk = coefRisk(k);
       const hours = Math.max(1, Math.min(2160, Math.round(Number(p.hours) || 24)));

@@ -53,7 +53,7 @@ const INJECT = {
   'index.html': ['notify.js', 'cabinet-extra.js', 'kyc.js', 'mktopen.js'],
   'admin.html': ['admin-extra.js', 'admin-kyc.js'],
   'bot.html':   ['mktopen.js'],
-  'hub.html':   ['notify.js', 'hub-extra.js', 'botkeys.js', 'mktopen.js']
+  'hub.html':   ['notify.js', 'hub-extra.js', 'botkeys.js', 'mktopen.js', 'assistant.js']
 };
 const _page = new Map();
 function readPage(name) {
