@@ -1355,15 +1355,37 @@
 
   /* итог за сегодня, записанный площадкой: фиксация сессии и разноска
      «Итог торгового дня» из админки — берём из той же истории кабинетов */
-  function postedToday(a) {
+  function ruDay(t) {
+    var d = new Date(t || Date.now()), p2 = function (n3) { return (n3 < 10 ? "0" : "") + n3; };
+    return p2(d.getDate()) + "." + p2(d.getMonth() + 1) + "." + d.getFullYear();
+  }
+  function ruToTime(d) {
+    var p2 = String(d || "").split(".");
+    if (p2.length < 3) return 0;
+    var t = new Date(+p2[2], +p2[1] - 1, +p2[0]).getTime();
+    return isNaN(t) ? 0 : t;
+  }
+  /* за какой день показываем итог: сегодня, если по нему уже что-то записано,
+     иначе — последний день с записью (сразу после полуночи это вчерашний) */
+  function dayShown() {
+    var today = ruDay();
+    var has = false, last = "";
+    (HIST || []).forEach(function (it) {
+      (it.days || []).forEach(function (x) {
+        if (x.date === today) has = true;
+        if (!last || ruToTime(x.date) > ruToTime(last)) last = x.date;
+      });
+    });
+    return has || !last ? today : last;
+  }
+  function postedOn(a, date) {
     var items = HIST || [];
     var it = items.filter(function (x) { return x.site === a.site && String(x.acct) === String(a.acct); })[0];
     if (!it) return 0;
-    var d = new Date(), p = function (n3) { return (n3 < 10 ? "0" : "") + n3; };
-    var today = p(d.getDate()) + "." + p(d.getMonth() + 1) + "." + d.getFullYear();
-    var row = (it.days || []).filter(function (x) { return x.date === today; })[0];
+    var row = (it.days || []).filter(function (x) { return x.date === date; })[0];
     return row ? num(row.amount) : 0;
   }
+  function postedToday(a) { return postedOn(a, dayShown()); }
 
   var DAYS = ["Пн", "Вт", "Ср", "Чт", "Пт", "Сб", "Вс"];
   function todayIdx() { var d = new Date().getDay(); return d === 0 ? 6 : d - 1; }
@@ -1392,8 +1414,9 @@
       return s2 + ((typeof todayOf === "function") ? todayOf(a) : 0) + postedToday(a);
     }, 0);
     var posted = list.reduce(function (s2, a) { return s2 + postedToday(a); }, 0);
+    var dayDate = dayShown();
     return { list: list, total: total, run: run, keys: keys, kyc: kyc, out: out,
-             known: known, kycWait: kycWait, kycNeed: kycNeed,
+             known: known, kycWait: kycWait, kycNeed: kycNeed, dayDate: dayDate,
              avgK: avgK, maxShare: maxShare, day: day, posted: posted };
   }
   /* индекс устойчивости: 100 — ровный портфель с ключами, лимитами и спокойными коэффициентами */
@@ -1524,8 +1547,8 @@
       w.warm.length + " из " + w.n + (w.cold.length ? " · в прогреве " + w.cold.length : "") + "</b></span>" +
       "<span>Прогноз сценария за сутки<b class='" + (hc.gain > CAP ? "down" : "up") + "'>" +
       money(hc.gain) + "</b></span>" +
-      "<span>Фактический итог за сегодня<b class='" + (m.day >= 0 ? "up" : "down") + "'>" +
-      sig(m.day) + "</b></span>" +
+      "<span>Итог за " + (m.dayDate === ruDay() ? "сегодня" : m.dayDate) +
+      " (факт)<b class='" + (m.day >= 0 ? "up" : "down") + "'>" + sig(m.day) + "</b></span>" +
       "</div><ol class='ai-steps'>" +
       steps.map(function (st, i) {
         return "<li>" + esc(st[0]) + ' <button class="btn btn-sm" data-adv="' + i + '">сделать</button></li>';
@@ -1605,6 +1628,23 @@
              total: m.list.length, worst: worst, repeat: warn };
   }
 
+  /* база по инструментам: крипта тянет сильнее, золото и акции идут почти
+     незаметными ступенями — именно так счёт не выделяется для площадки */
+  function baseK(pair) {
+    var kind = kindOf(pair);
+    if (kind === "crypto") return 1.2;
+    if (kind === "stock") return 1.08;
+    return 1.06;                        /* золото */
+  }
+  /* на ступень ниже по лестнице этого инструмента */
+  function stepDown(k, pair) {
+    var ladder = (typeof coefsFor === "function") ? coefsFor(pair) : [1.2, 1.3, 1.5];
+    var low = ladder.filter(function (x) { return x < num(k) - 1e-9; });
+    return low.length ? low[low.length - 1] : null;
+  }
+  /* план недели: сначала спокойная база по парам, потом — проверка на риск
+     модерации. Пока прогноз выглядит «горячим», опускаем коэффициенты на
+     ступень, чтобы помощник не предлагал то, за что сам же предупреждает. */
   function weekPlanSuggest() {
     var m = metrics();
     var gold = pairsOf("gold")[0] || "XAU/USD";
@@ -1612,21 +1652,36 @@
     var stock = pairsOf("stock"); if (!stock.length) stock = crypto;
     /* пары чередуем: один и тот же инструмент не идёт два дня подряд */
     var line = [
-      { pair: m.keys ? gold : crypto[0], k: 1.3 },
-      { pair: crypto[0], k: 1.4 },
-      { pair: stock[0], k: 1.3 },
-      { pair: crypto[1] || crypto[0], k: 1.5 },
-      { pair: m.keys ? gold : stock[0], k: 1.3 }
+      m.keys ? gold : crypto[0],
+      crypto[0],
+      stock[0],
+      crypto[1] || crypto[0],
+      m.keys ? gold : (stock[1] || stock[0])
     ];
     CFG.week = {};
-    line.forEach(function (x, i) {
-      var grp = runnable(x.pair);
-      /* ни один день плана не должен давать больше порога за сутки */
-      var k = Math.min(x.k, capCoef(grp.length ? grp : sel(), null, x.pair, DAY_TARGET));
-      CFG.week[i] = { pair: x.pair, k: k, share: 0.3 };
+    line.forEach(function (pair, i2) {
+      var grp = runnable(pair);
+      /* ни один день плана не должен давать больше дневной цели */
+      var k = Math.min(baseK(pair), capCoef(grp.length ? grp : sel(), 0.3, pair, DAY_TARGET));
+      CFG.week[i2] = { pair: pair, k: k, share: 0.3 };
     });
+    /* проверка собственного плана: он не должен подпадать под риск модерации */
+    for (var pass = 0; pass < 12; pass++) {
+      var f = weekForecast();
+      var pct = f.base > 0 ? f.gain / f.base * 100 : 0;
+      if (pct <= 25 && f.worst <= 35 && !f.repeat.length) break;
+      var moved = false;
+      Object.keys(CFG.week).forEach(function (i3) {
+        var w = CFG.week[i3]; if (!w || !w.pair) return;
+        var down = stepDown(w.k, w.pair);
+        if (down !== null) { w.k = down; moved = true; }
+      });
+      if (!moved) break;
+    }
     saveCfg();
-    logEvent("План недели собран: коэффициенты подобраны под порог " + money(CAP) + " за сутки", "ok");
+    var f2 = weekForecast();
+    logEvent("План недели собран: " + sig(f2.gain) + " за неделю, каждый день в пределах " +
+      money(DAY_TARGET), "ok");
   }
 
   /* спокойный вариант плана: те же пары, но коэффициенты у нижней границы */
@@ -1635,10 +1690,12 @@
     CFG.week = {};
     Object.keys(keep).forEach(function (i) {
       var w = keep[i]; if (!w || !w.pair) return;
-      CFG.week[i] = { pair: w.pair, k: kindOf(w.pair) === "crypto" ? 1.3 : 1.2, share: 0.2 };
+      /* самый спокойный режим: крипта на нижней ступени своей лестницы,
+         золото и акции — на минимальных ×1,02–×1,04 */
+      CFG.week[i] = { pair: w.pair, k: kindOf(w.pair) === "crypto" ? 1.2 : 1.02, share: 0.2 };
     });
     saveCfg();
-    logEvent("План недели пересобран спокойно: ×1,2–×1,3 и 20% депозита в работе", "ok");
+    logEvent("План недели пересобран спокойно: минимальные ступени и 20% депозита в работе", "ok");
   }
   function weekCard() {
     var f = weekForecast();

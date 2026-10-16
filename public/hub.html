@@ -96,6 +96,7 @@ button,input,select{font:inherit;color:inherit}
 .coef-band .coef-h{display:flex;align-items:baseline;gap:8px;margin-bottom:7px;flex-wrap:wrap}
 .coef-band .coef-h b{font-size:12.5px}
 .coef-band .coef-h span{font-size:11px;color:var(--muted)}
+.coef-band.min{border-left-color:#3E7CDA}.coef-band.min .coef-h b{color:#8AB4F8}
 .coef-band.calm{border-left-color:#2BA87A}.coef-band.calm .coef-h b{color:#58C699}
 .coef-band.balance{border-left-color:#7C5CFF}.coef-band.balance .coef-h b{color:#A796FF}
 .coef-band.turbo{border-left-color:#E2B23A}.coef-band.turbo .coef-h b{color:#E8C266}
@@ -890,13 +891,17 @@ const VOL={"XAU/USD":1.00,"XAG/USD":1.35,"EUR/USD":0.55,"GBP/USD":0.70,
 const RISKD={calm:{day:0.009,dd:3},balance:{day:0.021,dd:7},turbo:{day:0.042,dd:14}};
 /* коэффициенты сессии: во столько раз вырастет депозит к концу горизонта.
    Те же значения проверяет сервер, иначе он подставит 1,3. */
+/* самые спокойные ступени: на них счёт растёт почти незаметно — такие сценарии
+   площадки не разбирают. По золоту и акциям обычно работают именно ими. */
+const COEFS_MIN=[1.02,1.04,1.06,1.08,1.1,1.15];
 const COEFS=[1.2,1.3,1.4,1.5,1.6,1.7,1.8,1.9,2,2.1,2.2,2.3,2.4,2.5];
 /* по криптопарам волатильность выше, поэтому лестница идёт дальше — до ×10 с шагом 0,5 */
 const COEFS_X=[3,3.5,4,4.5,5,5.5,6,6.5,7,7.5,8,8.5,9,9.5,10];
 const pairKind=p=>((S.pairs||{})[p]||{}).kind||"fx";
 const isGold=p=>pairKind(p)==="gold";
-const coefsFor=p=>pairKind(p)==="crypto"?COEFS.concat(COEFS_X):COEFS;
-const coefOf=(v,p)=>{ const n=Math.round((Number(v)||0)*10)/10;
+const coefsFor=p=>pairKind(p)==="crypto"
+  ?COEFS_MIN.concat(COEFS,COEFS_X):COEFS_MIN.concat(COEFS);
+const coefOf=(v,p)=>{ const n=Math.round((Number(v)||0)*100)/100;
   return coefsFor(p).indexOf(n)>=0?n:1.3; };
 /* крипта торгуется круглосуточно, остальные инструменты — в часы биржи.
    Пока биржа закрыта, по крипте включается ночной режим риска: коэффициент
@@ -914,6 +919,7 @@ const coefRisk=k=>k<=1.4?"calm":(k<=1.9?"balance":"turbo");
 const coefTxt=k=>"×"+String(k).replace(".",",");
 /* полосы коэффициентов: по ним страница подписывает стратегию и рисует просадку */
 const COEF_BANDS=[
+  {name:"Минимальный риск",cls:"min",  from:1.02,to:1.15,note:"почти незаметный рост · просадка до 1%"},
   {name:"Консервативная",cls:"calm",   from:1.2, to:1.4, note:"ровная кривая · просадка до 3%"},
   {name:"Умеренная",     cls:"balance",from:1.5, to:1.9, note:"баланс дохода и риска · до 7%"},
   {name:"Агрессивная",   cls:"turbo",  from:2,   to:2.5, note:"высокий доход · до 14%"},
@@ -986,7 +992,7 @@ function renderKpis(){
     kpi("#7C5CFF",KPI_IC.wallet,"Суммарный капитал",usd(bal),"",
         (bw+nx)+" кошельков · BullWaves "+bw+" · FxPRO "+nx)+
     kpi("#2196B0",KPI_IC.day,"Доход за торговые сутки",sig(day),day>=0?"up":"down",
-        "сессии и итог дня из админки, все счета")+
+        (dayShown()===ruToday()?"за сегодня":"за "+dayShown())+" · сессии и итог дня, обе площадки")+
     kpi("#2BA87A",KPI_IC.chart,"Результат сессий",sig(pl),pl>=0?"up":"down",
         "от старта текущих сценариев")+
     kpi("#BE8716",KPI_IC.bolt,"Подключённых аккаунтов",String(bw+nx),"",
@@ -1484,10 +1490,26 @@ function ruToday(){
   const d=new Date(), p=n=>(n<10?"0":"")+n;
   return p(d.getDate())+"."+p(d.getMonth()+1)+"."+d.getFullYear();
 }
+/* за какой день показываем итог: сегодня, если по нему уже есть записи, иначе —
+   последний день с записью. Сразу после полуночи это вчерашний торговый день,
+   и плитка показывает его результат, а не ноль. */
+function ruToTime(d){
+  const p=String(d||"").split("."); if(p.length<3) return 0;
+  const t=new Date(+p[2],+p[1]-1,+p[0]).getTime();
+  return isNaN(t)?0:t;
+}
+function dayShown(){
+  const today=ruToday(); let has=false,last="";
+  (S.hist||[]).forEach(it=>(it.days||[]).forEach(x=>{
+    if(x.date===today) has=true;
+    if(!last||ruToTime(x.date)>ruToTime(last)) last=x.date;
+  }));
+  return (has||!last)?today:last;
+}
 function dayPosted(a){
   const it=(S.hist||[]).filter(x=>x.site===a.site&&String(x.acct)===String(a.acct))[0];
   if(!it) return 0;
-  const row=(it.days||[]).filter(x=>x.date===ruToday())[0];
+  const row=(it.days||[]).filter(x=>x.date===dayShown())[0];
   return row?Number(row.amount)||0:0;
 }
 async function pullHist(){
