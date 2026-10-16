@@ -873,7 +873,7 @@ function logOf(a,limit){
 }
 
 /* ============ состояние ============ */
-const S={creds:[],accounts:[],pairs:{},risks:{},sel:new Set(),open:new Set(),
+const S={creds:[],accounts:[],pairs:{},risks:{},sel:new Set(),open:new Set(),loading:false,
   params:{pair:"XAU/USD",hours:24,k:1.3,share:0.6,dir:"up"},per:{}};
 const keyOf=a=>a.site+":"+a.acct;
 function loadCreds(){
@@ -1020,9 +1020,48 @@ function outTxt(a){
   return min>0 ? ("открыт от "+usd(min)) : "открыт";
 }
 
-function renderAccs(){
+/* подпись карточек: всё, от чего зависит разметка, но без живых цифр.
+   Пока подпись не изменилась, карточки не пересобираются — иначе при 39
+   кошельках DOM переписывался каждую секунду и подсветка строк «залипала». */
+function accsSig(){
+  return S.accounts.map(a=>{
+    const k=keyOf(a);
+    if(a.error) return k+"|err";
+    const w=winOf(a), p=paramsFor(a);
+    return [k,S.sel.has(k)?1:0,S.open.has(k)?1:0,w?1:0,w?(w.d.pair||""):"",w?w.d.hours:"",
+      p.pair,p.k,p.hours,p.share,p.dir||"up",((a.dyn||{}).fixDaily!==false)?1:0,
+      outTxt(a),(((a.dyn||{}).fix||{}).last||"")].join("~");
+  }).join("|");
+}
+/* обновление только живых цифр: баланс, итог за сутки, прогресс и остаток времени */
+function tickAccs(){
+  const box=$("accs"); if(!box) return;
+  S.accounts.forEach(a=>{
+    if(a.error) return;
+    const el=box.querySelector('.acc[data-k="'+keyOf(a)+'"]'); if(!el) return;
+    const w=winOf(a), cur=valOf(a), day=todayOf(a);
+    const from=w?(Number(a.balance)||0):cur, pl=cur-from, pr=w?progOf(a):0;
+    const q=n=>el.querySelector('[data-live="'+n+'"]');
+    const cv=q("cur"); if(cv) cv.textContent=usd(cur);
+    const dv=q("day"); if(dv){ dv.textContent="за сутки "+sig(day); dv.className=(day>=0?"up":"down"); }
+    const pv=q("pl"); if(pv){ pv.textContent=sig(pl); pv.className=(pl>=0?"up":"down"); }
+    const gv=q("prog"); if(gv) gv.textContent=w?((pr*100<10?(pr*100).toFixed(1):Math.round(pr*100))+"%"):"—";
+    const bv=q("bar"); if(bv) bv.style.width=(pr*100).toFixed(1)+"%";
+    const lv=q("left"); if(lv){
+      lv.textContent=w?(w.en>Date.now()?" · осталось "+fmtLeft(w.en-Date.now()):" · сессия завершена"):"";
+    }
+  });
+}
+function renderAccs(force){
   const box=$("accs");
-  if(!S.accounts.length){ box.innerHTML='<p class="muted" style="font-size:13.5px">Кошельки не подключены.</p>'; return; }
+  if(!S.accounts.length){
+    box.innerHTML='<p class="muted" style="font-size:13.5px">'+
+      (S.loading?'Загружаю кошельки…':(S.creds.length?'Не удалось получить данные площадки — пробую ещё раз.':'Кошельки не подключены.'))+'</p>';
+    box.__sig=""; return;
+  }
+  const sg=accsSig();
+  if(!force&&box.__sig===sg){ tickAccs(); return; }
+  box.__sig=sg;
   box.innerHTML=S.accounts.map(a=>{
     const k=keyOf(a);
     if(a.error) return '<div class="acc"><div class="acc-top"><div class="acc-chk"></div>'+
@@ -1034,19 +1073,20 @@ function renderAccs(){
       '<div class="acc-top" data-tog="'+k+'">'+
         '<div class="acc-chk" data-chk="'+k+'">✓</div>'+
         '<div class="acc-name"><b>#'+a.acct+' '+siteBadge(a.site)+' <span class="badge demo">Live</span></b>'+
-          '<small>'+(a.name||"Клиент")+' · сервер '+a.srv+(w?' · сессия '+(w.d.pair||"")+(w.en>Date.now()?' · осталось '+fmtLeft(w.en-Date.now()):' · сессия завершена'):' · сессия не запущена')+'</small></div>'+
-        '<div class="acc-fig"><b class="num">'+usd(cur)+'</b>'+
-          '<span class="'+(day>=0?"up":"down")+'">за сутки '+sig(day)+'</span></div>'+
+          '<small>'+(a.name||"Клиент")+' · сервер '+a.srv+(w?' · сессия '+(w.d.pair||""):' · сессия не запущена')+
+            '<span data-live="left">'+(w?(w.en>Date.now()?' · осталось '+fmtLeft(w.en-Date.now()):' · сессия завершена'):'')+'</span></small></div>'+
+        '<div class="acc-fig"><b class="num" data-live="cur">'+usd(cur)+'</b>'+
+          '<span data-live="day" class="'+(day>=0?"up":"down")+'">за сутки '+sig(day)+'</span></div>'+
       '</div>'+
       '<div class="acc-body">'+
         '<div class="acc-row">'+
-          '<div><small>Результат сессии</small><b class="'+(pl>=0?"up":"down")+'">'+sig(pl)+'</b></div>'+
-          '<div><small>Выполнено плана</small><b>'+(w?(pr*100<10?(pr*100).toFixed(1):Math.round(pr*100))+"%":"—")+'</b></div>'+
+          '<div><small>Результат сессии</small><b data-live="pl" class="'+(pl>=0?"up":"down")+'">'+sig(pl)+'</b></div>'+
+          '<div><small>Выполнено плана</small><b data-live="prog">'+(w?(pr*100<10?(pr*100).toFixed(1):Math.round(pr*100))+"%":"—")+'</b></div>'+
           '<div><small>Инструмент</small><b>'+(w?(w.d.pair||"—"):"—")+'</b></div>'+
           '<div><small>Горизонт</small><b>'+(w?w.d.hours+" ч":"—")+'</b></div>'+
           '<div><small>Вывод дохода</small><b class="'+(outOk(a)?"up":"down")+'">'+outTxt(a)+'</b></div>'+
         '</div>'+
-        (w?'<div class="bar"><i style="width:'+(pr*100).toFixed(1)+'%"></i></div>':'')+
+        (w?'<div class="bar"><i data-live="bar" style="width:'+(pr*100).toFixed(1)+'%"></i></div>':'')+
         '<div class="acc-row">'+
           '<div><small>Инструмент сценария</small><select data-f="pair" data-k="'+k+'">'+
             Object.keys(S.pairs).map(x=>'<option value="'+x+'"'+(x===p.pair?" selected":"")+'>'+x+'</option>').join("")+'</select></div>'+
@@ -1139,9 +1179,17 @@ function drawChart(){
     (run.length?(" · сессий в работе: "+run.length+" · до завершения "+fmtLeft(en-now))
                :" · сессии завершены, итог зафиксирован на площадке");
 }
-function renderDeals(){
+let DEALS_AT=0, DEALS_CACHE=null;
+function renderDeals(force){
+  /* журнал показывает 60 строк: считать по 60 сделок на каждый из 39 кошельков
+     каждую секунду незачем — берём понемногу с кошелька и кэшируем на 10 сек. */
+  if(!force&&DEALS_CACHE&&Date.now()-DEALS_AT<10000){ return; }
+  DEALS_AT=Date.now();
+  const live=S.accounts.filter(a=>!a.error);
+  const per=Math.max(8,Math.ceil(140/Math.max(1,live.length)));
   const all=[];
-  S.accounts.filter(a=>!a.error).forEach(a=>dealsOf(a,60).forEach(d=>all.push(d)));
+  live.forEach(a=>dealsOf(a,per).forEach(d=>all.push(d)));
+  DEALS_CACHE=1;
   all.sort((x,y)=>y.t-x.t);
   const rows=all.slice(0,60);
   /* когда биржа закрыта, новые сделки идут только по крипте — остальное на паузе */
@@ -1199,8 +1247,17 @@ function renderForecast(){
     Math.round(Math.max(0.1,Math.min(1,S.params.share))*100)+"% депозита)";
 }
 function renderAll(){
-  renderMktStop(); renderKpis(); renderAccs(); drawChart(); renderDeals(); renderLog(); renderForecast();
+  renderMktStop(); renderKpis(); renderAccs(); drawChart(); renderDeals(true); renderLog(); renderForecast();
   cashSync();
+}
+/* секундный такт: обновляем цифры и прогресс, тяжёлую отрисовку не трогаем */
+let HEAVY_AT=0;
+function renderTick(){
+  renderKpis(); renderAccs(); renderForecast();
+  if(Date.now()-HEAVY_AT>10000){
+    HEAVY_AT=Date.now();
+    drawChart(); renderDeals(); renderLog();
+  }
 }
 
 /* ============ касса: пополнение и вывод ============ */
@@ -1556,16 +1613,18 @@ function renderPairNote(){
 
 /* ============ работа с сервером ============ */
 async function refresh(){
-  if(!S.creds.length){ S.accounts=[]; renderAll(); return; }
+  if(!S.creds.length){ S.accounts=[]; S.loading=false; renderAll(); return; }
+  if(!S.accounts.length) S.loading=true;
   try{
     const j=await api("/api/hub/state",{method:"POST",body:JSON.stringify({accounts:S.creds})});
     S.accounts=j.accounts||[];
     S.pairs=j.pairs||S.pairs; S.risks=j.risks||S.risks;
     if(!S.sel.size) S.accounts.forEach(a=>{ if(!a.error) S.sel.add(keyOf(a)); });
+    S.loading=false;
     renderAll();
     /* историю итогов тянем раз в минуту: она меняется только после фиксации или разноски */
     if(!S.histAt||Date.now()-S.histAt>60000){ S.histAt=Date.now(); pullHist(); }
-  }catch(e){ toast(e.message); }
+  }catch(e){ S.loading=false; toast(e.message); }
 }
 function credsOf(keys){
   return keys.map(k=>{
@@ -1829,7 +1888,7 @@ if(S.creds.length){
 }else{
   renderLinked();
 }
-setInterval(()=>{ if(!$("desk").classList.contains("hidden")) renderAll(); },1000);
+setInterval(()=>{ if(!$("desk").classList.contains("hidden")&&!document.hidden) renderTick(); },1000);
 setInterval(()=>{ if(!$("desk").classList.contains("hidden")) refresh(); },20000);
 </script>
 </body>

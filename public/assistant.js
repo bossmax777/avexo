@@ -2388,6 +2388,9 @@
         var ae = document.activeElement;
         if (ae && box.contains(ae) && /^(INPUT|SELECT|TEXTAREA)$/.test(ae.tagName)) return;
         var made = p2[1]();
+        /* если разметка та же, DOM не трогаем: обработчики уже на месте */
+        if (box.__html === made.html) return;
+        box.__html = made.html;
         box.innerHTML = made.html;
         if (made.wire) made.wire(box);
       });
@@ -2412,10 +2415,10 @@
   if (document.readyState === "loading") document.addEventListener("DOMContentLoaded", function () { setTimeout(boot, 400); });
   else setTimeout(boot, 400);
   setInterval(boot, 1500);
-  setInterval(function () { if ($("aiPanels")) renderPanels(); }, 6000);
-  setInterval(function () { if ($("aiPanels")) pullHist().then(renderPanels); }, 60000);
+  setInterval(function () { if ($("aiPanels") && !document.hidden) renderPanels(); }, 6000);
+  setInterval(function () { if ($("aiPanels") && !document.hidden) pullHist().then(renderPanels); }, 60000);
   setInterval(function () { if ($("aiPanels")) pullPrefs(); }, 30000);
   setInterval(midnightTick, 30000);
-  setInterval(function () { if ($("aiPanels")) { guardRun(); capTick(); } }, 4000);
+  setInterval(function () { if ($("aiPanels") && !document.hidden) { guardRun(); capTick(); } }, 4000);
   setInterval(function () { if ($("aiPanels")) { autoTick(); } }, 7000);
 })();
