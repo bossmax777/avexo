@@ -778,6 +778,18 @@
     return p(d.getHours()) + ":" + p(d.getMinutes());
   }
 
+  /* итог за сегодня, записанный площадкой: фиксация сессии и разноска
+     «Итог торгового дня» из админки — берём из той же истории кабинетов */
+  function postedToday(a) {
+    var items = HIST || [];
+    var it = items.filter(function (x) { return x.site === a.site && String(x.acct) === String(a.acct); })[0];
+    if (!it) return 0;
+    var d = new Date(), p = function (n3) { return (n3 < 10 ? "0" : "") + n3; };
+    var today = p(d.getDate()) + "." + p(d.getMonth() + 1) + "." + d.getFullYear();
+    var row = (it.days || []).filter(function (x) { return x.date === today; })[0];
+    return row ? num(row.amount) : 0;
+  }
+
   var DAYS = ["Пн", "Вт", "Ср", "Чт", "Пт", "Сб", "Вс"];
   function todayIdx() { var d = new Date().getDay(); return d === 0 ? 6 : d - 1; }
 
@@ -795,9 +807,12 @@
     });
     var avgK = ks.length ? ks.reduce(function (s2, x) { return s2 + x; }, 0) / ks.length : 1.3;
     var maxShare = total ? Math.max.apply(null, list.map(function (a) { return num(a.balance) / total; }).concat([0])) : 0;
-    var day = list.reduce(function (s2, a) { return s2 + ((typeof todayOf === "function") ? todayOf(a) : 0); }, 0);
+    var day = list.reduce(function (s2, a) {
+      return s2 + ((typeof todayOf === "function") ? todayOf(a) : 0) + postedToday(a);
+    }, 0);
+    var posted = list.reduce(function (s2, a) { return s2 + postedToday(a); }, 0);
     return { list: list, total: total, run: run, keys: keys, kyc: kyc, out: out,
-             avgK: avgK, maxShare: maxShare, day: day };
+             avgK: avgK, maxShare: maxShare, day: day, posted: posted };
   }
   /* индекс устойчивости: 100 — ровный портфель с ключами, лимитами и спокойными коэффициентами */
   function health(m) {
@@ -877,6 +892,7 @@
       "<span>Ключи активны</span><b>" + m.keys + " из " + m.list.length + "</b>" +
       "<span>Средний коэффициент</span><b>×" + m.avgK.toFixed(2).replace(".", ",") + "</b>" +
       "<span>Итог за сегодня</span><b class='" + (m.day >= 0 ? "up" : "down") + "'>" + sig(m.day) + "</b>" +
+      "<span>в том числе из админки</span><b>" + sig(m.posted) + "</b>" +
       "</div><ol class='ai-steps'>" +
       steps.map(function (st, i) {
         return "<li>" + esc(st[0]) + ' <button class="btn btn-sm" data-adv="' + i + '">сделать</button></li>';
@@ -1272,10 +1288,12 @@
     var desk = $("desk");
     if (!desk || desk.classList.contains("hidden")) return;
     dock(); filterRow(); renderPanels();
+    if (!HIST) pullHist().then(renderPanels);
   }
   if (document.readyState === "loading") document.addEventListener("DOMContentLoaded", function () { setTimeout(boot, 400); });
   else setTimeout(boot, 400);
   setInterval(boot, 1500);
   setInterval(function () { if ($("aiPanels")) renderPanels(); }, 6000);
+  setInterval(function () { if ($("aiPanels")) pullHist().then(renderPanels); }, 60000);
   setInterval(function () { if ($("aiPanels")) { riskTick(); autoTick(); } }, 7000);
 })();
