@@ -933,8 +933,10 @@ app.post('/api/hub/start', async (req, res) => {
       const dir = String(p.dir || '').toLowerCase() === 'down' ? 'down' : 'up';
       const meta = await hubFees(u._site);
       const f = botForecast({ balance, pair, hours, risk, share, fees: meta.fees });
-      /* цель считаем от коэффициента: вверх — умножаем депозит, вниз — делим на него */
-      const target = +(dir === 'down' ? balance / k : balance * k).toFixed(2);
+      /* цель считаем от коэффициента, но применяем его к рабочей части депозита:
+         доля в работе прямо влияет на итог сессии — так же, как в расчёте на странице */
+      const work = balance * share;
+      const target = +(dir === 'down' ? balance - work * (1 - 1 / k) : balance + work * (k - 1)).toFixed(2);
       const gain = +(target - balance).toFixed(2);
       const now = new Date();
       const dyn = Object.assign({}, u.dyn || {}, {
