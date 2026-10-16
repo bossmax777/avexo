@@ -605,7 +605,8 @@ app.post('/api/admin/mass-day', requireAdmin, async (req, res) => {
     for (const row of r.rows) {
       const u = toUser(row);
       /* повторный запуск за ту же дату ничего не задваивает */
-      if ((u.tx || []).some(t => t && t[0] === when && String(t[1]) === MASS_TITLE)) { skipped++; continue; }
+      if ((u.tx || []).some(t => t && t[0] === when
+        && String(t[1] || '').indexOf('Итог торгового дня') === 0)) { skipped++; continue; }
       const before = Number(u.balance) || 0;
       let amt = +(before * p / 100).toFixed(2);
       if (down) amt = -Math.min(amt, before);     /* в минус, но не ниже нуля */
@@ -630,6 +631,72 @@ app.post('/api/admin/mass-day', requireAdmin, async (req, res) => {
   } catch (e) { bad(res, 500, e.message); }
 });
 
+/* ---------- фиксация итога дня сразу всем кошелькам обеих площадок ---------- */
+/* Кнопка на пульте: по каждому кошельку с запущенным сценарием берём значение,
+   до которого кривая дошла к этой минуте, записываем его как итог торгового дня
+   в кабинет клиента и фиксируем баланс. Запуск сохраняется пачкой в mass_days
+   по каждой площадке, поэтому в админке его можно отменить целиком. */
+app.post('/api/admin/fix-day-all', requireAdmin, async (req, res) => {
+  const dry = !!(req.body || {}).dry;
+  const iso = new Date().toISOString().slice(0, 10);
+  const when = massRu(iso);
+  try {
+    const result = [];
+    for (const site of Object.keys(HUB_SITES)) {
+      const table = HUB_SITES[site].users;
+      let rows = [];
+      try { rows = (await q('SELECT * FROM ' + table + ' ORDER BY id')).rows; }
+      catch (e) { result.push({ site, error: e.message, items: [] }); continue; }
+      const items = [];
+      for (const row of rows) {
+        const u = toUser(row);
+        const d = u.dyn || {};
+        if (!d.on) continue;
+        /* повторная фиксация за ту же дату ничего не задваивает */
+        if ((u.tx || []).some(t => t && t[0] === when && String(t[1] || '').indexOf('Итог торгового дня') === 0)) continue;
+        const st = new Date(d.startedAt || 0).getTime(), en = new Date(d.endsAt || 0).getTime();
+        const was = Number(u.balance) || 0;
+        let value = was;
+        if (isFinite(st) && isFinite(en) && en > st) {
+          const pr = Math.max(0, Math.min(1, (Date.now() - st) / (en - st)));
+          const from = Number(d.from) || was, to = Number(d.to) || from;
+          value = from + (to - from) * pr;
+        }
+        value = Math.max(0, +value.toFixed(2));
+        const amt = +(value - was).toFixed(2);
+        if (Math.abs(amt) < 0.01) continue;
+        const pair = d.pair || 'XAU/USD';
+        items.push({ id: u.id, acct: u.acct, name: u.name || '', amount: amt, before: was, pair });
+        if (dry) continue;
+        const sum = massSum(amt);
+        const tx = [[when, 'Итог торгового дня · ' + pair, sum, 'ok', amt >= 0 ? 'Прибыль' : 'Убыток'],
+                    ...(u.tx || [])];
+        const hist = [[when, 'Результат дня', pair, sum, 'ok'], ...(u.hist || [])];
+        const dyn = Object.assign({}, d, {
+          on: false,
+          fix: { last: when, lastVal: value },
+          bot: Object.assign({}, d.bot || {}, { on: false, stoppedAt: new Date().toISOString() })
+        });
+        await q('UPDATE ' + table + ' SET balance = $2, tx = $3::jsonb, hist = $4::jsonb, dyn = $5::jsonb'
+          + ' WHERE id = $1',
+          [u.id, value.toFixed(2), JSON.stringify(tx.slice(0, 200)), JSON.stringify(hist.slice(0, 200)),
+           JSON.stringify(dyn)]);
+      }
+      if (!dry && items.length) {
+        await q('INSERT INTO mass_days (site, day, pct, dir, items) VALUES ($1,$2,$3,$4,$5::jsonb)',
+          [site, iso, 0, items.reduce((s2, x) => s2 + x.amount, 0) >= 0 ? 'up' : 'down',
+           JSON.stringify(items)]);
+      }
+      result.push({ site, siteName: HUB_SITES[site].label, count: items.length,
+                    total: +items.reduce((s2, x) => s2 + x.amount, 0).toFixed(2),
+                    items: items.map(x => ({ acct: x.acct, name: x.name, amount: x.amount, pair: x.pair })) });
+    }
+    res.json({ ok: true, dry, date: when,
+      applied: result.reduce((s2, x) => s2 + (x.count || 0), 0),
+      total: +result.reduce((s2, x) => s2 + (x.total || 0), 0).toFixed(2), sites: result });
+  } catch (e) { bad(res, 500, e.message); }
+});
+
 app.post('/api/admin/mass-day/undo', requireAdmin, async (req, res) => {
   const id = Number((req.body || {}).batch);
   try {
@@ -646,8 +713,11 @@ app.post('/api/admin/mass-day/undo', requireAdmin, async (req, res) => {
       const u = toUser(cur.rows[0]);
       const amt = Number(it.amount) || 0;
       const sum = massSum(amt);
-      const tx = massDrop(u.tx, t => t && t[0] === when && String(t[1]) === MASS_TITLE && String(t[2]) === sum);
-      const hist = massDrop(u.hist, t => t && t[0] === when && String(t[1]) === 'Результат дня' && String(t[3]) === sum);
+      /* фиксация с пульта пишет пару в заголовок, поэтому сверяем по началу строки */
+      const tx = massDrop(u.tx, t => t && t[0] === when
+        && String(t[1] || '').indexOf('Итог торгового дня') === 0 && String(t[2]) === sum);
+      const hist = massDrop(u.hist, t => t && t[0] === when
+        && String(t[1]) === 'Результат дня' && String(t[3]) === sum);
       const bal = Math.max(0, (Number(u.balance) || 0) - amt);
       await q('UPDATE users SET balance = $2, tx = $3::jsonb, hist = $4::jsonb WHERE id = $1',
         [u.id, bal.toFixed(2), JSON.stringify(tx), JSON.stringify(hist)]);
@@ -1171,25 +1241,112 @@ app.post('/api/hub/history', async (req, res) => {
     for (const a of list) {
       const u = await hubUser(a);
       if (!u) { out.push({ site: a.site, acct: a.acct, error: 'Ключ не подходит' }); continue; }
-      const rows = [];
+      /* «Результат дня» в истории сделок есть и у фиксации сессии, и у разноски
+         из админки — считаем по ним, иначе одно и то же событие попадёт дважды */
+      const byDay = {};
+      const fromAdmin = {};
       (Array.isArray(u.hist) ? u.hist : []).forEach(r => {
         if (!Array.isArray(r) || String(r[1] || '').indexOf('Результат дня') < 0) return;
-        rows.push({ date: histRu(r[0]), pair: r[2] || '', amount: histMoney(r[3]), kind: 'session' });
+        const d = histRu(r[0]);
+        byDay[d] = (byDay[d] || 0) + histMoney(r[3]);
       });
+      /* строка в операциях кабинета помечает дату как разнесённую администратором;
+         сумму берём оттуда, только если в истории сделок записи за эту дату нет */
       (Array.isArray(u.tx) ? u.tx : []).forEach(r => {
         if (!Array.isArray(r) || String(r[1] || '').indexOf('Итог торгового дня') < 0) return;
-        rows.push({ date: histRu(r[0]), pair: 'XAU/USD', amount: histMoney(r[2]), kind: 'admin' });
+        const d = histRu(r[0]);
+        fromAdmin[d] = true;
+        if (!(d in byDay)) byDay[d] = histMoney(r[2]);
       });
-      /* на одну дату может прийтись и сессия, и разноска — складываем */
-      const byDay = {};
-      rows.forEach(r => { byDay[r.date] = (byDay[r.date] || 0) + r.amount; });
       out.push({
         site: u._site, siteName: HUB_SITES[u._site].label, acct: u.acct, name: u.name || '',
         balance: Number(u.balance) || 0,
-        days: Object.keys(byDay).slice(0, days).map(d => ({ date: d, amount: +byDay[d].toFixed(2) }))
+        days: Object.keys(byDay).slice(0, days).map(d => ({
+          date: d, amount: +byDay[d].toFixed(2), admin: !!fromAdmin[d]
+        }))
       });
     }
     res.json({ ok: true, items: out });
+  } catch (e) { bad(res, 500, e.message); }
+});
+
+/* ---------- переписка с помощником: просмотр и очистка из админки ---------- */
+/* Диалог лежит в dyn.ai.chat кошелька — так его видят все, кто подключил этот
+   кошелёк к пульту. Админ может посмотреть, сколько сообщений, и стереть их. */
+app.get('/api/admin/ai-chats', requireAdmin, async (_req, res) => {
+  try {
+    const out = [];
+    for (const site of Object.keys(HUB_SITES)) {
+      try {
+        const r = await q('SELECT id, acct, name, email, dyn FROM ' + HUB_SITES[site].users + ' ORDER BY id');
+        r.rows.forEach(row => {
+          const chat = (((row.dyn || {}).ai || {}).chat) || [];
+          out.push({
+            site, siteName: HUB_SITES[site].label, id: Number(row.id), acct: row.acct,
+            name: row.name || '', email: row.email || '',
+            messages: chat.length,
+            last: chat.length ? Number(chat[chat.length - 1].at || 0) : 0
+          });
+        });
+      } catch (e) { /* площадки может не быть в этой базе */ }
+    }
+    res.json({ ok: true, items: out });
+  } catch (e) { bad(res, 500, e.message); }
+});
+
+app.post('/api/admin/ai-chats/clear', requireAdmin, async (req, res) => {
+  const b = req.body || {};
+  const all = !!b.all;
+  const accts = (Array.isArray(b.accts) ? b.accts : []).map(String);
+  if (!all && !accts.length) return bad(res, 400, 'Выберите кошельки или отметьте «всем»');
+  try {
+    let done = 0;
+    for (const site of Object.keys(HUB_SITES)) {
+      const table = HUB_SITES[site].users;
+      let rows = [];
+      try {
+        rows = all
+          ? (await q('SELECT id, dyn FROM ' + table)).rows
+          : (await q('SELECT id, dyn FROM ' + table + ' WHERE acct = ANY($1::text[])', [accts])).rows;
+      } catch (e) { continue; }
+      for (const row of rows) {
+        const dyn = row.dyn || {};
+        const ai = dyn.ai || {};
+        if (!ai.chat || !ai.chat.length) continue;
+        const next = Object.assign({}, ai, { chat: [], chatDay: '', at: Date.now() });
+        await q('UPDATE ' + table + ' SET dyn = $2::jsonb WHERE id = $1',
+          [row.id, JSON.stringify(Object.assign({}, dyn, { ai: next }))]);
+        done++;
+      }
+    }
+    res.json({ ok: true, cleared: done });
+  } catch (e) { bad(res, 500, e.message); }
+});
+
+/* общие настройки помощника: расписание недели, лимиты риска и журнал событий.
+   Хранятся в dyn.ai каждого подключённого кошелька, поэтому любой, кто подключит
+   те же кошельки, видит тот же план и те же лимиты — а не только автор. */
+app.post('/api/hub/prefs', async (req, res) => {
+  try {
+    const b = req.body || {};
+    const list = hubList(b);
+    const incoming = (b.prefs && typeof b.prefs === 'object') ? b.prefs : null;
+    let best = null;
+    for (const a of list) {
+      const u = await hubUser(a);
+      if (!u) continue;
+      const dyn = u.dyn || {};
+      if (incoming) {
+        const next = Object.assign({}, incoming, { at: Date.now() });
+        await q('UPDATE ' + HUB_SITES[u._site].users + ' SET dyn = $2::jsonb WHERE id = $1',
+          [u.id, JSON.stringify(Object.assign({}, dyn, { ai: next }))]);
+        best = next;
+      } else {
+        const ai = dyn.ai;
+        if (ai && (!best || Number(ai.at || 0) > Number(best.at || 0))) best = ai;
+      }
+    }
+    res.json({ ok: true, prefs: best || null });
   } catch (e) { bad(res, 500, e.message); }
 });
 

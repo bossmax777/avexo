@@ -51,7 +51,7 @@ function rename(text) {
 /* HTML-файлы площадки не трогаем: нужные скрипты добавляются при отдаче страницы. */
 const INJECT = {
   'index.html': ['notify.js', 'cabinet-extra.js', 'kyc.js', 'mktopen.js'],
-  'admin.html': ['admin-extra.js', 'admin-kyc.js'],
+  'admin.html': ['admin-extra.js', 'admin-kyc.js', 'admin-ai.js'],
   'bot.html':   ['mktopen.js'],
   'hub.html':   ['notify.js', 'hub-extra.js', 'botkeys.js', 'mktopen.js', 'assistant.js']
 };
