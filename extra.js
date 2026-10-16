@@ -53,7 +53,9 @@ const INJECT = {
   'index.html': ['notify.js', 'cabinet-extra.js', 'kyc.js', 'mktopen.js'],
   'admin.html': ['admin-extra.js', 'admin-kyc.js', 'admin-ai.js'],
   'bot.html':   ['mktopen.js'],
-  'hub.html':   ['notify.js', 'hub-extra.js', 'botkeys.js', 'mktopen.js', 'assistant.js']
+  /* на пульте часы биржи настоящие: статус торгов и ночной режим риска
+     считаются по расписанию рынков, поэтому заглушка mktopen.js тут не нужна */
+  'hub.html':   ['notify.js', 'hub-extra.js', 'botkeys.js', 'assistant.js']
 };
 const _page = new Map();
 function readPage(name) {
