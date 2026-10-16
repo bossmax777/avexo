@@ -208,6 +208,7 @@ table{max-width:100%}
   padding:6px 12px;font-size:12.5px;color:var(--muted);cursor:pointer}
 .chips button.on{border-color:var(--accent);background:var(--accent-soft);color:var(--text)}
 input[type=range]{width:100%;accent-color:var(--accent)}
+.note.pair-warn{color:#F3A2A2;border-left:2px solid #E5484D;padding-left:9px}
 /* ---- касса: окно пополнения и вывода ---- */
 .cs-modal{position:fixed;inset:0;z-index:95;background:rgba(6,9,14,.72);backdrop-filter:blur(4px);
   display:flex;align-items:flex-start;justify-content:center;padding:28px 16px;overflow:auto}
@@ -346,7 +347,8 @@ input[type=range]{width:100%;accent-color:var(--accent)}
       <div class="panel">
         <div class="panel-head"><h3>Общий сценарий</h3><span class="muted" id="selMeta">—</span></div>
 
-        <div class="field"><label>Инструмент</label><select id="fPair"></select></div>
+        <div class="field"><label>Инструмент</label><select id="fPair"></select>
+          <p class="note" id="pairNote"></p></div>
 
         <div class="field"><label>Горизонт сессии</label>
           <div class="chips" id="fHours"></div>
@@ -737,9 +739,11 @@ function todayOf(a){
 
 /* ============ сделки и журнал ============ */
 const SPEC={"XAU/USD":[100,2],"XAG/USD":[5000,3],"EUR/USD":[100000,5],"GBP/USD":[100000,5],
-  "USD/JPY":[100000,3],"BTC/USD":[1,0],"US500":[10,1],"USOIL":[100,2]};
+  "USD/JPY":[100000,3],"BTC/USD":[1,0],"ETH/USD":[10,2],"SOL/USD":[100,2],"XRP/USD":[10000,4],
+  "AAPL":[100,2],"TSLA":[100,2],"NVDA":[100,2],"MSFT":[100,2],"US500":[10,1],"USOIL":[100,2]};
 const PRICE={"XAU/USD":2361.40,"XAG/USD":30.84,"EUR/USD":1.08412,"GBP/USD":1.27310,
-  "USD/JPY":157.281,"BTC/USD":67420,"US500":5284.6,"USOIL":78.64};
+  "USD/JPY":157.281,"BTC/USD":67420,"ETH/USD":3518.40,"SOL/USD":171.26,"XRP/USD":0.6184,
+  "AAPL":214.36,"TSLA":243.18,"NVDA":126.74,"MSFT":436.52,"US500":5284.6,"USOIL":78.64};
 function basePrice(sym,t){
   const base=PRICE[sym]||1;
   const s=(t||Date.now())/1000;
@@ -753,7 +757,7 @@ function dealsOf(a,limit){
   const sym=(w&&w.d.pair)||p.pair||"XAU/USD";
   const seed=((Number(String(a.acct).replace(/\D/g,""))||7)*31)%9973;
   /* частота сделок: у запущенной сессии своя, иначе берём настройку кошелька */
-  const risk=w?(w.d.risk||coefRisk(coefOf(w.d.k))):coefRisk(coefOf(p.k));
+  const risk=w?(w.d.risk||coefRisk(coefOf(w.d.k,sym))):coefRisk(coefOf(p.k,sym));
   const perDay=TRADES_DAY[risk]||TRADES_DAY.balance;
   const step=86400000/Math.max(1,perDay);
   const now=Date.now();
@@ -841,18 +845,28 @@ function paramsFor(a){ return S.per[keyOf(a)]||S.params; }
 
 /* ============ прогноз на клиенте (как на площадке) ============ */
 const VOL={"XAU/USD":1.00,"XAG/USD":1.35,"EUR/USD":0.55,"GBP/USD":0.70,
-  "USD/JPY":0.65,"BTC/USD":2.10,"US500":0.75,"USOIL":1.20};
+  "USD/JPY":0.65,"BTC/USD":2.10,"ETH/USD":2.60,"SOL/USD":3.20,"XRP/USD":2.90,
+  "AAPL":0.95,"TSLA":1.70,"NVDA":1.55,"MSFT":0.90,"US500":0.75,"USOIL":1.20};
 const RISKD={calm:{day:0.009,dd:3},balance:{day:0.021,dd:7},turbo:{day:0.042,dd:14}};
 /* коэффициенты сессии: во столько раз вырастет депозит к концу горизонта.
    Те же значения проверяет сервер, иначе он подставит 1,3. */
 const COEFS=[1.2,1.3,1.4,1.5,1.6,1.7,1.8,1.9,2,2.1,2.2,2.3,2.4,2.5];
-const coefOf=v=>{ const n=Math.round((Number(v)||0)*10)/10; return COEFS.indexOf(n)>=0?n:1.3; };
+/* по криптопарам волатильность выше, поэтому лестница идёт дальше — до ×10 с шагом 0,5 */
+const COEFS_X=[3,3.5,4,4.5,5,5.5,6,6.5,7,7.5,8,8.5,9,9.5,10];
+const pairKind=p=>((S.pairs||{})[p]||{}).kind||"fx";
+const isGold=p=>pairKind(p)==="gold";
+const coefsFor=p=>pairKind(p)==="crypto"?COEFS.concat(COEFS_X):COEFS;
+const coefOf=(v,p)=>{ const n=Math.round((Number(v)||0)*10)/10;
+  return coefsFor(p).indexOf(n)>=0?n:1.3; };
+/* ключ бота активен: от него зависит доступ к паре с золотом */
+const keyLive=a=>!!(a&&(a.keyLive||a.goldOpen));
+const goldBlocked=(a,p)=>isGold(p)&&!keyLive(a);
 /* чем выше коэффициент, тем резче кривая: от него зависят просадка и число сделок */
 const coefRisk=k=>k<=1.4?"calm":(k<=1.9?"balance":"turbo");
 const coefTxt=k=>"×"+String(k).replace(".",",");
 function forecast(balance,p,fees){
   const f=Object.assign({lot:3.5,swap:4.2,plat:1.5},fees||{});
-  const k=coefOf(p.k), risk=coefRisk(k), r=RISKD[risk];
+  const k=coefOf(p.k,p.pair), risk=coefRisk(k), r=RISKD[risk];
   const days=Math.max(p.hours,1)/24;
   const work=balance*Math.max(0.1,Math.min(1,p.share));
   const perDay=TRADES_DAY[risk];
@@ -978,7 +992,7 @@ function renderAccs(){
             '<option value="up"'+((p.dir||"up")==="up"?" selected":"")+'>В плюс</option>'+
             '<option value="down"'+(p.dir==="down"?" selected":"")+'>В минус</option></select></div>'+
           '<div><small>Коэффициент</small><select data-f="k" data-k="'+k+'">'+
-            COEFS.map(x=>'<option value="'+x+'"'+(x===coefOf(p.k)?" selected":"")+'>'+coefTxt(x)+'</option>').join("")+'</select></div>'+
+            coefsFor(p.pair).map(x=>'<option value="'+x+'"'+(x===coefOf(p.k,p.pair)?" selected":"")+'>'+coefTxt(x)+'</option>').join("")+'</select></div>'+
           '<div><small>Доля депозита</small><input class="num" data-f="share" data-k="'+k+'" type="number" min="10" max="100" step="5" value="'+Math.round(p.share*100)+'"></div>'+
         '</div>'+
         '<label class="fix-row"><input type="checkbox" data-fix="'+k+'"'+
@@ -1007,7 +1021,7 @@ function renderAccs(){
       const f=el.dataset.f;
       if(f==="share") p.share=Math.max(0.1,Math.min(1,(Number(el.value)||60)/100));
       else if(f==="hours") p.hours=Math.max(1,Math.min(2160,Math.round(Number(el.value)||24)));
-      else if(f==="k") p.k=coefOf(el.value);
+      else if(f==="k") p.k=coefOf(el.value,p.pair);
       else p[f]=el.value;
       S.per[k]=p; renderAll();
     };
@@ -1107,9 +1121,9 @@ function renderForecast(){
   $("fcGross").textContent=sig(gross);
   $("fcFee").textContent="−"+usd(fee);
   $("fcTarget").textContent=usd(target);
-  const perDay=TRADES_DAY[coefRisk(coefOf(S.params.k))];
+  const perDay=TRADES_DAY[coefRisk(coefOf(S.params.k,S.params.pair))];
   $("fcFreq").textContent="≈ "+perDay+" сделок в сутки · "+trades+" за период · цель "+
-    coefTxt(coefOf(S.params.k))+" к депозиту";
+    coefTxt(coefOf(S.params.k,S.params.pair))+" к депозиту";
 }
 function renderAll(){
   renderMktStop(); renderKpis(); renderAccs(); drawChart(); renderDeals(); renderLog(); renderForecast();
@@ -1331,7 +1345,11 @@ function buildForm(){
   $("fPair").innerHTML=Object.keys(S.pairs).map(k=>
     '<option value="'+k+'">'+k+" — "+S.pairs[k].name+'</option>').join("");
   $("fPair").value=S.params.pair;
-  $("fPair").onchange=()=>{S.params.pair=$("fPair").value;renderForecast();};
+  $("fPair").onchange=()=>{
+    S.params.pair=$("fPair").value;
+    /* у крипты своя лестница: приводим выбранный коэффициент к допустимому */
+    S.params.k=coefOf(S.params.k,S.params.pair);
+    buildForm(); renderForecast();};
   $("fHours").innerHTML=HOUR_PRESETS.map(([h,t])=>
     '<button data-h="'+h+'"'+(h===S.params.hours?' class="on"':'')+'>'+t+'</button>').join("");
   $("fHours").querySelectorAll("[data-h]").forEach(b=>b.onclick=()=>{
@@ -1346,11 +1364,12 @@ function buildForm(){
   $("dirNote").textContent=(S.params.dir==="down")
     ? ""
     : "";
-  const kNow=coefOf(S.params.k);
-  $("fCoef").innerHTML=COEFS.map(x=>
+  const kNow=coefOf(S.params.k,S.params.pair);
+  $("fCoef").innerHTML=coefsFor(S.params.pair).map(x=>
     '<button data-c="'+x+'"'+(x===kNow?' class="on"':'')+'>'+coefTxt(x)+'</button>').join("");
   $("fCoef").querySelectorAll("[data-c]").forEach(b=>b.onclick=()=>{
     S.params.k=Number(b.dataset.c); buildForm(); renderForecast();});
+  renderPairNote();
   const rd=RISKD[coefRisk(kNow)];
   $("riskNote").textContent=(S.params.dir==="down"?"Депозит уменьшится в "+String(kNow).replace(".",",")+" раза"
     :"Депозит вырастет в "+String(kNow).replace(".",",")+" раза")+
@@ -1360,6 +1379,29 @@ function buildForm(){
   $("fShare").oninput=()=>{
     S.params.share=(+$("fShare").value)/100;
     $("shareVal").textContent=$("fShare").value+"%"; renderForecast();};
+}
+
+/* кошельки без активного ключа бота: по ним пара с золотом закрыта */
+function noKeyList(){ return selected().filter(a=>!keyLive(a)); }
+function renderPairNote(){
+  const host=$("pairNote"); if(!host) return;
+  const p=S.params.pair, bad=isGold(p)?noKeyList():[];
+  if(!isGold(p)){
+    host.className="note";
+    host.textContent=pairKind(p)==="crypto"
+      ? "Криптопара: коэффициент можно поднять до ×10 — выше коэффициент, резче кривая и просадка."
+      : "";
+    return;
+  }
+  if(!bad.length){
+    host.className="note";
+    host.textContent="Пара с золотом: доступна кошелькам с активным ключом бота.";
+    return;
+  }
+  host.className="note pair-warn";
+  host.textContent="Ключ не активирован у "+bad.length+" кошельк"+(bad.length===1?"а":"ов")+
+    " ("+bad.slice(0,4).map(a=>"#"+a.acct).join(", ")+(bad.length>4?" и др.":"")+
+    ") — сценарий по паре с золотом для них не запустится.";
 }
 
 /* ============ работа с сервером ============ */
@@ -1382,8 +1424,21 @@ function credsOf(keys){
 }
 async function runKeys(keys,params){
   if(!mktOpen()){ renderMktStop(); return toast("Биржа закрыта — новые сессии не запускаются"); }
-  const list=credsOf(keys);
+  let list=credsOf(keys);
   if(!list.length) return toast("Не выбрано ни одного кошелька");
+  /* пара с золотом требует активного ключа бота — такие кошельки отсеиваем до запроса */
+  const blocked=list.filter(x=>{
+    const a=S.accounts.find(y=>y.site===x.site&&String(y.acct)===String(x.acct));
+    return goldBlocked(a,(params||x.params).pair);
+  });
+  if(blocked.length){
+    list=list.filter(x=>blocked.indexOf(x)<0);
+    const txt="Ключ не активирован: "+blocked.map(x=>"#"+x.acct).join(", ")+
+      " — по паре с золотом сценарий не запускается.";
+    if($("eRun")) $("eRun").textContent=txt;
+    toast("Ключ не активирован — пропущено кошельков: "+blocked.length);
+    if(!list.length) return;
+  }
   if(params) list.forEach(x=>x.params=params);
   const names=list.map(x=>"#"+x.acct).join(", ");
   const pp=params||list[0].params;
