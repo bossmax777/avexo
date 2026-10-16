@@ -89,7 +89,11 @@
     ".ai-filter{display:flex;gap:7px;flex-wrap:wrap;margin:0 0 12px;align-items:center}" +
     ".ai-filter button{font:inherit;font-size:12px;padding:7px 12px;border-radius:999px;cursor:pointer;" +
     "border:1px solid var(--line);background:var(--surface-2);color:var(--muted)}" +
-    ".ai-filter button.on{border-color:var(--accent);color:var(--text);background:rgba(124,92,255,.14)}";
+    ".ai-filter button.on{border-color:var(--accent);color:var(--text);background:rgba(124,92,255,.14)}" +
+    ".ai-run{margin-left:8px;font-size:10.5px;font-weight:600;padding:2px 8px;border-radius:999px;" +
+    "border:1px solid var(--line);color:var(--muted);vertical-align:middle;white-space:nowrap}" +
+    ".ai-run.on{color:#6FE0B0;border-color:#53D6A066;background:rgba(83,214,160,.12)}" +
+    ".ai-run.done{color:#E8C266;border-color:#E2B23A55;background:rgba(226,178,58,.12)}";
 
   /* ---------- окно диалога ---------- */
   function dayStamp() {
@@ -247,8 +251,9 @@
           say("Оставил в выборе " + byCount.count + " кошельк(ов) — суточный итог " +
             money(byCount.gain) + ". Остальные пусть отдохнут, так аккаунты выглядят спокойно.");
         }
-        logEvent("Предупреждение о пороге " + money(CAP) + ": " +
-          (w === "close" ? "оставлено как есть" : "сценарий снижен"), w === "close" ? "warn" : "ok");
+        logEvent("Порог " + money(CAP) + " за сутки: " +
+          (w === "close" ? "оставлено как есть" : "сценарий снижен"),
+          w === "close" ? "warn" : "ok", "risk");
         renderPanels();
         done();
       };
@@ -846,6 +851,7 @@
     if (/^(запусти|старт|включи сцена)/.test(t) || /запусти (сцена|по|сесс)/.test(t)) return doRun();
     if (/(останов|стоп|заверши)/.test(t)) return doStop();
     if (/(план на сегодня|применить план|расписани)/.test(t)) { applyToday(true); return; }
+    if (/(отмени|останов|сбрось)/.test(t) && /(все сценари|всех сценари|все сессии)/.test(t)) return stopAllFix();
     if (/(зафиксир|запиши|итог дня)/.test(t) && /(всем|обеих|двум|площадк)/.test(t)) return fixDayAll();
     if (/(зафиксир|фиксац)/.test(t) && !/когда|как|во сколько/.test(t)) return doFix();
     if (/(сценари|что даст|какой результат|прогноз)/.test(t) || /\d+\s*%/.test(t)) return doScenario(t);
@@ -912,17 +918,42 @@
 
   /* ---------- фильтр кошельков по ключу ---------- */
   var FLT = "all";
+  function working(a) { return !!(a && typeof winOf === "function" && winOf(a)); }
+  /* в карточке сразу видно, работает ли по ней сценарий */
+  function markCards() {
+    var box = $("accs"); if (!box) return;
+    box.querySelectorAll(".acc[data-k]").forEach(function (el) {
+      var a = accs().filter(function (x) { return kOf(x) === el.dataset.k; })[0];
+      if (!a) return;
+      var name = el.querySelector(".acc-name b");
+      if (!name) return;
+      var tag = name.querySelector(".ai-run");
+      if (!tag) {
+        tag = document.createElement("span");
+        tag.className = "ai-run";
+        name.appendChild(tag);
+      }
+      var run = working(a), over = (typeof overOf === "function") && overOf(a);
+      tag.className = "ai-run " + (run && !over ? "on" : (over ? "done" : "off"));
+      tag.textContent = run && !over ? "сценарий работает" : (over ? "сессия завершена" : "сценарий не запущен");
+    });
+  }
   function applyFilter() {
     var box = $("accs"); if (!box) return;
     box.querySelectorAll(".acc[data-k]").forEach(function (el) {
       var a = accs().filter(function (x) { return kOf(x) === el.dataset.k; })[0];
-      var show = FLT === "all" || (FLT === "on" ? live(a) : !live(a));
+      var show = FLT === "all" ? true
+        : (FLT === "on" ? live(a)
+        : (FLT === "off" ? !live(a)
+        : (FLT === "run" ? working(a) : !working(a))));
       el.style.display = show ? "" : "none";
     });
+    markCards();
     var cnt = $("aiFltCnt");
     if (cnt) {
-      var on = accs().filter(live).length;
-      cnt.textContent = "ключ активирован — " + on + " · не активирован — " + (accs().length - on);
+      var on = accs().filter(live).length, run = accs().filter(working).length;
+      cnt.textContent = "ключ активирован — " + on + " · не активирован — " + (accs().length - on) +
+        " · по сценарию работают — " + run;
     }
   }
   function filterRow() {
@@ -932,6 +963,8 @@
     row.className = "ai-filter"; row.id = "aiFlt";
     row.innerHTML =
       '<button data-f="all" class="on">Все кошельки</button>' +
+      '<button data-f="run">По сценарию работают</button>' +
+      '<button data-f="stop">Сценарий не запущен</button>' +
       '<button data-f="on">Ключ активирован</button>' +
       '<button data-f="off">Ключ не активирован</button>' +
       '<span id="aiFltCnt" class="note" style="margin:0 0 0 4px"></span>';
@@ -1011,8 +1044,10 @@
         renderPanels();
       }).catch(function () {});
   }
-  function logEvent(text, tone) {
-    CFG.log.unshift({ at: Date.now(), text: text, tone: tone || "info" });
+  /* kind: "risk" — события лимитов и остановок, они попадают в карточку риска;
+     всё остальное (планы, стратегии) туда не пишем, чтобы не мешалось */
+  function logEvent(text, tone, kind) {
+    CFG.log.unshift({ at: Date.now(), text: text, tone: tone || "info", kind: kind || "plan" });
     CFG.log = CFG.log.slice(0, 20); saveCfg();
   }
   function hhmm(ts) {
@@ -1097,7 +1132,7 @@
     }
     if (!CFG.risk.on) {
       out.push(["Включить контроль рисков: стоп-лосс −" + CFG.risk.day + "% в день",
-        function () { CFG.risk.on = true; saveCfg(); logEvent("Контроль рисков включён", "ok"); renderPanels(); }]);
+        function () { CFG.risk.on = true; saveCfg(); logEvent("Контроль рисков включён", "ok", "risk"); renderPanels(); }]);
     }
     if (m.maxShare > 0.35) {
       out.push(["Разложить сценарии по разным парам — сейчас " + Math.round(m.maxShare * 100) +
@@ -1437,7 +1472,7 @@
     if (!list.length) return;
     /* автозапуск никогда не выходит за порог суточного дохода */
     if (gainOf(list, num(w.k) || 1.6, num(w.share) || 0.3) > CAP) {
-      logEvent("Автозапуск придержан: план дня выше порога " + money(CAP) + " за сутки", "warn");
+      logEvent("Автозапуск придержан: план дня выше порога " + money(CAP) + " за сутки", "warn", "risk");
       say("<b>Автозапуск придержал.</b> План на сегодня даёт больше " + money(CAP) +
         " за сутки — такие сценарии площадки проверяют. Поправьте план, и я запущу.");
       AUTO_DONE = stamp;
@@ -1513,6 +1548,32 @@
     }).catch(function (e) { fill(m, "Не получилось: " + esc(e.message)); });
   }
 
+  /* отмена всех сценариев с фиксацией результата — тем же путём, что итог дня */
+  function stopAllFix() {
+    var m = busy("Смотрю, какие сценарии сейчас в работе");
+    return admPost("/api/admin/fix-day-all", { dry: true }).then(function (pre) {
+      if (!pre.applied) return fill(m, "<b>Запущенных сценариев нет.</b> Останавливать нечего.");
+      fill(m, "<b>В работе " + pre.applied + " сценари(ев), результат " + sig(pre.total) + "</b>" +
+        "<ul>" + (pre.sites || []).map(function (x) {
+          return "<li>" + esc(x.siteName || x.site) + " — " + (x.count || 0) + " кошельк(ов), " +
+            sig(x.total || 0) + "</li>";
+        }).join("") + "</ul>" +
+        "Остановлю их все и зафиксирую результат: баланс каждого кошелька встанет на достигнутом " +
+        "значении, в кабинет клиента уйдёт строка «Итог торгового дня». Отменить можно в админке.");
+      act($("aiBody").lastChild, [["Остановить и зафиксировать", function () {
+        var b2 = busy("Останавливаю сценарии");
+        admPost("/api/admin/fix-day-all", {}).then(function (j) {
+          fill(b2, "<b>Остановлено " + j.applied + " сценари(ев), зафиксировано " + sig(j.total) + "</b><br>" +
+            "Балансы сохранены, записи за " + esc(j.date) + " в кабинетах клиентов. " +
+            "Пачку можно отменить в админке площадки.");
+          logEvent("Все сценарии остановлены с фиксацией: " + j.applied + " кошельков", "warn", "risk");
+          if (typeof refresh === "function") refresh();
+          pullHist().then(renderPanels);
+        }).catch(function (e) { fill(b2, "Не получилось: " + esc(e.message)); });
+      }], ["Отмена", function () {}, true]]);
+    }).catch(function (e) { fill(m, "Не получилось: " + esc(e.message)); });
+  }
+
   /* ---------- 3. контроль рисков в реальном времени ---------- */
   var PEAK = {};
   function riskTick() {
@@ -1526,7 +1587,7 @@
       if (dd >= num(CFG.risk.dd)) {
         if (typeof stopKeys === "function") stopKeys([k]);
         delete PEAK[k];
-        logEvent("Просадка " + dd.toFixed(1) + "% на #" + a.acct + " — сценарий остановлен", "warn");
+        logEvent("Просадка " + dd.toFixed(1) + "% на #" + a.acct + " — сценарий остановлен", "warn", "risk");
         say("<b>Сработал лимит просадки.</b> #" + esc(a.acct) + " ушёл на " + dd.toFixed(1) +
           "% от максимума — сценарий остановлен, баланс зафиксирован.");
         renderPanels();
@@ -1537,12 +1598,15 @@
       var running = m.run.map(kOf);
       if (running.length) {
         if (typeof stopKeys === "function") stopKeys(running);
-        logEvent("Дневной стоп-лосс −" + CFG.risk.day + "%: остановлено сессий " + running.length, "warn");
+        logEvent("Дневной стоп-лосс −" + CFG.risk.day + "%: остановлено сессий " + running.length, "warn", "risk");
         say("<b>Дневной стоп-лосс.</b> Портфель ушёл ниже −" + CFG.risk.day +
           "% — остановил все сессии и зафиксировал балансы.");
         renderPanels();
       }
     }
+  }
+  function riskLog() {
+    return (CFG.log || []).filter(function (e) { return e.kind === "risk"; });
   }
   function riskCard() {
     var m = metrics();
@@ -1557,6 +1621,7 @@
       '<div class="ai-row">' +
       '<label class="ai-chk"><input type="checkbox" id="aiRiskOn"' + (CFG.risk.on ? " checked" : "") +
       "><span>Контроль включён</span></label>" +
+      '<button class="btn btn-sm btn-danger" id="aiStopFix">Отменить все сценарии с фиксацией</button>' +
       '<label class="ai-f"><span>Стоп-лосс за день, %</span><input class="num" id="aiRiskDay" type="number" min="1" max="50" value="' + CFG.risk.day + '"></label>' +
       '<label class="ai-f"><span>Просадка по кошельку, %</span><input class="num" id="aiRiskDd" type="number" min="1" max="50" value="' + CFG.risk.dd + '"></label>' +
       '<label class="ai-f"><span>Подтверждать вывод от, $</span><input class="num" id="aiRiskBig" type="number" min="0" step="100" value="' + CFG.risk.big + '"></label>' +
@@ -1566,12 +1631,14 @@
       " (" + (m.total ? (m.day / m.total * 100).toFixed(2) : "0.00") + "%)</b>" +
       "<span>Худшая просадка сейчас</span><b>" + (worst ? "#" + esc(worst.a.acct) + " · " + worst.dd.toFixed(1) + "%" : "—") + "</b>" +
       "<span>Под наблюдением</span><b>" + m.run.length + " сессий</b></div>" +
-      (CFG.log.length ? '<ul class="ai-log">' + CFG.log.slice(0, 6).map(function (e) {
+      (riskLog().length ? '<ul class="ai-log">' + riskLog().slice(0, 6).map(function (e) {
         return '<li class="' + esc(e.tone) + '"><span>' + hhmm(e.at) + "</span>" + esc(e.text) + "</li>";
       }).join("") + "</ul>" : '<p class="note" style="margin-top:10px">Событий пока нет — лимиты стоят, сессии в норме.</p>');
     return { html: html, wire: function (box) {
       var on = box.querySelector("#aiRiskOn");
       if (on) on.onchange = function () { CFG.risk.on = on.checked; saveCfg(); renderPanels(); };
+      var sf = box.querySelector("#aiStopFix");
+      if (sf) sf.onclick = function () { openDock(); stopAllFix(); };
       [["aiRiskDay", "day"], ["aiRiskDd", "dd"], ["aiRiskBig", "big"]].forEach(function (x) {
         var el = box.querySelector("#" + x[0]);
         if (el) el.onchange = function () { CFG.risk[x[1]] = Math.max(0, num(el.value)); saveCfg(); renderPanels(); };
@@ -1678,6 +1745,7 @@
     ["останови всё", "Останови сессии по выбранным"],
     ["зафиксируй день", "Зафиксируй итог дня"],
     ["итог дня всем площадкам", "Запиши итог дня всем кошелькам обеих площадок"],
+    ["отменить все сценарии", "Отмени все сценарии с фиксацией результата"],
     ["что с ключами", "Что с ключами и сроками?"],
     ["можно ли выводить", "Можно ли выводить средства?"],
     ["какие пары есть", "Какие пары есть?"]
