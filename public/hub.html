@@ -118,6 +118,11 @@ button,input,select{font:inherit;color:inherit}
 .kpis{display:grid;grid-template-columns:repeat(auto-fit,minmax(214px,1fr));gap:12px;margin-bottom:16px}
 /* полоса статуса мировых торгов: три рынка со своим расписанием, время — местное */
 /* выбор кошельков для сценария: список с балансами и пометкой занятых */
+/* метка рядом с инструментом: идут торги или закрыто до ближайшего открытия */
+.pair-live{display:none;margin-left:8px;font-size:10.5px;font-weight:700;letter-spacing:.06em;
+  padding:2px 8px;border-radius:999px;vertical-align:middle;text-transform:none}
+.pair-live.on{display:inline-block;color:#6FE0B0;border:1px solid #2BA87A66;background:rgba(43,168,122,.14)}
+.pair-live.off{display:inline-block;color:#F3A2A2;border:1px solid #E5484D66;background:rgba(229,72,77,.13)}
 .wpick{border:1px solid var(--line);border-radius:13px;background:var(--surface-2);overflow:hidden}
 .wpick>summary{cursor:pointer;padding:11px 13px;font-size:12.8px;list-style:none;display:flex;
   align-items:center;justify-content:space-between;gap:10px;font-weight:600}
@@ -414,7 +419,9 @@ input[type=range]{width:100%;accent-color:var(--accent)}
           </details>
           <p class="note" id="whoNote"></p></div>
 
-        <div class="field"><label>Инструмент</label><select id="fPair"></select>
+        <div class="field">
+          <label>Инструмент <span class="pair-live" id="pairLive"></span></label>
+          <select id="fPair"></select>
           <p class="note" id="pairNote"></p></div>
 
         <div class="field"><label>Горизонт сессии</label>
@@ -1155,7 +1162,7 @@ function accsSig(){
     if(a.error) return k+"|err";
     const w=winOf(a), p=paramsFor(a);
     return [k,S.sel.has(k)?1:0,S.open.has(k)?1:0,w?1:0,w?(w.d.pair||""):"",w?w.d.hours:"",
-      p.pair,p.k,p.hours,p.share,p.dir||"up",((a.dyn||{}).fixDaily!==false)?1:0,
+      p.pair,p.k,p.hours,p.share,p.dir||"up",pairOpen(p.pair)?1:0,((a.dyn||{}).fixDaily!==false)?1:0,
       outTxt(a),(((a.dyn||{}).fix||{}).last||"")].join("~");
   }).join("|");
 }
@@ -1233,7 +1240,9 @@ function renderAccs(force){
           '<span>Писать итог дня в историю кабинета — 21:00 по Китаю, по будням'+
           (((a.dyn||{}).fix||{}).last?' · последняя запись '+a.dyn.fix.last:'')+'</span></label>'+
         '<div style="display:flex;gap:8px;flex-wrap:wrap">'+
-          '<button class="btn btn-sm btn-primary acc-run" data-run="'+k+'">'+(w?"Перезапустить":"Запустить этот кошелёк")+'</button>'+
+          '<button class="btn btn-sm'+(pairOpen(p.pair)?" btn-primary":"")+' acc-run" data-run="'+k+'"'+
+            (pairOpen(p.pair)?"":' disabled title="По '+p.pair+' торги закрыты до '+pairOpenAt(p.pair)+'"')+'>'+
+            (pairOpen(p.pair)?(w?"Перезапустить":"Запустить этот кошелёк"):"Рынок закрыт")+'</button>'+
           (w?'<button class="btn btn-sm btn-danger" data-stop="'+k+'">Остановить</button>':'')+
           '<button class="btn btn-sm" data-fixnow="'+k+'">Зафиксировать день</button>'+
           '<button class="btn btn-sm" data-del="'+k+'">Отключить кошелёк</button>'+
@@ -1419,13 +1428,13 @@ function renderForecast(){
     Math.round(Math.max(0.1,Math.min(1,S.params.share))*100)+"% депозита)";
 }
 function renderAll(){
-  renderMktStop(); renderMktBar(); renderWho(); renderKpis(); renderAccs(); drawChart(); renderDeals(true); renderLog(); renderForecast();
+  renderMktStop(); renderMktBar(); renderWho(); renderPairLive(); renderKpis(); renderAccs(); drawChart(); renderDeals(true); renderLog(); renderForecast();
   cashSync();
 }
 /* секундный такт: обновляем цифры и прогресс, тяжёлую отрисовку не трогаем */
 let HEAVY_AT=0;
 function renderTick(){
-  renderMktBar(); renderWho(); renderKpis(); renderAccs(); renderForecast();
+  renderMktBar(); renderWho(); renderKpis(); renderAccs(); renderForecast(); renderPairLive();
   if(Date.now()-HEAVY_AT>10000){
     HEAVY_AT=Date.now();
     drawChart(); renderDeals(); renderLog();
@@ -1646,7 +1655,7 @@ const HOUR_PRESETS=[[24,"1 день"],[48,"2 дня"],[72,"3 дня"],[96,"4 д�
 function buildForm(){
   $("fPair").innerHTML=Object.keys(S.pairs).map(k=>
     '<option value="'+k+'">'+k+" — "+S.pairs[k].name+
-    (pairOpen(k)?"":" · пауза, вне часов биржи")+'</option>').join("");
+    (pairOpen(k)?"":" · закрыто до "+pairOpenAt(k))+'</option>').join("");
   $("fPair").value=S.params.pair;
   $("fPair").onchange=()=>{
     S.params.pair=$("fPair").value;
@@ -1680,7 +1689,7 @@ function buildForm(){
   }).join("");
   $("fCoef").querySelectorAll("[data-c]").forEach(b=>b.onclick=()=>{
     S.params.k=Number(b.dataset.c); buildForm(); renderForecast();});
-  renderPairNote();
+  renderPairNote(); renderPairLive();
   const rd=RISKD[coefRisk(kUse)];
   $("riskNote").textContent=bandOf(kUse).name+" стратегия · "+
     (S.params.dir==="down"?"рабочая часть уменьшится в "+String(kUse).replace(".",",")+" раза"
@@ -1753,13 +1762,40 @@ async function pullHist(){
 
 /* кошельки без активного ключа бота: по ним пара с золотом закрыта */
 function noKeyList(){ return selected().filter(a=>!keyLive(a)); }
+/* ближайшее открытие пары в местном времени: «04:00» или «04:00, в понедельник» */
+function pairOpenAt(p){
+  const kind=pairKind(p)==="crypto"?"crypto":(pairKind(p)==="stock"?"stock":"gold");
+  const st=mktAt(kind);
+  if(st.open||!st.until) return "—";
+  const d=new Date(st.until), hm=d.toLocaleTimeString("ru-RU",{hour:"2-digit",minute:"2-digit"});
+  return d.toDateString()===new Date().toDateString()
+    ? hm
+    : hm+", "+["вс","пн","вт","ср","чт","пт","сб"][d.getDay()];
+}
+/* метка у инструмента и кнопка запуска: на закрытом рынке запускать нечего */
+function renderPairLive(){
+  const p=S.params.pair, tag=$("pairLive"), btn=$("btnRun");
+  const open=pairOpen(p);
+  if(tag){
+    tag.className="pair-live "+(open?"on":"off");
+    tag.textContent=open?"LIVE":"закрыто до "+pairOpenAt(p);
+  }
+  if(btn){
+    btn.disabled=!open;
+    btn.textContent=open?"Запустить на выбранных":"Рынок закрыт — выберите другую пару";
+    btn.classList.toggle("btn-primary",open);
+    btn.title=open?"":"По "+p+" торги закрыты до "+pairOpenAt(p)+
+      ". Круглосуточно идёт только крипта: BTC/USD, ETH/USD, SOL/USD, XRP/USD.";
+  }
+}
 function renderPairNote(){
   const host=$("pairNote"); if(!host) return;
   const p=S.params.pair, bad=isGold(p)?noKeyList():[];
   if(!pairOpen(p)){
     host.className="note pair-warn";
-    host.textContent="Биржа закрыта: "+p+" сейчас на паузе, сценарий по нему не запустится. "+
-      "Круглосуточно торгуется только крипта — выберите BTC/USD, ETH/USD, SOL/USD или XRP/USD.";
+    host.textContent="Рынок закрыт: по "+p+" торги начнутся в "+pairOpenAt(p)+
+      ", сценарий сейчас не запустится. Круглосуточно идёт только крипта — "+
+      "выберите BTC/USD, ETH/USD, SOL/USD или XRP/USD.";
     return;
   }
   if(!isGold(p)){
@@ -2049,7 +2085,12 @@ on("btnAll",()=>{ S.accounts.filter(a=>!a.error&&!busyOf(a)).forEach(a=>S.sel.ad
 on("whoAll",e=>{ e.preventDefault(); S.accounts.filter(a=>!a.error&&!busyOf(a)).forEach(a=>S.sel.add(keyOf(a))); renderAll(); });
 on("whoNone",e=>{ e.preventDefault(); S.sel.clear(); renderAll(); });
 on("btnNone",()=>{ S.sel.clear(); renderAll(); });
-on("btnRun",()=>runKeys([...S.sel],S.params));
+on("btnRun",()=>{
+  if(!pairOpen(S.params.pair))
+    return toast("Рынок закрыт: по "+S.params.pair+" торги начнутся в "+pairOpenAt(S.params.pair)+
+      ". Выберите криптопару — она идёт круглосуточно.");
+  runKeys([...S.sel],S.params);
+});
 on("btnHalt",()=>stopKeys([...S.sel]));
 on("btnDrop",()=>dropAll());
 on("btnFix",()=>fixNow([...S.sel]));
