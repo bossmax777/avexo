@@ -116,6 +116,42 @@ button,input,select{font:inherit;color:inherit}
 
 /* ---- сводка ---- */
 .kpis{display:grid;grid-template-columns:repeat(auto-fit,minmax(214px,1fr));gap:12px;margin-bottom:16px}
+/* полоса статуса мировых торгов: три рынка со своим расписанием, время — местное */
+/* выбор кошельков для сценария: список с балансами и пометкой занятых */
+.wpick{border:1px solid var(--line);border-radius:12px;background:var(--surface-2);overflow:hidden}
+.wpick>summary{cursor:pointer;padding:10px 12px;font-size:12.8px;list-style:none;display:flex;
+  align-items:center;justify-content:space-between;gap:10px}
+.wpick>summary::-webkit-details-marker{display:none}
+.wpick>summary::after{content:"▾";color:var(--muted);font-size:12px}
+.wpick[open]>summary::after{content:"▴"}
+.wpick-act{display:flex;gap:7px;padding:0 12px 9px;flex-wrap:wrap}
+.wpick-list{max-height:260px;overflow:auto;border-top:1px solid var(--line)}
+.wp-i{display:flex;align-items:center;gap:9px;padding:8px 12px;font-size:12.3px;
+  border-bottom:1px solid rgba(255,255,255,.04);cursor:pointer}
+.wp-i:last-child{border-bottom:0}
+.wp-i:hover{background:rgba(255,255,255,.03)}
+.wp-i.busy{opacity:.55;cursor:default}
+.wp-i input{flex:none}
+.wp-i b{font-weight:600}
+.wp-i .wp-bal{margin-left:auto;font-variant-numeric:tabular-nums;color:var(--text)}
+.wp-i .wp-tag{font-size:10.5px;color:var(--muted);border:1px solid var(--line);border-radius:999px;
+  padding:1px 7px;white-space:nowrap}
+.mkt-bar{background:var(--surface);border:1px solid var(--line);border-radius:var(--radius);
+  padding:14px 17px 15px;margin-bottom:16px}
+.mkt-bar-h{display:flex;align-items:baseline;gap:10px;flex-wrap:wrap;margin-bottom:12px}
+.mkt-bar-h b{font-size:13.5px}
+.mkt-bar-h span{font-size:11.5px;color:var(--muted)}
+.mkt-cols{display:grid;grid-template-columns:repeat(auto-fit,minmax(248px,1fr));gap:11px}
+.mkt-c{border:1px solid var(--line);border-radius:13px;padding:11px 13px;background:rgba(255,255,255,.02);
+  display:flex;flex-direction:column;gap:5px}
+.mkt-c-top{display:flex;align-items:center;gap:8px}
+.mkt-c-top i{width:8px;height:8px;border-radius:50%;flex:none;background:#E5484D;box-shadow:0 0 0 3px rgba(229,72,77,.16)}
+.mkt-c.on .mkt-c-top i{background:#2BA87A;box-shadow:0 0 0 3px rgba(43,168,122,.18)}
+.mkt-c-top b{font-size:12.5px}
+.mkt-st{font-size:12.5px;font-weight:600;color:#F3A2A2}
+.mkt-c.on .mkt-st{color:#6FE0B0}
+.mkt-hrs{font-size:11.6px;color:var(--muted);line-height:1.5}
+.mkt-hrs b{color:var(--text);font-weight:600;font-variant-numeric:tabular-nums}
 /* каждая плитка со своим цветом: он задаётся переменной --k прямо в разметке
    и подхватывается полоской сверху, значком и подсветкой фона */
 .kpi{position:relative;overflow:hidden;background:var(--surface);border:1px solid var(--line);
@@ -353,12 +389,26 @@ input[type=range]{width:100%;accent-color:var(--accent)}
 
   <div class="kpis" id="kpis"></div>
 
+  <!-- статус мировых торгов: золото, акции и крипта со своим расписанием -->
+  <section class="mkt-bar" id="mktBar"></section>
+
   <div class="grid">
 
     <!-- ЛЕВО: общий сценарий -->
     <div>
       <div class="panel">
         <div class="panel-head"><h3>Общий сценарий</h3><span class="muted" id="selMeta">—</span></div>
+
+        <div class="field"><label>Кошельки сценария</label>
+          <details class="wpick" id="fWho">
+            <summary><span id="whoSum">кошельки не выбраны</span></summary>
+            <div class="wpick-act">
+              <button class="btn btn-sm" id="whoAll">Выбрать свободные</button>
+              <button class="btn btn-sm" id="whoNone">Снять выбор</button>
+            </div>
+            <div class="wpick-list" id="whoList"></div>
+          </details>
+          <p class="note" id="whoNote"></p></div>
 
         <div class="field"><label>Инструмент</label><select id="fPair"></select>
           <p class="note" id="pairNote"></p></div>
@@ -596,6 +646,52 @@ function mktOpen(ts){
   const h=d.getUTCHours()+d.getUTCMinutes()/60;
   return mktSegs(d.getUTCDay()).some(([a,b])=>h>=a&&h<b);
 }
+/* Расписания рынков в часах Нью-Йорка (биржевое время): спот-золото и валюты
+   идут круглосуточно по будням с часовым перерывом, акции США — основная сессия
+   09:30–16:00, крипта без выходных. Время показываем в часовом поясе устройства. */
+const MKT_KINDS=[
+  {k:"gold",  name:"Золото · XAU/USD", segs:dow=>mktSegs(dow),
+   note:"круглосуточно с вечера воскресенья до вечера пятницы, ежедневный перерыв 1 час"},
+  {k:"stock", name:"Акции · AAPL, TSLA, NVDA, MSFT", segs:dow=>((dow>=1&&dow<=5)?[[9.5,16]]:[]),
+   note:"основная сессия бирж США, выходные закрыты"},
+  {k:"crypto",name:"Криптовалюта · BTC, ETH, SOL, XRP", segs:()=>[[0,24]],
+   note:"торгуется круглосуточно, без выходных и перерывов"}
+];
+function mktKind(k){ return MKT_KINDS.filter(x=>x.k===k)[0]||MKT_KINDS[0]; }
+/* статус рынка: идут ли торги и когда ближайшее открытие или закрытие */
+function mktAt(kind,ts){
+  ts=ts||Date.now();
+  if(kind==="crypto") return {open:true,always:true,until:null,segs:[[0,24]]};
+  const off=mktOff(ts), W=ts+off, d=new Date(W);
+  const h=d.getUTCHours()+d.getUTCMinutes()/60;
+  const day0=Math.floor(W/86400000)*86400000;
+  const segs=mktKind(kind).segs(d.getUTCDay());
+  const cur=segs.filter(x=>h>=x[0]&&h<x[1])[0];
+  if(cur) return {open:true,until:day0+cur[1]*3600000-off,segs:segs};
+  for(let i=0;i<9;i++){
+    const dayW=day0+i*86400000;
+    for(const x of mktKind(kind).segs(new Date(dayW).getUTCDay())){
+      const t=dayW+x[0]*3600000-off;
+      if(t>ts) return {open:false,until:t,segs:segs};
+    }
+  }
+  return {open:false,until:null,segs:segs};
+}
+/* сегодняшняя сессия рынка в местном времени устройства */
+function mktHoursLocal(kind,ts){
+  ts=ts||Date.now();
+  if(kind==="crypto") return "круглосуточно, 24/7";
+  const off=mktOff(ts), W=ts+off, day0=Math.floor(W/86400000)*86400000;
+  const segs=mktKind(kind).segs(new Date(W).getUTCDay());
+  if(!segs.length) return "сегодня торгов нет — выходной";
+  const hm=t=>new Date(t).toLocaleTimeString("ru-RU",{hour:"2-digit",minute:"2-digit"});
+  return segs.map(x=>hm(day0+x[0]*3600000-off)+"–"+hm(day0+x[1]*3600000-off-1000)).join(", ");
+}
+function tzLabel(){
+  const m=-new Date().getTimezoneOffset()/60;
+  const z="GMT"+(m>=0?"+":"−")+String(Math.abs(m)).replace(".",",");
+  try{ return (Intl.DateTimeFormat().resolvedOptions().timeZone||"")+" · "+z; }catch(e){ return z; }
+}
 function mktNextOpen(ts){
   ts=ts||Date.now();
   const off=mktOff(ts); let W=ts+off;
@@ -631,6 +727,30 @@ function mktEndWall(st,need){
   }
   return t;
 }
+const DOWS=["воскресенье","понедельник","вторник","среду","четверг","пятницу","субботу"];
+function renderMktBar(){
+  const bar=$("mktBar"); if(!bar) return;
+  const hm=t=>new Date(t).toLocaleTimeString("ru-RU",{hour:"2-digit",minute:"2-digit"});
+  const cards=MKT_KINDS.map(m=>{
+    const st=mktAt(m.k);
+    let line;
+    if(st.always) line="Торги идут · круглосуточно";
+    else if(st.open) line="Торги идут · закрытие в "+hm(st.until);
+    else if(st.until){
+      const d=new Date(st.until), sameDay=d.toDateString()===new Date().toDateString();
+      line="Торги закрыты · откроются в "+hm(st.until)+
+        (sameDay?" сегодня":" в "+DOWS[d.getDay()]+", "+d.toLocaleDateString("ru-RU",{day:"numeric",month:"long"}));
+    } else line="Торги закрыты";
+    return '<div class="mkt-c'+(st.open?" on":"")+'">'+
+      '<div class="mkt-c-top"><i></i><b>'+m.name+'</b></div>'+
+      '<div class="mkt-st">'+line+'</div>'+
+      '<div class="mkt-hrs">Сегодня: <b>'+mktHoursLocal(m.k)+'</b><br>'+m.note+'</div></div>';
+  }).join("");
+  const html='<div class="mkt-bar-h"><b>Статус мировых торгов</b>'+
+    '<span>время вашего устройства · '+tzLabel()+'</span></div>'+
+    '<div class="mkt-cols">'+cards+'</div>';
+  if(bar.__html!==html){ bar.__html=html; bar.innerHTML=html; }
+}
 function renderMktStop(){
   const open=mktOpen();
   document.body.classList.toggle("is-mkt-closed",!open);
@@ -647,7 +767,7 @@ function renderMktStop(){
   $("mktStopS").textContent="Новые сессии не запускаются, сценарии на паузе на обеих площадках. "+
     "До открытия "+(hh?hh+" ч ":"")+mm+" мин.";
 }
-setInterval(renderMktStop,30000);
+setInterval(()=>{ renderMktStop(); renderMktBar(); },30000);
 
 /* ============ движок сценария (один в один с кабинетами) ============ */
 /* настоящее расписание биржи: по нему расставляются сделки в журнале.
@@ -1223,6 +1343,45 @@ function renderLog(){
     '<small>'+new Date(it.t).toLocaleString("ru-RU")+'</small></div></div>').join("")
     :'<p class="muted" style="font-size:13px">Журнал появится после запуска сессии.</p>';
 }
+/* кошелёк занят другим сценарием: пока он работает, в общий сценарий его не берём */
+function busyOf(a){ return !!winOf(a); }
+function renderWho(){
+  const box=$("whoList"); if(!box) return;
+  const list=S.accounts.filter(a=>!a.error);
+  const free=list.filter(a=>!busyOf(a));
+  const sig=list.map(a=>keyOf(a)+(S.sel.has(keyOf(a))?"1":"0")+(busyOf(a)?"b":"f")+valOf(a).toFixed(0)).join("|");
+  const sum=$("whoSum");
+  if(sum){
+    const n=selected().length;
+    sum.textContent=n?(n+" кошельк(ов) в сценарии · "+usd(selected().reduce((s2,a)=>s2+valOf(a),0)))
+      :"кошельки не выбраны";
+  }
+  const note=$("whoNote");
+  if(note){
+    const busy=list.length-free.length;
+    note.textContent=busy
+      ? busy+" кошельк(ов) уже работают в других сценариях — для нового сценария они недоступны, "+
+        "пока сессия не закончится или её не остановят."
+      : "Все подключённые кошельки свободны: можно собрать сценарий из любых.";
+  }
+  if(box.__sig===sig) return;
+  box.__sig=sig;
+  box.innerHTML=list.map(a=>{
+    const k=keyOf(a), busy=busyOf(a);
+    return '<label class="wp-i'+(busy?" busy":"")+'" data-wp="'+k+'">'+
+      '<input type="checkbox"'+(S.sel.has(k)?" checked":"")+(busy?" disabled":"")+'>'+
+      '<b>#'+a.acct+'</b> '+siteBadge(a.site)+
+      (busy?'<span class="wp-tag">в сценарии '+((a.dyn||{}).pair||"")+'</span>':'')+
+      '<span class="wp-bal">'+usd(valOf(a))+'</span></label>';
+  }).join("")||'<p class="muted" style="font-size:12.5px;padding:10px 12px">Кошельки не подключены.</p>';
+  box.querySelectorAll("[data-wp] input").forEach(el=>{
+    el.onchange=()=>{
+      const k=el.closest("[data-wp]").dataset.wp;
+      el.checked?S.sel.add(k):S.sel.delete(k);
+      renderAccs(true); renderForecast(); renderWho();
+    };
+  });
+}
 function renderForecast(){
   const sel=selected();
   $("selMeta").textContent=sel.length?sel.length+" выбрано":"кошельки не выбраны";
@@ -1249,13 +1408,13 @@ function renderForecast(){
     Math.round(Math.max(0.1,Math.min(1,S.params.share))*100)+"% депозита)";
 }
 function renderAll(){
-  renderMktStop(); renderKpis(); renderAccs(); drawChart(); renderDeals(true); renderLog(); renderForecast();
+  renderMktStop(); renderMktBar(); renderWho(); renderKpis(); renderAccs(); drawChart(); renderDeals(true); renderLog(); renderForecast();
   cashSync();
 }
 /* секундный такт: обновляем цифры и прогресс, тяжёлую отрисовку не трогаем */
 let HEAVY_AT=0;
 function renderTick(){
-  renderKpis(); renderAccs(); renderForecast();
+  renderMktBar(); renderWho(); renderKpis(); renderAccs(); renderForecast();
   if(Date.now()-HEAVY_AT>10000){
     HEAVY_AT=Date.now();
     drawChart(); renderDeals(); renderLog();
@@ -1621,7 +1780,9 @@ async function refresh(){
     const j=await api("/api/hub/state",{method:"POST",body:JSON.stringify({accounts:S.creds})});
     S.accounts=j.accounts||[];
     S.pairs=j.pairs||S.pairs; S.risks=j.risks||S.risks;
-    if(!S.sel.size) S.accounts.forEach(a=>{ if(!a.error) S.sel.add(keyOf(a)); });
+    if(!S.sel.size) S.accounts.forEach(a=>{ if(!a.error&&!busyOf(a)) S.sel.add(keyOf(a)); });
+    /* кошелёк, ушедший в работу, из выбора нового сценария убираем */
+    S.accounts.forEach(a=>{ if(!a.error&&busyOf(a)) S.sel.delete(keyOf(a)); });
     S.loading=false;
     renderAll();
     /* историю итогов тянем раз в минуту: она меняется только после фиксации или разноски */
@@ -1873,7 +2034,9 @@ regWire();
 });
 on("btnAdd",showAuth);
 on("btnOut",logoutAll);
-on("btnAll",()=>{ S.accounts.filter(a=>!a.error).forEach(a=>S.sel.add(keyOf(a))); renderAll(); });
+on("btnAll",()=>{ S.accounts.filter(a=>!a.error&&!busyOf(a)).forEach(a=>S.sel.add(keyOf(a))); renderAll(); });
+on("whoAll",e=>{ e.preventDefault(); S.accounts.filter(a=>!a.error&&!busyOf(a)).forEach(a=>S.sel.add(keyOf(a))); renderAll(); });
+on("whoNone",e=>{ e.preventDefault(); S.sel.clear(); renderAll(); });
 on("btnNone",()=>{ S.sel.clear(); renderAll(); });
 on("btnRun",()=>runKeys([...S.sel],S.params));
 on("btnHalt",()=>stopKeys([...S.sel]));

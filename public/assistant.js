@@ -282,23 +282,22 @@
              pct: Math.round(cold.length / n * 100) };
   }
   /* текст про прогрев: он нужен и в окне предупреждения, и в рекомендациях */
+  var COLD_MAX = 1.15;   /* потолок коэффициента для непрогретых счетов */
   function warmNote(list, what) {
     var w = warmInfo(list);
     var kind = what || "кошельков";
     if (!w.n) return "";
-    if (w.cold.length && w.pct >= 50) {
-      return "<b>Прогрев: " + w.cold.length + " из " + w.n + " " + kind + " ещё не прогреты</b> — " +
-        "на счёте нет " + money(WARM_SUM) + " или не прошло " + WARM_DAYS + " дней с регистрации. " +
-        "Это большинство выбранных аккаунтов: если запустить сценарий на всех сразу, по непрогретым " +
-        "счетам выйдет резкий скачок на молодом аккаунте — такие площадка с высокой вероятностью " +
-        "отправит на модерацию, а часть может заблокировать. Безопаснее работать прогретыми" +
-        (w.warm.length ? " (" + w.warm.length + " кошельк(ов))" : "") + ", остальным дать отлежаться.";
+    if (!w.cold.length) {
+      return "Прогрев: все " + kind + " отлежались и набрали объём — по ним можно держать " +
+        "коэффициент выше.";
     }
-    if (w.cold.length) {
-      return "Прогрев: " + w.cold.length + " из " + w.n + " " + kind + " ещё не прогреты — " +
-        "по ним лучше держать спокойный коэффициент, иначе аккаунт уйдёт на проверку.";
-    }
-    return "Прогрев: все " + kind + " отлежались и набрали объём — вопросов к ним не будет.";
+    return "Прогрев: " + w.cold.length + " из " + w.n + " " + kind + " ещё в прогреве — " +
+      "на счёте нет " + money(WARM_SUM) + " или не прошло " + WARM_DAYS + " дней с регистрации. " +
+      "Торгуют они так же, как остальные, но коэффициент по ним держим в минимальных ступенях " +
+      "(до ×" + String(COLD_MAX).replace(".", ",") + "): резкий рост на молодом счёте — главная " +
+      "причина проверок." + (w.warm.length
+        ? " Прогретым (" + w.warm.length + ") можно ставить выше."
+        : "");
   }
   var CAP_SEEN = "";
   function capWarn(opts) {
@@ -317,8 +316,6 @@
     var byK = capFit("k", list, k, pair);
     var byCount = capFit("count", list, k, pair);
     var wi = warmInfo(list);
-    /* отдельный вариант: оставить только прогретые кошельки и подобрать под них коэффициент */
-    var byWarm = wi.warm.length ? capFit("k", wi.warm, k, pair) : null;
     var box = document.createElement("div");
     box.className = "cap-ovl";
     box.innerHTML =
@@ -327,11 +324,12 @@
       " кошельк(ам) — это выше порога в " + money(CAP) + ", на который площадки реагируют проверкой. " +
       "Аккаунт с таким дневным результатом отправляют на модерацию, вывод замораживают до выяснения, " +
       "а при повторе — закрывают. Я такие сценарии не предлагаю и советую снизить разгон.</p>" +
-      (wi.cold.length && wi.pct >= 50
-        ? '<p class="cap-warm">Плюс к этому большинство кошельков (' + wi.cold.length + " из " + wi.n +
-          ") ещё не прогреты: нет " + money(WARM_SUM) + " на счёте или не прошло " + WARM_DAYS +
-          " дней с регистрации. Если завести в сценарий все аккаунты сразу, непрогретые с высокой " +
-          "вероятностью попадут под модерацию, а часть могут заблокировать.</p>"
+      (wi.cold.length
+        ? '<p class="cap-warm">Плюс к этому ' + wi.cold.length + " из " + wi.n +
+          " кошельков ещё в прогреве: нет " + money(WARM_SUM) + " на счёте или не прошло " +
+          WARM_DAYS + " дней с регистрации. Работать ими можно, но коэффициент по таким счетам " +
+          "лучше держать в минимальных ступенях — резкий рост на молодом аккаунте и приводит " +
+          "к проверке.</p>"
         : "") +
       '<div class="cap-opts">' +
       '<button data-cap="k">Снизить коэффициент до ×' + String(byK.k).replace(".", ",") +
@@ -342,10 +340,10 @@
           " при ×" + String(byCount.k).replace(".", ",") +
           "<span>" + money(byCount.gain) + " за сутки</span></button>"
         : "") +
-      (byWarm && wi.cold.length
-        ? '<button data-cap="warm">Работать только прогретыми — ' + byWarm.list.length +
-          " из " + wi.n + " при ×" + String(byWarm.k).replace(".", ",") +
-          "<span>" + money(byWarm.gain) + " за сутки · непрогретые отдыхают</span></button>"
+      (wi.cold.length
+        ? '<button data-cap="cold">Непрогретым — минимальные ступени (×' +
+          String(COLD_MAX).replace(".", ",") + " по " + wi.cold.length + " кошельк(ам))" +
+          "<span>все кошельки остаются в работе, рост по молодым счетам спокойный</span></button>"
         : "") +
       "</div>" +
       '<p class="cap-note">Разумный режим: ×1,2–×1,6 и часть кошельков в работе — ' +
@@ -358,9 +356,22 @@
       b.onclick = function () {
         var w = b.dataset.cap;
         if (w !== "close") {
-          var r = (w === "count") ? byCount : (w === "warm" ? byWarm : byK);
-          if (!r) r = byK;
-          capPut(r, pair, w === "warm");
+          if (w === "cold") {
+            /* кошельки из работы не выводим: молодым счетам ставим спокойный коэффициент */
+            wi.cold.forEach(function (a) {
+              S.per[kOf(a)] = Object.assign({ pair: pair, hours: 24, share: 0.6, dir: "up" },
+                (typeof paramsFor === "function") ? paramsFor(a) : {}, { k: COLD_MAX });
+            });
+            if (typeof renderAll === "function") renderAll();
+            renderPanels();
+            say("<b>Непрогретым кошелькам поставил ×" + String(COLD_MAX).replace(".", ",") + ".</b> " +
+              "В работе остаются все " + wi.n + " кошельк(ов). " + warmNote(list));
+            logEvent("Непрогретым кошелькам снижен коэффициент: " + wi.cold.length, "ok", "risk");
+            done();
+            return;
+          }
+          var r = (w === "count") ? byCount : byK;
+          capPut(r, pair);
           CAP_SEEN = "";
           say("<b>Поправил сценарий.</b> " + esc(pair) + " ×" + String(r.k).replace(".", ",") +
             (r.cut ? ", в работе " + r.list.length + " кошельк(ов) из " + list.length : "") +
@@ -454,6 +465,10 @@
         p = crypto[i % crypto.length]; k = 2.2; why = "средний депозит — крипта, умеренный риск";
       } else {
         p = crypto[(i + 1) % crypto.length]; k = 4.5; why = "небольшой депозит — крипта, высокий коэффициент";
+      }
+      /* непрогретым счетам — минимальные ступени, но из работы их не выводим */
+      if (outState(a).tone !== "warm" && k > COLD_MAX) {
+        k = COLD_MAX; why = "счёт в прогреве — коэффициент минимальный, но кошелёк работает";
       }
       /* потолок суточного дохода: выше порога помощник коэффициент не ставит */
       var top = capCoef([a], 1, p);
@@ -667,24 +682,23 @@
       if (typeof goldBlocked === "function" && goldBlocked(a, pair)) stop.push("золото без ключа");
       var note = stop.length ? stop.join(", ")
         : (warm ? (k > 1.6 ? "прогрет, но коэффициент высокий" : "прогрет, коэффициент спокойный")
-                : (k > 1.3 ? "не прогрет — коэффициент лучше снизить до ×1,3" : "не прогрет, коэффициент спокойный"));
+                : (k > COLD_MAX ? "в прогреве — коэффициент лучше снизить до ×" + String(COLD_MAX).replace(".", ",")
+                                : "в прогреве, коэффициент спокойный"));
       return { a: a, pair: pair, k: k, warm: warm, stop: stop,
                gain: num(a.balance) * (k - 1), note: note };
     });
     var ready = rows.filter(function (r) { return !r.stop.length; });
     var total = ready.reduce(function (s2, r) { return s2 + r.gain; }, 0);
     var cold = ready.filter(function (r) { return !r.warm; });
-    var hotCold = cold.filter(function (r) { return r.k > 1.3; });
+    var hotCold = cold.filter(function (r) { return r.k > COLD_MAX; });
     var over = total > CAP;
-    var safe = ready.filter(function (r) { return r.warm; });
-    var safeSum = safe.reduce(function (s2, r) { return s2 + r.gain; }, 0);
     var verdict = over
       ? "<b>Запускать в таком виде не советую.</b> Суммарный итог за сутки — " + money(total) +
         ", это выше порога " + money(CAP) + ", с которого площадки проверяют аккаунты."
       : (hotCold.length
         ? "<b>Можно запускать, но с оговоркой.</b> " + hotCold.length +
-          " непрогретых кошельк(ов) идут с коэффициентом выше ×1,3 — именно такие счета чаще всего " +
-          "уходят на модерацию. Я бы снизил по ним разгон."
+          " кошельк(ов) в прогреве идут с коэффициентом выше ×" + String(COLD_MAX).replace(".", ",") +
+          " — именно резкий рост на молодом счёте чаще всего и вызывает проверку. Я бы снизил по ним разгон."
         : "<b>Сценарий выглядит спокойно.</b> Итог за сутки " + money(total) +
           " — в пределах порога " + money(CAP) + ", коэффициенты соразмерны прогреву счетов.");
     var m = say("<b>Разбор перед запуском: " + list.length + " кошельк(ов)</b>" +
@@ -708,24 +722,15 @@
         if (typeof runKeys === "function") runKeys(ready.map(function (r) { return kOf(r.a); }));
       }]);
     }
-    if (safe.length && safe.length !== ready.length && safeSum <= CAP) {
-      btns.push(["Только прогретыми (" + safe.length + " · " + money(safeSum) + ")", function () {
-        if (typeof S !== "undefined") {
-          S.sel.clear(); safe.forEach(function (r) { S.sel.add(kOf(r.a)); });
-          if (typeof renderAll === "function") renderAll();
-        }
-        if (typeof runKeys === "function") runKeys(safe.map(function (r) { return kOf(r.a); }));
-      }, !over]);
-    }
     if (hotCold.length) {
-      btns.push(["Снизить до ×1,3 непрогретым (" + hotCold.length + ")", function () {
+      btns.push(["Снизить до ×" + String(COLD_MAX).replace(".", ",") + " непрогретым (" + hotCold.length + ")", function () {
         hotCold.forEach(function (r) {
-          S.per[kOf(r.a)] = { pair: r.pair, hours: 24, k: 1.3, share: 0.6, dir: "up" };
+          S.per[kOf(r.a)] = { pair: r.pair, hours: 24, k: COLD_MAX, share: 0.6, dir: "up" };
         });
         if (typeof renderAll === "function") renderAll();
         renderPanels();
-        say("Непрогретым кошелькам поставил ×1,3 — теперь разбор можно собрать заново " +
-          "командой «запусти по выбранным».");
+        say("Непрогретым кошелькам поставил ×" + String(COLD_MAX).replace(".", ",") +
+          " — теперь разбор можно собрать заново командой «запусти по выбранным».");
       }, true]);
     }
     if (over) {
@@ -1475,10 +1480,15 @@
     if (capPen >= 1) {
       down.push(["по прогнозу сценарий даёт " + money(gain) + " за сутки — выше порога " + money(CAP), capPen]);
     }
-    var coldRun = w.cold.filter(working).length;
-    if (coldRun) {
-      var cp = Math.min(14, coldRun * 2.5); v -= cp;
-      down.push([coldRun + " непрогретых кошельк(ов) уже в работе — именно такие уходят на модерацию", cp]);
+    /* непрогретые счета тоже торгуют — вопрос только в коэффициенте по ним */
+    var coldHot = w.cold.filter(function (a) {
+      var pp = (typeof paramsFor === "function") ? paramsFor(a) : {};
+      return capK(pp.k, pp.pair || "XAU/USD") > COLD_MAX;
+    }).length;
+    if (coldHot) {
+      var cp = Math.min(16, coldHot * 2.5); v -= cp;
+      down.push([coldHot + " непрогретых кошельк(ов) идут выше ×" + String(COLD_MAX).replace(".", ",") +
+        " — резкий рост на молодом счёте чаще всего и вызывает проверку", cp]);
     }
     if (m.total > 0 && m.day < 0) {
       var dp = 8 * Math.min(1, Math.abs(m.day) / (m.total * 0.03)); v -= dp;
@@ -1488,7 +1498,7 @@
     up = up.filter(function (x) { return x[1] >= 1; }).sort(function (a, b) { return b[1] - a[1]; });
     down = down.filter(function (x) { return x[1] >= 1; }).sort(function (a, b) { return b[1] - a[1]; });
     return { score: Math.max(5, Math.min(100, Math.round(v))), up: up, down: down,
-             warm: w, gain: gain, coldRun: coldRun };
+             warm: w, gain: gain, coldHot: coldHot };
   }
   function health(m) { return healthCalc(m).score; }
   /* приоритетные шаги советника — каждый со своей кнопкой */
@@ -1519,16 +1529,27 @@
         function () { doKyc(); }]);
     }
     var wi0 = warmInfo(sel());
-    if (wi0.cold.length && wi0.warm.length && wi0.pct >= 50) {
-      out.push(["Оставить в работе только прогретые кошельки — " + wi0.warm.length + " из " +
-        wi0.n + " выбранных",
+    /* из работы кошельки не выводим: в сценарии участвуют все, но непрогретым
+       ставим минимальные ступени — так аккаунт не выделяется для площадки */
+    var hotCold0 = wi0.cold.filter(function (a) {
+      var pp = (typeof paramsFor === "function") ? paramsFor(a) : {};
+      return capK(pp.k, pp.pair || "XAU/USD") > COLD_MAX;
+    });
+    if (hotCold0.length) {
+      out.push(["Снизить коэффициент до ×" + String(COLD_MAX).replace(".", ",") + " по " +
+        hotCold0.length + " непрогретым кошельк(ам) — остальные параметры не трогаю",
         function () {
           if (typeof S === "undefined") return;
-          S.sel.clear(); wi0.warm.forEach(function (a) { S.sel.add(kOf(a)); });
+          hotCold0.forEach(function (a) {
+            var pp = Object.assign({ pair: "XAU/USD", hours: 24, share: 0.6, dir: "up" },
+              (typeof paramsFor === "function") ? paramsFor(a) : {}, { k: COLD_MAX });
+            S.per[kOf(a)] = pp;
+          });
           if (typeof renderAll === "function") renderAll();
-          logEvent("В выборе остались прогретые кошельки: " + wi0.warm.length, "ok");
+          logEvent("Непрогретым кошелькам поставлен коэффициент ×" + COLD_MAX + ": " + hotCold0.length, "ok");
           renderPanels();
-          say("<b>Оставил прогретые кошельки.</b> " + warmNote(wi0.warm));
+          say("<b>Поставил непрогретым минимальные ступени.</b> Все кошельки остаются в работе — " +
+            "просто по молодым счетам рост теперь спокойный. " + warmNote(sel()));
         }]);
     }
     if (m.maxShare > 0.35) {
@@ -1589,7 +1610,8 @@
         ? "<ul>" + hc.down.slice(0, 4).map(function (x) {
             return "<li>" + esc(x[0]) + " <span>−" + Math.round(x[1]) + "</span></li>";
           }).join("") + "</ul>"
-        : "<p>Рисков не вижу: иксы спокойные, порог не превышен, непрогретые счета не в работе.</p>") +
+        : "<p>Рисков не вижу: иксы спокойные, порог не превышен, по непрогретым счетам " +
+          "коэффициент в минимальных ступенях.</p>") +
       "</div></div>" +
       '<p class="note" style="margin-top:9px">' + warmNote(m.list, "подключённых кошельков") +
       (sel().length !== m.list.length
@@ -1599,6 +1621,86 @@
     return { html: html, wire: function (box) {
       box.querySelectorAll("[data-adv]").forEach(function (b) {
         b.onclick = function () { steps[+b.dataset.adv][1](); };
+      });
+    } };
+  }
+
+  /* ---------- 1b. активные сценарии ----------
+     Сценариев может идти сколько угодно одновременно: 30 кошельков по золоту,
+     10 по биткоину, остальные по акциям. Группируем запущенные сессии по
+     инструменту, коэффициенту и направлению — так видно каждый сценарий
+     отдельно: сколько в нём кошельков, что уже заработано и сколько осталось. */
+  function runGroups() {
+    var g = {};
+    metrics().run.forEach(function (a) {
+      var d = (a && a.dyn) || {};
+      var key = [d.pair || "—", d.k || "", d.dir || "up", d.hours || ""].join("|");
+      if (!g[key]) {
+        g[key] = { pair: d.pair || "—", k: num(d.k) || 0, dir: d.dir || "up",
+                   hours: num(d.hours) || 24, list: [], base: 0, now: 0, ends: 0, started: 0 };
+      }
+      var it = g[key];
+      it.list.push(a);
+      it.base += num(d.from) || num(a.balance);
+      it.now += (typeof valOf === "function") ? valOf(a) : num(a.balance);
+      var en = new Date(d.endsAt || 0).getTime();
+      var st = new Date(d.startedAt || 0).getTime();
+      if (isFinite(en)) it.ends = Math.max(it.ends, en);
+      if (isFinite(st)) it.started = it.started ? Math.min(it.started, st) : st;
+    });
+    return Object.keys(g).map(function (k) { return g[k]; })
+      .sort(function (x, y) { return y.list.length - x.list.length; });
+  }
+  function leftTxt(ms) {
+    if (ms <= 0) return "горизонт вышел";
+    var h = Math.floor(ms / 3600000), m2 = Math.floor(ms % 3600000 / 60000);
+    var d = Math.floor(h / 24);
+    return d > 0 ? ("осталось " + d + " д " + (h % 24) + " ч") : ("осталось " + h + " ч " + m2 + " мин");
+  }
+  function runCard() {
+    var gs = runGroups();
+    var total = gs.reduce(function (s2, g) { return s2 + (g.now - g.base); }, 0);
+    var wal = gs.reduce(function (s2, g) { return s2 + g.list.length; }, 0);
+    var html =
+      '<div class="panel-head"><h3>Активные сценарии</h3>' +
+      '<span class="muted">' + (gs.length
+        ? gs.length + " сценари(ев) · " + wal + " кошельк(ов) в работе"
+        : "ни один сценарий не запущен") + "</span></div>";
+    if (!gs.length) {
+      html += '<p class="note">Нет активных сценариев. Соберите состав кошельков слева, выберите ' +
+        "инструмент и коэффициент — и запустите. Сценариев может идти сколько угодно одновременно: " +
+        "часть кошельков по золоту, часть по крипте, часть по акциям.</p>";
+      return { html: html, wire: function () {} };
+    }
+    html +=
+      '<table class="ai-table"><tr><th>Инструмент</th><th>Коэф.</th><th>Кошельков</th>' +
+      "<th>Депозит на старте</th><th>Сейчас</th><th>Результат</th><th>Статус</th></tr>" +
+      gs.map(function (g, i) {
+        var pl = g.now - g.base;
+        var ms = g.ends - Date.now();
+        var st = (ms > 0 ? leftTxt(ms) : "сессия завершена") +
+          (g.dir === "down" ? " · в минус" : "");
+        return "<tr><td>" + esc(g.pair) + "</td><td>×" + String(g.k).replace(".", ",") + "</td><td>" +
+          g.list.length + "</td><td>" + money(g.base) + "</td><td>" + money(g.now) + "</td><td class='" +
+          (pl >= 0 ? "up" : "down") + "'>" + sig(pl) + "</td><td>" + esc(st) + "</td></tr>";
+      }).join("") + "</table>" +
+      '<p class="note" style="margin-top:9px">Всего по запущенным сценариям: <b>' + sig(total) +
+      "</b>. Кошельки, занятые сценарием, не попадают в выбор нового — чтобы один счёт не оказался " +
+      "в двух сценариях сразу.</p>" +
+      '<div class="ai-row">' +
+      gs.map(function (g, i) {
+        return '<button class="btn btn-sm" data-rg="' + i + '">Остановить ' + esc(g.pair) +
+          " ×" + String(g.k).replace(".", ",") + " (" + g.list.length + ")</button>";
+      }).join("") + "</div>";
+    return { html: html, wire: function (box) {
+      box.querySelectorAll("[data-rg]").forEach(function (b) {
+        b.onclick = function () {
+          var g = gs[+b.dataset.rg]; if (!g) return;
+          if (typeof stopKeys !== "function") return say("Остановка доступна только на странице пульта.");
+          stopKeys(g.list.map(kOf));
+          logEvent("Остановлен сценарий " + g.pair + " ×" + g.k + " · " + g.list.length + " кошельков",
+            "warn", "risk");
+        };
       });
     } };
   }
@@ -2352,7 +2454,7 @@
     "border:1px solid var(--line);background:transparent;color:var(--muted)}";
 
   var PANELS = [
-    ["aiAdv", advCard], ["aiWeek", weekCard],
+    ["aiAdv", advCard], ["aiRun", runCard], ["aiWeek", weekCard],
     ["aiHeat", heatCard], ["aiCmd", cmdCard]
   ];
   function panelsHost() {

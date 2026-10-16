@@ -48,21 +48,8 @@
         Notify.mount(slot, { api: false });
       }
     }
-    /* кнопка отчёта под кнопкой фиксации */
-    if (!$("btnReport")) {
-      var fix = $("btnFix");
-      if (fix && fix.parentNode) {
-        var b = document.createElement("button");
-        b.className = "btn btn-full"; b.id = "btnReport";
-        b.style.marginTop = "9px";
-        b.textContent = "Отчёт за сутки в Telegram";
-        var pre = document.createElement("div");
-        pre.id = "repPre"; pre.hidden = true;
-        fix.parentNode.insertBefore(b, fix.nextSibling);
-        b.parentNode.insertBefore(pre, b.nextSibling);
-        b.onclick = function () { sendReport(); };
-      }
-    }
+    /* кнопки отчёта в Telegram на пульте нет: отчёт уходит сам вместе
+       с фиксацией итога дня */
     outButtons();
   }
 
