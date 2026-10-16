@@ -40,6 +40,8 @@
     "font-size:11.5px;font-weight:600;border:1px solid currentColor;background:rgba(255,255,255,.04)}" +
     ".bk-left i{width:7px;height:7px;border-radius:50%;background:currentColor;flex:none}" +
     ".bk-left.g{color:#2BA87A}.bk-left.y{color:#E2B23A}.bk-left.r{color:#E5484D}" +
+    ".bk-badge.gold{color:#C98A1E;border-color:#C98A1E55;background:#C98A1E14}" +
+    ".bk-badge.gold i{background:#C98A1E}.bk-badge.off i{background:#E5484D}" +
     ".bk-badge.off{border-color:#E5484D;color:#E5484D;background:rgba(229,72,77,.12)}" +
     ".bk-badge.wait{border-color:#E2B23A;color:#E2B23A;background:rgba(226,178,58,.12)}" +
     ".bk-badge.wait i{background:#E2B23A;box-shadow:0 0 0 3px rgba(226,178,58,.18)}" +
@@ -278,11 +280,13 @@
           (ms > 0 ? "осталось " + leftTxt(ms) : "срок вышел") + "</span>";
       }
       host.innerHTML = '<div class="bk-row"><span class="bk-badge"><i></i>Бот активен' +
-        (s.code ? " <s>" + esc(s.code) + "</s>" : "") + "</span>" + timer + "</div>" +
+        (s.code ? " <s>" + esc(s.code) + "</s>" : "") + "</span>" + timer +
+        '<span class="bk-badge gold"><i></i>Ключ активирован для золотой пары</span></div>' +
         '<p class="bk-note">Код принят.' +
         (ms !== null
           ? " Активация действует до " + new Date(s.until).toLocaleDateString("ru-RU") + "."
-          : " Ключ бессрочный.") + "</p>" +
+          : " Ключ бессрочный.") +
+        " Пара XAU/USD — Золото открыта для сценариев, крипта и акции доступны без ключа.</p>" +
         kycRow(s, k);
       return;
     }
@@ -291,7 +295,9 @@
     /* узел перенесён из прежней карточки — он уже собран, вернуть нужно только курсор */
     if (host.querySelector("input")) { aim(host, k); return; }
     host.innerHTML =
-      (gone ? '<div class="bk-row"><span class="bk-badge off"><i></i>Срок ключа истёк</span></div>' : "") +
+      '<div class="bk-row"><span class="bk-badge off"><i></i>' +
+      (gone ? "Срок ключа истёк" : "Ключ не активирован") + "</span>" +
+      '<span class="bk-badge off"><i></i>Золотая пара закрыта</span></div>' +
       '<div class="bk-row">' +
       '<input maxlength="19" placeholder="X7K9P-4M2QD-V8R3N" autocomplete="off" ' +
       'autocapitalize="characters" spellcheck="false" data-code="' + k + '">' +
