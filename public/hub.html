@@ -536,9 +536,15 @@ input[type=range]{width:100%;accent-color:var(--accent)}
 </div>
 
 <footer class="note" style="max-width:1180px;margin:0 auto;padding:26px 20px 34px;text-align:center">
-  Verdix AI Multi 
+  Verdix AI Multi
+  <button id="btnDrop" title="Снять все сессии без записи результата">сбросить сессии</button>
 </footer>
 
+<style>
+#btnDrop{display:block;margin:14px auto 0;background:none;border:0;padding:2px 6px;font:inherit;
+ font-size:10.5px;letter-spacing:.04em;color:rgba(255,255,255,.14);cursor:pointer;transition:color .2s}
+#btnDrop:hover{color:rgba(255,255,255,.4)}
+</style>
 <div class="toast" id="toast"></div>
 
 <script>
@@ -761,21 +767,44 @@ function basePrice(sym,t){
 }
 const TRADES_DAY={calm:9,balance:18,turbo:34};
 /* закрытые сделки кошелька: детерминированы окном сценария, сумма результатов = достигнутой прибыли */
+/* какая пара работала на кошельке в этот день: берём из разнесённых итогов
+   кабинета (там записан инструмент), иначе — пара текущей сессии или карточки */
+function pairAt(a,t){
+  const d=new Date(t),p2=n=>(n<10?"0":"")+n;
+  const key=p2(d.getDate())+"."+p2(d.getMonth()+1)+"."+d.getFullYear();
+  const it=(S.hist||[]).filter(x=>x.site===a.site&&String(x.acct)===String(a.acct))[0];
+  const row=it&&(it.days||[]).filter(x=>x.date===key)[0];
+  if(row&&row.pair) return row.pair;
+  const w=winOf(a),pp=paramsFor(a);
+  return (w&&w.d.pair)||pp.pair||"XAU/USD";
+}
+/* шаг назад по времени с учётом часов инструмента: крипта идёт круглосуточно,
+   у золота и акций сделки появляются только в торговые часы — на паузе их нет */
+function backFor(sym,t,need){
+  return allDay(sym)?t-Math.max(0,need):marketBack(t,need);
+}
 function dealsOf(a,limit){
   const cap=Math.max(1,limit||40);
   const w=winOf(a), p=paramsFor(a);
-  const sym=(w&&w.d.pair)||p.pair||"XAU/USD";
+  const nowSym=(w&&w.d.pair)||p.pair||"XAU/USD";
   const seed=((Number(String(a.acct).replace(/\D/g,""))||7)*31)%9973;
   /* частота сделок: у запущенной сессии своя, иначе берём настройку кошелька */
-  const risk=w?(w.d.risk||coefRisk(coefOf(w.d.k,sym))):coefRisk(coefOf(p.k,sym));
+  const risk=w?(w.d.risk||coefRisk(coefOf(w.d.k,nowSym))):coefRisk(coefOf(p.k,nowSym));
   const perDay=TRADES_DAY[risk]||TRADES_DAY.balance;
   const step=86400000/Math.max(1,perDay);
   const now=Date.now();
-  /* сделки идут назад от текущей минуты по настоящим часам биржи,
-     поэтому в журнале всегда свежие даты, даже когда сценарий уже остановлен */
-  const ts=[];
-  let t=marketBack(now,step*0.4);
-  for(let i=0;i<cap;i++){ ts.push(t); t=marketBack(t,step*(0.65+rnd(seed,i+11)*0.7)); }
+  /* сделки идут назад от текущей минуты: каждую относим к той паре, которая
+     работала в этот день, и соблюдаем её часы торгов */
+  const ts=[], syms=[];
+  let t=backFor(nowSym,now,step*0.4);
+  /* если инструмент сейчас на паузе, последняя сделка не свежее закрытия биржи */
+  for(let i=0;i<cap;i++){
+    const sym=pairAt(a,t);
+    /* пара этого дня могла быть закрыта в это время — отступаем к торговым часам */
+    const tt=(!allDay(sym)&&!mktOpen(t))?marketBack(t,0):t;
+    ts.push(tt); syms.push(sym);
+    t=backFor(sym,tt,step*(0.65+rnd(seed,i+11)*0.7));
+  }
   /* результат сессии распределяем по тем сделкам, что попали в её окно;
      остальные дают мелкий разброс около нуля — баланс они не меняют */
   const bal=valOf(a);
@@ -783,9 +812,10 @@ function dealsOf(a,limit){
   const inWin=w?ts.filter(x=>x>=w.st):[];
   const ws={}; let sum=0;
   inWin.forEach((x,i)=>{ const v=0.45+rnd(seed,i+120); ws[x]=v; sum+=v; });
-  const [c,dec]=SPEC[sym]||[100,2];
   const out=[];
   ts.forEach((x,i)=>{
+    const sym=syms[i];
+    const [c,dec]=SPEC[sym]||[100,2];
     const side=rnd(seed,i+40)>0.32?"buy":"sell";
     const vol=Math.max(0.01,Math.round((0.05+rnd(seed,i+60)*0.6)*100)/100);
     let pl;
@@ -868,6 +898,14 @@ const isGold=p=>pairKind(p)==="gold";
 const coefsFor=p=>pairKind(p)==="crypto"?COEFS.concat(COEFS_X):COEFS;
 const coefOf=(v,p)=>{ const n=Math.round((Number(v)||0)*10)/10;
   return coefsFor(p).indexOf(n)>=0?n:1.3; };
+/* крипта торгуется круглосуточно, остальные инструменты — в часы биржи.
+   Пока биржа закрыта, по крипте включается ночной режим риска: коэффициент
+   опускается, потому что ночью ликвидность ниже и площадки внимательнее. */
+const allDay=p=>pairKind(p)==="crypto";
+const pairOpen=p=>allDay(p)||mktOpen();
+const NIGHT_MAX=1.6;
+const nightOn=p=>allDay(p)&&!mktOpen();
+const nightCoef=(k,p)=>nightOn(p)?Math.min(k,NIGHT_MAX):k;
 /* ключ бота активен: от него зависит доступ к паре с золотом */
 const keyLive=a=>!!(a&&(a.keyLive||a.goldOpen));
 const goldBlocked=(a,p)=>isGold(p)&&!keyLive(a);
@@ -884,7 +922,7 @@ const COEF_BANDS=[
 const bandOf=k=>(COEF_BANDS.filter(b=>k>=b.from&&k<=b.to)[0]||COEF_BANDS[1]);
 function forecast(balance,p,fees){
   const f=Object.assign({lot:3.5,swap:4.2,plat:1.5},fees||{});
-  const k=coefOf(p.k,p.pair), risk=coefRisk(k), r=RISKD[risk];
+  const k=nightCoef(coefOf(p.k,p.pair),p.pair), risk=coefRisk(k), r=RISKD[risk];
   const days=Math.max(p.hours,1)/24;
   const work=balance*Math.max(0.1,Math.min(1,p.share));
   const perDay=TRADES_DAY[risk];
@@ -1099,7 +1137,12 @@ function renderDeals(){
   S.accounts.filter(a=>!a.error).forEach(a=>dealsOf(a,60).forEach(d=>all.push(d)));
   all.sort((x,y)=>y.t-x.t);
   const rows=all.slice(0,60);
-  $("dealMeta").textContent=all.length?all.length+" закрытых сделок по всем кошелькам":"—";
+  /* когда биржа закрыта, новые сделки идут только по крипте — остальное на паузе */
+  const paused=[...new Set(all.map(d=>d.sym))].filter(x=>!allDay(x)&&!mktOpen());
+  $("dealMeta").textContent=all.length
+    ?all.length+" закрытых сделок по всем кошелькам"+
+      (paused.length?" · на паузе: "+paused.join(", ")+" (вне часов биржи)":"")
+    :"—";
   $("dealBody").innerHTML=rows.length?rows.map(d=>
     '<tr><td class="num dim">'+new Date(d.t).toLocaleString("ru-RU",{day:"2-digit",month:"2-digit",hour:"2-digit",minute:"2-digit"})+'</td>'+
     '<td>#'+d.acct+' '+siteBadge(d.site)+'</td><td><b>'+d.sym+'</b></td>'+
@@ -1365,7 +1408,8 @@ function cashBuild(){
 const HOUR_PRESETS=[[24,"1 день"],[48,"2 дня"],[72,"3 дня"],[96,"4 дня"],[120,"5 дней"],[240,"10 дней"],[480,"20 дней"]];
 function buildForm(){
   $("fPair").innerHTML=Object.keys(S.pairs).map(k=>
-    '<option value="'+k+'">'+k+" — "+S.pairs[k].name+'</option>').join("");
+    '<option value="'+k+'">'+k+" — "+S.pairs[k].name+
+    (pairOpen(k)?"":" · пауза, вне часов биржи")+'</option>').join("");
   $("fPair").value=S.params.pair;
   $("fPair").onchange=()=>{
     S.params.pair=$("fPair").value;
@@ -1387,6 +1431,7 @@ function buildForm(){
     ? ""
     : "";
   const kNow=coefOf(S.params.k,S.params.pair);
+  const kUse=nightCoef(kNow,S.params.pair);
   /* коэффициенты разложены по стратегиям: так видно, где спокойный режим, а где разгон */
   $("fCoef").innerHTML=COEF_BANDS.map(bd=>{
     const list=coefsFor(S.params.pair).filter(x=>x>=bd.from&&x<=bd.to);
@@ -1399,16 +1444,33 @@ function buildForm(){
   $("fCoef").querySelectorAll("[data-c]").forEach(b=>b.onclick=()=>{
     S.params.k=Number(b.dataset.c); buildForm(); renderForecast();});
   renderPairNote();
-  const rd=RISKD[coefRisk(kNow)];
-  $("riskNote").textContent=bandOf(kNow).name+" стратегия · "+
-    (S.params.dir==="down"?"депозит уменьшится в "+String(kNow).replace(".",",")+" раза"
-    :"депозит вырастет в "+String(kNow).replace(".",",")+" раза")+
-    " · ожидаемая просадка до "+rd.dd+"% · ≈ "+TRADES_DAY[coefRisk(kNow)]+" сделок в сутки на кошелёк";
+  const rd=RISKD[coefRisk(kUse)];
+  $("riskNote").textContent=bandOf(kUse).name+" стратегия · "+
+    (S.params.dir==="down"?"депозит уменьшится в "+String(kUse).replace(".",",")+" раза"
+    :"депозит вырастет в "+String(kUse).replace(".",",")+" раза")+
+    " · ожидаемая просадка до "+rd.dd+"% · ≈ "+TRADES_DAY[coefRisk(kUse)]+" сделок в сутки на кошелёк"+
+    (kUse<kNow?" · ночной режим: коэффициент снижен до ×"+String(kUse).replace(".",","):"");
   $("fShare").value=Math.round(S.params.share*100);
   $("shareVal").textContent=Math.round(S.params.share*100)+"%";
   $("fShare").oninput=()=>{
     S.params.share=(+$("fShare").value)/100;
     $("shareVal").textContent=$("fShare").value+"%"; renderForecast();};
+}
+
+/* сброс сессий без записи результата: баланс возвращается к депозиту на старте,
+   в историю операций и сделок ничего не попадает */
+async function dropAll(){
+  const run=S.accounts.filter(a=>!a.error&&winOf(a));
+  if(!run.length) return toast("Запущенных сессий нет");
+  if(!confirm("Снять сессии на "+run.length+" кошельке(ах) без сохранения результата? "+
+    "Баланс вернётся к депозиту на момент запуска, записей в истории не будет.")) return;
+  try{
+    const j=await api("/api/hub/cancel",{method:"POST",
+      body:JSON.stringify({accounts:credsOf(run.map(a=>keyOf(a)))})});
+    const ok=(j.items||[]).filter(x=>x.ok).length;
+    toast(ok?("Сессии сняты без записи: "+ok):"Снимать нечего");
+    await refresh();
+  }catch(e){ toast(e.message); }
 }
 
 /* итоги дня, записанные площадкой: фиксация сессии и разноска «Итог торгового дня»
@@ -1438,10 +1500,19 @@ function noKeyList(){ return selected().filter(a=>!keyLive(a)); }
 function renderPairNote(){
   const host=$("pairNote"); if(!host) return;
   const p=S.params.pair, bad=isGold(p)?noKeyList():[];
+  if(!pairOpen(p)){
+    host.className="note pair-warn";
+    host.textContent="Биржа закрыта: "+p+" сейчас на паузе, сценарий по нему не запустится. "+
+      "Круглосуточно торгуется только крипта — выберите BTC/USD, ETH/USD, SOL/USD или XRP/USD.";
+    return;
+  }
   if(!isGold(p)){
     host.className="note";
     host.textContent=pairKind(p)==="crypto"
-      ? "Криптопара: коэффициент можно поднять до ×10 — выше коэффициент, резче кривая и просадка."
+      ? (nightOn(p)
+         ? "Ночной режим риска: биржа закрыта, по крипте коэффициент ограничен ×"+
+           String(NIGHT_MAX).replace(".",",")+" — ночью ликвидность ниже, доходность считаю по сниженному коэффициенту."
+         : "Криптопара: коэффициент можно поднять до ×10 — выше коэффициент, резче кривая и просадка.")
       : "";
     return;
   }
@@ -1477,7 +1548,14 @@ function credsOf(keys){
   }).filter(Boolean);
 }
 async function runKeys(keys,params){
-  if(!mktOpen()){ renderMktStop(); return toast("Биржа закрыта — новые сессии не запускаются"); }
+  const pp0=(params||S.params)||{};
+  /* вне часов биржи идёт только крипта: остальные инструменты стоят на паузе */
+  if(!pairOpen(pp0.pair)){
+    renderMktStop();
+    if($("eRun")) $("eRun").textContent="Биржа закрыта: "+pp0.pair+" на паузе. "+
+      "Круглосуточно торгуется только крипта.";
+    return toast("Вне часов биржи — "+pp0.pair+" на паузе");
+  }
   let list=credsOf(keys);
   if(!list.length) return toast("Не выбрано ни одного кошелька");
   /* пара с золотом требует активного ключа бота — такие кошельки отсеиваем до запроса */
@@ -1497,7 +1575,8 @@ async function runKeys(keys,params){
   const names=list.map(x=>"#"+x.acct).join(", ");
   const pp=params||list[0].params;
   if(!confirm("Запустить сценарий на "+list.length+" кошельке(ах): "+names+"?\n\nИнструмент: "+
-    pp.pair+"\nГоризонт: "+pp.hours+" ч\nКоэффициент: "+coefTxt(coefOf(pp.k))+
+    pp.pair+"\nГоризонт: "+pp.hours+" ч\nКоэффициент: "+coefTxt(nightCoef(coefOf(pp.k,pp.pair),pp.pair))+
+    (nightOn(pp.pair)?" (ночной режим риска)":"")+
     "\nНаправление: "+
     (pp.dir==="down"?"В МИНУС — кошельки уйдут в убыток":"в плюс"))) return;
   try{
@@ -1710,6 +1789,7 @@ on("btnAll",()=>{ S.accounts.filter(a=>!a.error).forEach(a=>S.sel.add(keyOf(a)))
 on("btnNone",()=>{ S.sel.clear(); renderAll(); });
 on("btnRun",()=>runKeys([...S.sel],S.params));
 on("btnHalt",()=>stopKeys([...S.sel]));
+on("btnDrop",()=>dropAll());
 on("btnFix",()=>fixNow([...S.sel]));
 
 /* ============ старт ============ */

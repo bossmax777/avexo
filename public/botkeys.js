@@ -41,6 +41,8 @@
     ".bk-left i{width:7px;height:7px;border-radius:50%;background:currentColor;flex:none}" +
     ".bk-left.g{color:#2BA87A}.bk-left.y{color:#E2B23A}.bk-left.r{color:#E5484D}" +
     ".bk-badge.gold{color:#C98A1E;border-color:#C98A1E55;background:#C98A1E14}" +
+    ".bk-badge.free{color:#5B8CFF;border-color:#5B8CFF55;background:#5B8CFF14}" +
+    ".bk-badge.free i{background:#5B8CFF}" +
     ".bk-badge.gold i{background:#C98A1E}.bk-badge.off i{background:#E5484D}" +
     ".bk-badge.off{border-color:#E5484D;color:#E5484D;background:rgba(229,72,77,.12)}" +
     ".bk-badge.wait{border-color:#E2B23A;color:#E2B23A;background:rgba(226,178,58,.12)}" +
@@ -281,12 +283,15 @@
       }
       host.innerHTML = '<div class="bk-row"><span class="bk-badge"><i></i>Бот активен' +
         (s.code ? " <s>" + esc(s.code) + "</s>" : "") + "</span>" + timer +
-        '<span class="bk-badge gold"><i></i>Ключ активирован для золотой пары</span></div>' +
+        '<span class="bk-badge gold"><i></i>Ключ активирован для золотой пары</span>' +
+        '<span class="bk-badge free"><i></i>Криптовалюта — ключ не требуется</span>' +
+        '<span class="bk-badge free"><i></i>Акции — ключ не требуется</span></div>' +
         '<p class="bk-note">Код принят.' +
         (ms !== null
           ? " Активация действует до " + new Date(s.until).toLocaleDateString("ru-RU") + "."
           : " Ключ бессрочный.") +
-        " Пара XAU/USD — Золото открыта для сценариев, крипта и акции доступны без ключа.</p>" +
+        " Пара XAU/USD — Золото открыта для сценариев. Криптовалюта и акции работают " +
+        "без ключа активации — по ним сценарий запускается всегда.</p>" +
         kycRow(s, k);
       return;
     }
@@ -297,7 +302,9 @@
     host.innerHTML =
       '<div class="bk-row"><span class="bk-badge off"><i></i>' +
       (gone ? "Срок ключа истёк" : "Ключ не активирован") + "</span>" +
-      '<span class="bk-badge off"><i></i>Золотая пара закрыта</span></div>' +
+      '<span class="bk-badge off"><i></i>Золотая пара закрыта</span>' +
+      '<span class="bk-badge free"><i></i>Криптовалюта — ключ не требуется</span>' +
+      '<span class="bk-badge free"><i></i>Акции — ключ не требуется</span></div>' +
       '<div class="bk-row">' +
       '<input maxlength="19" placeholder="X7K9P-4M2QD-V8R3N" autocomplete="off" ' +
       'autocapitalize="characters" spellcheck="false" data-code="' + k + '">' +
@@ -305,7 +312,8 @@
       '<p class="bk-note">' + (gone
         ? "Активация закончилась" + (s.until ? " " + new Date(s.until).toLocaleDateString("ru-RU") : "") +
           ". Введите новый ключ — его выдаёт администратор площадки."
-        : "Ключ активации выдаёт администратор площадки.") + "</p>";
+        : "Ключ активации выдаёт администратор площадки.") +
+      " Он нужен только для золотой пары: по криптовалюте и акциям сценарии запускаются без ключа.</p>";
     var inp = host.querySelector("input");
     var btn = host.querySelector("button");
     /* страница хаба обновляет карточки сама, поле при этом создаётся заново —

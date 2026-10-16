@@ -161,33 +161,112 @@
      предлагает такие сценарии, а если их собирает пользователь — показывает
      предупреждение на весь экран и варианты, как снизить риск. */
   var CAP = 100000;
-  /* сколько даст сценарий за сутки по списку кошельков */
-  function gainOf(list, k, share) {
-    return list.reduce(function (s2, a) { return s2 + num(a.balance); }, 0) * (num(k) - 1) * num(share);
+  /* коэффициент, с которым сценарий реально уйдёт в работу: он снимается с лестницы
+     инструмента, а ночью по крипте ещё и понижается ночным режимом риска */
+  function capK(k, pair) {
+    var p2 = pair || ((typeof S !== "undefined" && S.params && S.params.pair) || "XAU/USD");
+    var kk = (typeof coefOf === "function") ? coefOf(num(k), p2) : num(k);
+    if (typeof nightCoef === "function") kk = nightCoef(kk, p2);
+    return num(kk) || 1.2;
+  }
+  function sumOf(list) {
+    return (list || []).reduce(function (s2, a) { return s2 + num(a.balance); }, 0);
+  }
+  /* сколько сценарий даёт за сутки. Итог сессии площадка считает от всего депозита
+     кошелька и коэффициента: доля депозита в работе меняет только характер сделок,
+     на результат она не влияет — поэтому в расчёт порога она не входит. */
+  function gainOf(list, k, share, pair) {
+    return sumOf(list) * (capK(k, pair) - 1);
   }
   /* самый высокий коэффициент, который укладывается в потолок */
   function capCoef(list, share, pair) {
-    var base = list.reduce(function (s2, a) { return s2 + num(a.balance); }, 0) * num(share);
+    var base = sumOf(list);
     if (base <= 0) return 2.5;
     var ladder = (typeof coefsFor === "function") ? coefsFor(pair) : [1.2, 1.3, 1.5, 1.6, 2, 2.5];
-    var ok = ladder.filter(function (k) { return base * (k - 1) <= CAP; });
+    var ok = ladder.filter(function (k) { return base * (capK(k, pair) - 1) <= CAP; });
     return ok.length ? ok[ok.length - 1] : ladder[0];
   }
   /* сколько кошельков можно оставить при этом коэффициенте */
-  function capCount(list, k, share) {
-    var sorted = list.slice().sort(function (a, b) { return num(a.balance) - num(b.balance); });
+  function capCount(list, k, share, pair) {
+    var kk = capK(k, pair);
+    var sorted = (list || []).slice().sort(function (a, b) { return num(a.balance) - num(b.balance); });
     var sum = 0, n = 0;
     for (var i = 0; i < sorted.length; i++) {
-      var add = num(sorted[i].balance) * (num(k) - 1) * num(share);
+      var add = num(sorted[i].balance) * (kk - 1);
       if (sum + add > CAP) break;
       sum += add; n++;
     }
     return { count: n, list: sorted.slice(0, n), gain: sum };
   }
-  function capShare(list, k) {
-    var base = list.reduce(function (s2, a) { return s2 + num(a.balance); }, 0) * (num(k) - 1);
-    if (base <= 0) return 1;
-    return Math.max(0.1, Math.floor(CAP / base * 20) / 20);
+  /* приводим сценарий к порогу: сначала коэффициент, если этого мало — ещё и число
+     кошельков. Возвращаем набор, который гарантированно укладывается в потолок. */
+  function capFit(mode, list, k, pair) {
+    var r = { k: num(k) || 1.3, list: (list || []).slice(), cut: 0 };
+    if (mode !== "count") r.k = capCoef(r.list, 1, pair);
+    if (mode === "count" || gainOf(r.list, r.k, 1, pair) > CAP) {
+      var c = capCount(r.list, r.k, 1, pair);
+      r.cut += r.list.length - c.count;
+      r.list = c.list;
+    }
+    /* крайний случай: и после обрезки порог выше — опускаем коэффициент до спокойного */
+    if (gainOf(r.list, r.k, 1, pair) > CAP) {
+      r.k = capCoef(r.list, 1, pair);
+      var c2 = capCount(r.list, r.k, 1, pair);
+      r.cut += r.list.length - c2.count;
+      r.list = c2.list;
+    }
+    r.gain = gainOf(r.list, r.k, 1, pair);
+    return r;
+  }
+  /* применяем правку сразу: коэффициент в общий сценарий, выбор кошельков и
+     карточки с личными параметрами — чтобы расчёт слева тут же стал ниже порога */
+  function capPut(r, pair, force) {
+    if (typeof S === "undefined") return;
+    if (pair) S.params.pair = pair;
+    S.params.k = r.k;
+    if (r.cut || force) {
+      S.sel.clear();
+      r.list.forEach(function (a) { S.sel.add(kOf(a)); });
+    }
+    /* личные параметры карточек тоже не должны выходить за порог */
+    Object.keys(S.per || {}).forEach(function (kk) {
+      var p2 = S.per[kk];
+      if (p2 && num(p2.k) > r.k) S.per[kk] = Object.assign({}, p2, { k: r.k });
+    });
+    if (typeof buildForm === "function") buildForm();
+    if (typeof renderAll === "function") renderAll();
+    renderPanels();
+  }
+  /* прогрев кошельков: площадка спокойно смотрит на счёт, который отлежался и набрал
+     объём. Когда в сценарий заводят все кошельки подряд, большая часть из них ещё не
+     прогрета — именно такие аккаунты и уходят на модерацию. */
+  function warmInfo(list) {
+    var warm = [], cold = [];
+    (list || []).forEach(function (a) {
+      var t = outState(a).tone;
+      (t === "warm" || t === "ok" ? warm : cold).push(a);
+    });
+    var n = (list || []).length || 1;
+    return { warm: warm, cold: cold, n: (list || []).length,
+             pct: Math.round(cold.length / n * 100) };
+  }
+  /* текст про прогрев: он нужен и в окне предупреждения, и в рекомендациях */
+  function warmNote(list) {
+    var w = warmInfo(list);
+    if (!w.n) return "";
+    if (w.cold.length && w.pct >= 50) {
+      return "<b>Прогрев: " + w.cold.length + " из " + w.n + " кошельков ещё не прогреты</b> — " +
+        "на счёте нет " + money(WARM_SUM) + " или не прошло " + WARM_DAYS + " дней с регистрации. " +
+        "Это большинство выбранных аккаунтов: если запустить сценарий на всех сразу, по непрогретым " +
+        "счетам выйдет резкий скачок на молодом аккаунте — такие площадка с высокой вероятностью " +
+        "отправит на модерацию, а часть может заблокировать. Безопаснее работать прогретыми" +
+        (w.warm.length ? " (" + w.warm.length + " кошельк(ов))" : "") + ", остальным дать отлежаться.";
+    }
+    if (w.cold.length) {
+      return "Прогрев: " + w.cold.length + " из " + w.n + " кошельков ещё не прогреты — " +
+        "по ним лучше держать спокойный коэффициент, иначе аккаунт уйдёт на проверку.";
+    }
+    return "Прогрев: все выбранные кошельки отлежались и набрали объём — вопросов к ним не будет.";
   }
   var CAP_SEEN = "";
   function capWarn(opts) {
@@ -195,15 +274,19 @@
     var list = o.list || sel();
     var k = num(o.k) || 1.3, share = num(o.share) || 0.6;
     var pair = o.pair || ((typeof S !== "undefined" && S.params && S.params.pair) || "XAU/USD");
-    var gain = o.gain !== undefined ? num(o.gain) : gainOf(list, k, share);
+    var gain = o.gain !== undefined ? num(o.gain) : gainOf(list, k, share, pair);
     if (gain <= CAP) return false;
     /* одно и то же сочетание не показываем по кругу */
-    var sign = [list.length, k, share, pair, Math.round(gain)].join("|");
+    var sign = [list.length, k, pair, Math.round(gain)].join("|");
     if (!o.force && CAP_SEEN === sign) return true;
+    /* одно окно за раз: второе поверх первого только мешает */
+    if (document.querySelector(".cap-ovl")) return true;
     CAP_SEEN = sign;
-    var safeK = capCoef(list, share, pair);
-    var byCount = capCount(list, k, share);
-    var safeShare = capShare(list, k);
+    var byK = capFit("k", list, k, pair);
+    var byCount = capFit("count", list, k, pair);
+    var wi = warmInfo(list);
+    /* отдельный вариант: оставить только прогретые кошельки и подобрать под них коэффициент */
+    var byWarm = wi.warm.length ? capFit("k", wi.warm, k, pair) : null;
     var box = document.createElement("div");
     box.className = "cap-ovl";
     box.innerHTML =
@@ -212,44 +295,48 @@
       " кошельк(ам) — это выше порога в " + money(CAP) + ", на который площадки реагируют проверкой. " +
       "Аккаунт с таким дневным результатом отправляют на модерацию, вывод замораживают до выяснения, " +
       "а при повторе — закрывают. Я такие сценарии не предлагаю и советую снизить разгон.</p>" +
+      (wi.cold.length && wi.pct >= 50
+        ? '<p class="cap-warm">Плюс к этому большинство кошельков (' + wi.cold.length + " из " + wi.n +
+          ") ещё не прогреты: нет " + money(WARM_SUM) + " на счёте или не прошло " + WARM_DAYS +
+          " дней с регистрации. Если завести в сценарий все аккаунты сразу, непрогретые с высокой " +
+          "вероятностью попадут под модерацию, а часть могут заблокировать.</p>"
+        : "") +
       '<div class="cap-opts">' +
-      '<button data-cap="k">Снизить коэффициент до ×' + String(safeK).replace(".", ",") +
-      "<span>" + money(gainOf(list, safeK, share)) + " за сутки</span></button>" +
-      '<button data-cap="share">Уменьшить долю депозита до ' + Math.round(safeShare * 100) + "%" +
-      "<span>" + money(gainOf(list, k, safeShare)) + " за сутки</span></button>" +
-      (byCount.count
-        ? '<button data-cap="count">Оставить ' + byCount.count + " кошельк(ов) из " + list.length +
+      '<button data-cap="k">Снизить коэффициент до ×' + String(byK.k).replace(".", ",") +
+      (byK.cut ? " и оставить " + byK.list.length + " кошельк(ов)" : "") +
+      "<span>" + money(byK.gain) + " за сутки</span></button>" +
+      (byCount.count !== 0 && byCount.list.length
+        ? '<button data-cap="count">Оставить ' + byCount.list.length + " кошельк(ов) из " + list.length +
+          " при ×" + String(byCount.k).replace(".", ",") +
           "<span>" + money(byCount.gain) + " за сутки</span></button>"
         : "") +
+      (byWarm && wi.cold.length
+        ? '<button data-cap="warm">Работать только прогретыми — ' + byWarm.list.length +
+          " из " + wi.n + " при ×" + String(byWarm.k).replace(".", ",") +
+          "<span>" + money(byWarm.gain) + " за сутки · непрогретые отдыхают</span></button>"
+        : "") +
       "</div>" +
-      '<p class="cap-note">Разумный режим: ×1,2–×1,6 при 20–30% депозита и работе группами по дням — ' +
-      "тогда счета растут ровно и вопросов к ним нет.</p>" +
+      '<p class="cap-note">Разумный режим: ×1,2–×1,6 и часть кошельков в работе — ' +
+      "тогда счета растут ровно и вопросов к ним нет. Любая правка применяется сразу: " +
+      "расчёт слева пересчитается под выбранный вариант.</p>" +
       '<div class="cap-act"><button class="cap-x" data-cap="close">Понимаю риск, оставить как есть</button></div></div>';
     document.body.appendChild(box);
     function done() { box.remove(); }
     box.querySelectorAll("[data-cap]").forEach(function (b) {
       b.onclick = function () {
         var w = b.dataset.cap;
-        if (w === "k" && typeof S !== "undefined") {
-          S.params.k = safeK;
-          if (typeof buildForm === "function") buildForm();
-          if (typeof renderForecast === "function") renderForecast();
-          say("Поставил коэффициент ×" + String(safeK).replace(".", ",") + " — " +
-            money(gainOf(list, safeK, share)) + " за сутки, это в пределах нормы.");
-        }
-        if (w === "share" && typeof S !== "undefined") {
-          S.params.share = safeShare;
-          if (typeof buildForm === "function") buildForm();
-          if (typeof renderForecast === "function") renderForecast();
-          say("Доля депозита в работе — " + Math.round(safeShare * 100) + "%, суточный итог " +
-            money(gainOf(list, k, safeShare)) + ".");
-        }
-        if (w === "count" && typeof S !== "undefined") {
-          S.sel.clear();
-          byCount.list.forEach(function (a) { S.sel.add(kOf(a)); });
-          if (typeof renderAll === "function") renderAll();
-          say("Оставил в выборе " + byCount.count + " кошельк(ов) — суточный итог " +
-            money(byCount.gain) + ". Остальные пусть отдохнут, так аккаунты выглядят спокойно.");
+        if (w !== "close") {
+          var r = (w === "count") ? byCount : (w === "warm" ? byWarm : byK);
+          if (!r) r = byK;
+          capPut(r, pair, w === "warm");
+          CAP_SEEN = "";
+          say("<b>Поправил сценарий.</b> " + esc(pair) + " ×" + String(r.k).replace(".", ",") +
+            (r.cut ? ", в работе " + r.list.length + " кошельк(ов) из " + list.length : "") +
+            " — теперь это " + money(r.gain) + " за сутки, в пределах порога " + money(CAP) +
+            ". Расчёт слева уже пересчитан." +
+            (r.cut || w === "warm"
+              ? "<br>Остальные кошельки сегодня отдыхают — так аккаунты выглядят спокойно." : "") +
+            "<br>" + warmNote(r.list));
         }
         logEvent("Порог " + money(CAP) + " за сутки: " +
           (w === "close" ? "оставлено как есть" : "сценарий снижен"),
@@ -260,13 +347,33 @@
     });
     return true;
   }
-  /* следим за общим сценарием: как только расчёт перевалил за порог — предупреждаем */
+  /* Следим за общим сценарием. При первой загрузке окно не показываем: если
+     параметры по умолчанию дают больше порога, помощник сам подбирает вариант
+     под потолок и пишет об этом в чат. Окно вылезает только тогда, когда
+     пользователь сам поднял коэффициент или добавил кошельков. */
+  var CAP_INIT = false;
   function capTick() {
     if (typeof S === "undefined" || !S.params) return;
     var list = sel();
     if (!list.length) return;
-    var g = gainOf(list, coefNow(), num(S.params.share) || 0.6);
-    if (g > CAP) capWarn({ list: list, k: coefNow(), share: num(S.params.share) || 0.6 });
+    var g = gainOf(list, coefNow(), 1, S.params.pair);
+    if (g <= CAP) { CAP_INIT = true; return; }
+    if (!CAP_INIT) {
+      CAP_INIT = true;
+      var r = capFit("k", list, coefNow(), S.params.pair);
+      if (!r.list.length) return;
+      capPut(r, S.params.pair);
+      logEvent("Стартовый сценарий подобран под порог " + money(CAP) + " за сутки", "ok", "risk");
+      say("<b>Подобрал стартовый сценарий под порог.</b> По умолчанию на " + list.length +
+        " кошельк(ах) выходило " + money(g) + " за сутки — выше " + money(CAP) +
+        ", с которого площадки проверяют аккаунты. Поставил " + esc(S.params.pair) + " ×" +
+        String(r.k).replace(".", ",") +
+        (r.cut ? " и оставил в работе " + r.list.length + " кошельк(ов)" : "") +
+        ", это " + money(r.gain) + " за сутки.<br>" + warmNote(r.list) +
+        "<br>Если поднимете коэффициент выше — покажу предупреждение с вариантами.");
+      return;
+    }
+    capWarn({ list: list, k: coefNow(), pair: S.params.pair, gain: g });
   }
   function coefNow() {
     if (typeof S === "undefined" || !S.params) return 1.3;
@@ -282,9 +389,9 @@
       }).filter(Boolean);
       var p2 = params || (typeof S !== "undefined" ? S.params : {}) || {};
       var k2 = (typeof coefOf === "function") ? coefOf(p2.k, p2.pair) : num(p2.k) || 1.3;
-      var g = gainOf(list, k2, num(p2.share) || 0.6);
+      var g = gainOf(list, k2, 1, p2.pair);
       if (g > CAP) {
-        capWarn({ list: list, k: k2, share: num(p2.share) || 0.6, pair: p2.pair, gain: g, force: true });
+        capWarn({ list: list, k: k2, pair: p2.pair, gain: g, force: true });
         say("<b>Запуск придержал.</b> Сценарий даёт " + money(g) + " за сутки — выше порога " +
           money(CAP) + ", с которого площадки проверяют аккаунты. Поправьте разгон в окне предупреждения " +
           "или запустите меньшим числом кошельков.");
@@ -317,7 +424,7 @@
         p = crypto[(i + 1) % crypto.length]; k = 4.5; why = "небольшой депозит — крипта, высокий коэффициент";
       }
       /* потолок суточного дохода: выше порога помощник коэффициент не ставит */
-      var top = capCoef([a], 0.6, p);
+      var top = capCoef([a], 1, p);
       if (k > top) { k = top; why = "ограничил коэффициент: выше порога по доходу за сутки"; }
       return { a: a, pair: p, k: k, why: why, gold: p === gold };
     });
@@ -334,7 +441,7 @@
   function doAdvice() {
     var rows = plan();
     if (!rows.length) return say("Сначала подключите кошельки — тогда разложу их по парам.");
-    var sum = rows.reduce(function (s, r) { return s + num(r.a.balance) * (r.k - 1) * 0.6; }, 0);
+    var sum = rows.reduce(function (s, r) { return s + num(r.a.balance) * (capK(r.k, r.pair) - 1); }, 0);
     var m = say("<b>Предложение на день по " + rows.length + " кошелькам</b>" +
       "<table><tr><th>Кошелёк</th><th>Пара</th><th>Коэф.</th><th>Почему</th></tr>" +
       rows.slice(0, 14).map(function (r) {
@@ -344,7 +451,7 @@
       "<br>Если всё отработает по плану, прибавка за сутки около " + money(sum) + "." +
       (sum > CAP
         ? "<br><b>Выше порога " + money(CAP) + " за сутки</b> — площадки проверяют такие аккаунты. " +
-          "Советую запускать группами по дням или уменьшить долю депозита."
+          "Советую снизить коэффициенты или оставить в работе часть кошельков."
         : ""));
     act(m, [["Применить к карточкам", function () { applyPlan(rows); }],
             ["Только золото тем, у кого ключ", function () {
@@ -471,14 +578,91 @@
   }
 
   /* ---------- 5. сессии: запуск, остановка, фиксация ---------- */
+  /* Запуск сессий — это не кнопка «ок», а решение: сначала роспись по каждому
+     кошельку (пара, коэффициент, итог за сутки, прогрев), потом вывод и выбор. */
   function doRun() {
     var list = sel();
     if (!list.length) return say("Не выбрано ни одного кошелька.");
-    var m = say("Запущу сценарий по " + list.length + " кошельк(ам) с параметрами из карточек " +
-      "(где их нет — из общего сценария слева).");
-    act(m, [["Запустить", function () {
-      if (typeof runKeys === "function") runKeys(list.map(kOf));
-    }], ["Отмена", function () {}, true]]);
+    var rows = list.map(function (a) {
+      var pp = (typeof paramsFor === "function") ? paramsFor(a) : (S && S.params) || {};
+      var pair = pp.pair || "XAU/USD";
+      var k = capK(pp.k, pair);
+      var st = outState(a);
+      var warm = st.tone === "warm" || st.tone === "ok";
+      var stop = [];
+      if (typeof pairOpen === "function" && !pairOpen(pair)) stop.push("пара вне торговых часов");
+      if (typeof goldBlocked === "function" && goldBlocked(a, pair)) stop.push("золото без ключа");
+      var note = stop.length ? stop.join(", ")
+        : (warm ? (k > 1.6 ? "прогрет, но коэффициент высокий" : "прогрет, коэффициент спокойный")
+                : (k > 1.3 ? "не прогрет — коэффициент лучше снизить до ×1,3" : "не прогрет, коэффициент спокойный"));
+      return { a: a, pair: pair, k: k, warm: warm, stop: stop,
+               gain: num(a.balance) * (k - 1), note: note };
+    });
+    var ready = rows.filter(function (r) { return !r.stop.length; });
+    var total = ready.reduce(function (s2, r) { return s2 + r.gain; }, 0);
+    var cold = ready.filter(function (r) { return !r.warm; });
+    var hotCold = cold.filter(function (r) { return r.k > 1.3; });
+    var over = total > CAP;
+    var safe = ready.filter(function (r) { return r.warm; });
+    var safeSum = safe.reduce(function (s2, r) { return s2 + r.gain; }, 0);
+    var verdict = over
+      ? "<b>Запускать в таком виде не советую.</b> Суммарный итог за сутки — " + money(total) +
+        ", это выше порога " + money(CAP) + ", с которого площадки проверяют аккаунты."
+      : (hotCold.length
+        ? "<b>Можно запускать, но с оговоркой.</b> " + hotCold.length +
+          " непрогретых кошельк(ов) идут с коэффициентом выше ×1,3 — именно такие счета чаще всего " +
+          "уходят на модерацию. Я бы снизил по ним разгон."
+        : "<b>Сценарий выглядит спокойно.</b> Итог за сутки " + money(total) +
+          " — в пределах порога " + money(CAP) + ", коэффициенты соразмерны прогреву счетов.");
+    var m = say("<b>Разбор перед запуском: " + list.length + " кошельк(ов)</b>" +
+      "<table><tr><th>Кошелёк</th><th>Пара</th><th>Коэф.</th><th>Итог за сутки</th><th>Прогрев</th>" +
+      "<th>Комментарий</th></tr>" +
+      rows.slice(0, 14).map(function (r) {
+        return "<tr><td>#" + esc(r.a.acct) + "</td><td>" + esc(r.pair) + "</td><td>×" +
+          String(r.k).replace(".", ",") + "</td><td>" + sig(r.gain) + "</td><td>" +
+          (r.warm ? "прогрет" : "в прогреве") + "</td><td>" + esc(r.note) + "</td></tr>";
+      }).join("") + "</table>" +
+      (rows.length > 14 ? "<br>и ещё " + (rows.length - 14) + " кошельк(ов)." : "") +
+      (rows.length - ready.length
+        ? "<br>Не стартуют " + (rows.length - ready.length) + " кошельк(ов): " +
+          rows.filter(function (r) { return r.stop.length; }).slice(0, 6).map(function (r) {
+            return "#" + esc(r.a.acct) + " (" + esc(r.stop.join(", ")) + ")"; }).join(", ") + "."
+        : "") +
+      "<br><br>" + verdict + "<br>" + warmNote(ready.map(function (r) { return r.a; })));
+    var btns = [];
+    if (!over) {
+      btns.push(["Применить и запустить (" + ready.length + ")", function () {
+        if (typeof runKeys === "function") runKeys(ready.map(function (r) { return kOf(r.a); }));
+      }]);
+    }
+    if (safe.length && safe.length !== ready.length && safeSum <= CAP) {
+      btns.push(["Только прогретыми (" + safe.length + " · " + money(safeSum) + ")", function () {
+        if (typeof S !== "undefined") {
+          S.sel.clear(); safe.forEach(function (r) { S.sel.add(kOf(r.a)); });
+          if (typeof renderAll === "function") renderAll();
+        }
+        if (typeof runKeys === "function") runKeys(safe.map(function (r) { return kOf(r.a); }));
+      }, !over]);
+    }
+    if (hotCold.length) {
+      btns.push(["Снизить до ×1,3 непрогретым (" + hotCold.length + ")", function () {
+        hotCold.forEach(function (r) {
+          S.per[kOf(r.a)] = { pair: r.pair, hours: 24, k: 1.3, share: 0.6, dir: "up" };
+        });
+        if (typeof renderAll === "function") renderAll();
+        renderPanels();
+        say("Непрогретым кошелькам поставил ×1,3 — теперь разбор можно собрать заново " +
+          "командой «запусти по выбранным».");
+      }, true]);
+    }
+    if (over) {
+      btns.push(["Подобрать безопасный вариант", function () {
+        capWarn({ list: ready.map(function (r) { return r.a; }), k: rows[0] ? rows[0].k : 1.6,
+                  pair: rows[0] ? rows[0].pair : "XAU/USD", gain: total, force: true });
+      }]);
+    }
+    btns.push(["Не запускать", function () { say("Хорошо, сессии не трогаю."); }, true]);
+    act(m, btns);
   }
   function doStop() {
     var list = sel().filter(function (a) { return (typeof winOf === "function") && winOf(a); });
@@ -514,8 +698,11 @@
     var p = function (n) { return (n < 10 ? "0" : "") + n; };
     return p(d.getDate()) + "." + p(d.getMonth() + 1) + "." + d.getFullYear();
   }
+  function dayRow(it, date) {
+    return (it.days || []).filter(function (x) { return x.date === date; })[0] || null;
+  }
   function dayOf(it, date) {
-    var row = (it.days || []).filter(function (x) { return x.date === date; })[0];
+    var row = dayRow(it, date);
     return row ? row.amount : null;
   }
   /* «вчера», «позавчера», «15.10» или «за 7 дней» */
@@ -538,7 +725,10 @@
       var range = (t.match(/за\s*(\d+)\s*(дн|день|дня|дней)/) || [])[1];
       if (range) return fill(m, rangeHtml(items, Math.min(30, +range)));
       var date = dateFrom(t);
-      var rows = items.map(function (it) { return { it: it, g: dayOf(it, date) }; });
+      var rows = items.map(function (it) {
+        var row = dayRow(it, date);
+        return { it: it, row: row, g: row ? row.amount : null };
+      });
       var have = rows.filter(function (r) { return r.g !== null; });
       if (!have.length) {
         var known = {};
@@ -554,18 +744,23 @@
         var n = r.it.siteName || r.it.site;
         bySite[n] = (bySite[n] || 0) + r.g;
       });
-      var down = have.filter(function (r) { return r.g < 0; }).sort(function (x, y) { return x.g - y.g; });
-      var top = have.slice().sort(function (x, y) { return y.g - x.g; }).slice(0, 5);
+      var down = have.filter(function (r) { return r.g < 0; });
+      /* показываем каждый кошелёк: имя клиента, площадку, пару и сумму за этот день */
+      var all = have.slice().sort(function (x, y) { return y.g - x.g; });
+      var posted = have.filter(function (r) { return (r.row || {}).admin; }).length;
       fill(m, "<b>Итог за " + esc(date) + ": " + sig(sum) + "</b> · кошельков с записью " +
         have.length + " из " + items.length +
         "<ul>" + Object.keys(bySite).map(function (n) {
           return "<li>" + esc(n) + " — " + sig(bySite[n]) + "</li>"; }).join("") + "</ul>" +
-        "<table><tr><th>Кошелёк</th><th>Площадка</th><th>Итог</th></tr>" +
-        top.map(function (r) {
-          return "<tr><td>#" + esc(r.it.acct) + "</td><td>" + esc(r.it.siteName || r.it.site) +
-            "</td><td>" + sig(r.g) + "</td></tr>"; }).join("") + "</table>" +
+        "<table><tr><th>Клиент</th><th>Кошелёк</th><th>Площадка</th><th>Пара</th><th>Итог</th></tr>" +
+        all.map(function (r) {
+          var row = r.row || {};
+          return "<tr><td>" + esc(r.it.name || "—") + "</td><td>#" + esc(r.it.acct) + "</td><td>" +
+            esc(r.it.siteName || r.it.site) + "</td><td>" + esc(row.pair || "—") + "</td><td>" +
+            sig(r.g) + "</td></tr>"; }).join("") + "</table>" +
+        (posted ? "<br>Из них проставлено площадкой за этот день: " + posted + " кошельк(ов)." : "") +
         (down.length
-          ? "<br>Просадка у " + down.length + ": " + down.slice(0, 6).map(function (r) {
+          ? "<br>Просадка у " + down.length + ": " + down.slice(0, 8).map(function (r) {
               return "#" + esc(r.it.acct) + " (" + sig(r.g) + ")"; }).join(", ")
           : "<br>Просадки за этот день нет."));
     });
@@ -628,15 +823,52 @@
         (by.none.length ? "Могу отправить заявки — скажите «отправь заявки на верификацию»." : ""));
     });
   }
+  /* Вывод: по каждому кошельку свой вердикт — сумма, возраст счёта и прошлые заявки */
   function doPayout() {
     var list = accs();
-    var open = list.filter(function (a) { return (typeof outOk === "function") ? outOk(a) : false; });
-    var closed = list.filter(function (a) { return open.indexOf(a) < 0; });
-    say("<b>Вывод дохода: открыт у " + open.length + " из " + list.length + "</b>" +
-      (closed.length ? "<ul>" + closed.slice(0, 8).map(function (a) {
-        return "<li>#" + esc(a.acct) + " — " + esc(typeof outTxt === "function" ? outTxt(a) : "закрыт") + "</li>";
-      }).join("") + "</ul>Порог суммы и привязанный кошелёк задаёт администратор площадки в карточке клиента."
-        : "<br>Заявку можно создать кнопкой «Вывести средства» в карточке кошелька."));
+    if (!list.length) return say("Кошельки не подключены.");
+    return pullHist().then(function () {
+      var rows = list.map(function (a) {
+        var st = outState(a);
+        var rec = (st.tone === "warm") ? "выводить можно"
+          : (st.tone === "ok") ? "вывод возможен, но лучше дождаться " + money(WARM_SUM)
+          : (st.tone === "wait") ? "подождать: заявки подряд площадка проверяет"
+          : (st.tone === "cold") ? "не рекомендую: прогрев сбросится"
+          : "закрыт администратором";
+        return { a: a, st: st, rec: rec };
+      });
+      var ok = rows.filter(function (r) { return r.st.tone === "warm"; });
+      var soon = rows.filter(function (r) { return r.st.tone === "ok"; });
+      var no = rows.filter(function (r) { return ["cold", "wait", "off"].indexOf(r.st.tone) >= 0; });
+      var sum = ok.reduce(function (s2, r) { return s2 + num(r.a.balance); }, 0);
+      say("<b>Вывод средств: " + ok.length + " кошельк(ов) прогреты и готовы</b> · на них " + money(sum) +
+        "<table><tr><th>Клиент</th><th>Кошелёк</th><th>Площадка</th><th>Баланс</th><th>Статус</th>" +
+        "<th>Рекомендация</th></tr>" +
+        rows.map(function (r) {
+          return "<tr><td>" + esc(nameOf(r.a)) + "</td><td>#" + esc(r.a.acct) + "</td><td>" +
+            esc(r.a.siteName || r.a.site) + "</td><td>" + money(num(r.a.balance)) + "</td><td>" +
+            esc(r.st.title) + "</td><td>" + esc(r.rec) + "</td></tr>";
+        }).join("") + "</table>" +
+        "<br><b>Что советую:</b> " +
+        (ok.length
+          ? "подавать заявки с прогретых кошельков — " + ok.slice(0, 6).map(function (r) {
+              return "#" + esc(r.a.acct); }).join(", ") + (ok.length > 6 ? " и др." : "") + ". "
+          : "сейчас прогретых кошельков нет — вывод лучше отложить. ") +
+        (soon.length ? "Ещё " + soon.length + " кошельк(ов) отлежались, но не набрали " + money(WARM_SUM) +
+          " — с них лучше выводить частями. " : "") +
+        (no.length ? "Не трогать " + no.length + " кошельк(ов): " + no.slice(0, 6).map(function (r) {
+          return "#" + esc(r.a.acct) + " (" + esc(r.st.title.toLowerCase()) + ")"; }).join(", ") + "."
+          : "") +
+        "<br>Прогретым считаю счёт от " + money(WARM_SUM) + " и старше " + WARM_DAYS +
+        " дней; заявка создаётся кнопкой «Вывести средства» в карточке кошелька, порог и адрес " +
+        "задаёт администратор площадки.");
+    });
+  }
+  /* имя клиента берём из истории кабинета: в карточке пульта его может не быть */
+  function nameOf(a) {
+    var h = (HIST || []).filter(function (x) {
+      return x.site === a.site && String(x.acct) === String(a.acct); })[0];
+    return (h && h.name) || a.name || "—";
   }
   function doMarket() {
     var open = (typeof mktOpen === "function") ? mktOpen() : true;
@@ -699,34 +931,33 @@
     var want = (t.match(/([+-]?\d{1,3})\s*%/) || [])[1];
     var ladder = coefLadder(pair);
     if (want) {
-      var need = 1 + Math.abs(+want) / 100 / Math.max(share, 0.1);
+      var need = 1 + Math.abs(+want) / 100;
       var best = ladder.reduce(function (p1, k) {
         return Math.abs(k - need) < Math.abs(p1 - need) ? k : p1; }, ladder[0]);
-      var wantGain = bal * (best - 1) * share;
+      var wantGain = bal * (capK(best, pair) - 1);
       if (wantGain > CAP) {
-        var fit = capCoef(list, share, pair);
+        var fit = capCoef(list, 1, pair);
         return say("<b>Столько за сутки ставить не стоит.</b> " + esc(want) + "% по " + esc(pair) +
           " — это " + money(wantGain) + " за сутки, выше порога " + money(CAP) +
           ", с которого площадки проверяют аккаунты и могут закрыть вывод." +
           "<br>Максимум, который я советую на эти кошельки: <b>×" + String(fit).replace(".", ",") +
-          "</b> — " + money(gainOf(list, fit, share)) + " за сутки. " +
-          "Если нужно больше, разложите по дням или запускайте группами.");
+          "</b> — " + money(gainOf(list, fit, 1, pair)) + " за сутки. " +
+          "Если нужно больше — разложите по дням или оставьте в работе часть кошельков.");
       }
       return say("<b>Чтобы получить около " + esc(want) + "% за " + hours + " ч</b> по " + esc(pair) +
-        " при доле депозита " + Math.round(share * 100) + "% нужен коэффициент <b>×" +
-        String(best).replace(".", ",") + "</b>." +
-        "<br>На " + money(bal) + " это примерно " + sig(bal * (best - 1) * share) + " за сессию." +
+        " нужен коэффициент <b>×" + String(best).replace(".", ",") + "</b>." +
+        "<br>На " + money(bal) + " это примерно " + sig(bal * (capK(best, pair) - 1)) + " за сессию." +
         (kindOf(pair) !== "crypto" && need > 2.5
           ? " Выше ×2,5 по этой паре не ставится — возьмите криптопару, там лестница до ×10."
           : ""));
     }
     var rows = ladder.map(function (k) {
-      var gain = bal * (k - 1) * share;
+      var gain = bal * (capK(k, pair) - 1);
       var dd = k <= 1.4 ? 3 : (k <= 1.9 ? 7 : 14);
       return { k: k, gain: gain, dd: dd, over: gain > CAP };
     });
-    var m = say("<b>Сценарий на день: " + esc(pair) + ", " + hours + " ч, доля " +
-      Math.round(share * 100) + "%</b> · в работе " + money(bal) + " по " + list.length + " кошельк(ам)" +
+    var m = say("<b>Сценарий на день: " + esc(pair) + ", " + hours + " ч</b> · депозит " +
+      money(bal) + " по " + list.length + " кошельк(ам)" +
       "<table><tr><th>Коэф.</th><th>Итог сессии</th><th>Баланс после</th><th>Просадка до</th>" +
       "<th>Модерация</th></tr>" +
       rows.map(function (r) {
@@ -851,6 +1082,8 @@
     if (/^(запусти|старт|включи сцена)/.test(t) || /запусти (сцена|по|сесс)/.test(t)) return doRun();
     if (/(останов|стоп|заверши)/.test(t)) return doStop();
     if (/(план на сегодня|применить план|расписани)/.test(t)) { applyToday(true); return; }
+    if (/(отмени|останов|сбрось|убери)/.test(t) && /(ошибочн|неверн|неправильн|сломан)/.test(t)) return stopBadRuns();
+    if (/(прогрет|прогрев|тепловая карт|тепловую карт|карт[аыу] вывод)/.test(t)) return doHeat();
     if (/(отмени|останов|сбрось)/.test(t) && /(все сценари|всех сценари|все сессии)/.test(t)) return stopAllFix();
     if (/(зафиксир|запиши|итог дня)/.test(t) && /(всем|обеих|двум|площадк)/.test(t)) return fixDayAll();
     if (/(зафиксир|фиксац)/.test(t) && !/когда|как|во сколько/.test(t)) return doFix();
@@ -882,6 +1115,7 @@
     ["Можно ли выводить", "Можно ли выводить средства?"],
     ["Запустить сессии", "Запусти по выбранным кошелькам"],
     ["Остановить сессии", "Останови сессии по выбранным"],
+    ["Ошибочные сценарии", "Отмени все ошибочные сценарии"],
     ["Что умеешь", "Что умеешь?"]
   ];
   function dock() {
@@ -1092,17 +1326,52 @@
              avgK: avgK, maxShare: maxShare, day: day, posted: posted };
   }
   /* индекс устойчивости: 100 — ровный портфель с ключами, лимитами и спокойными коэффициентами */
-  function health(m) {
+  /* Индекс устойчивости и разбор по пунктам: что добавит баллов до 100,
+     а что их съедает — иксы, непрогретые счета, превышение порога за сутки. */
+  function healthCalc(m) {
     var n = m.list.length || 1;
-    var v = 50;
-    v += 15 * (m.keys / n);
-    v += 10 * (m.kyc / n);
-    v += CFG.risk.on ? 10 : 0;
-    v -= 18 * Math.max(0, Math.min(1, (m.avgK - 1.2) / 1.6));
-    v -= 12 * Math.max(0, Math.min(1, (m.maxShare - 0.3) / 0.5));
-    if (m.total > 0 && m.day < 0) v -= 8 * Math.min(1, Math.abs(m.day) / (m.total * 0.03));
-    return Math.max(5, Math.min(98, Math.round(v)));
+    var w = warmInfo(m.list);
+    var pair = (typeof S !== "undefined" && S.params && S.params.pair) || "XAU/USD";
+    var gain = gainOf(sel(), coefNow(), 1, pair);
+    var v = 42, up = [], down = [];
+    var keyP = 14 * (m.keys / n); v += keyP;
+    if (m.keys < n) up.push(["активировать ключи на " + (n - m.keys) + " кошельк(ах)", 14 - keyP]);
+    var kycP = 8 * (m.kyc / n); v += kycP;
+    if (m.kyc < n) up.push(["пройти верификацию по " + (n - m.kyc) + " кошельк(ам)", 8 - kycP]);
+    var warmP = 22 * (w.n ? w.warm.length / w.n : 0); v += warmP;
+    if (w.cold.length) {
+      up.push(["прогреть " + w.cold.length + " кошельк(ов): до " + money(WARM_SUM) + " на счёте и " +
+        WARM_DAYS + " дней с регистрации", 22 - warmP]);
+    }
+    var outP = 6 * (m.out / n); v += outP;
+    if (m.out < n) up.push(["открыть вывод " + (n - m.out) + " кошельк(ам): порог и адрес задаёт администратор", 6 - outP]);
+    var kPen = 20 * Math.max(0, Math.min(1, (m.avgK - 1.2) / 1.6)); v -= kPen;
+    if (kPen >= 1) {
+      down.push(["средний коэффициент ×" + m.avgK.toFixed(2).replace(".", ",") +
+        " — счета дают слишком большие иксы", kPen]);
+    }
+    var sPen = 10 * Math.max(0, Math.min(1, (m.maxShare - 0.3) / 0.5)); v -= sPen;
+    if (sPen >= 1) down.push(["в одном кошельке " + Math.round(m.maxShare * 100) + "% капитала", sPen]);
+    var capPen = Math.min(25, gain > CAP ? 25 * ((gain - CAP) / CAP) + 8 : 0); v -= capPen;
+    if (capPen >= 1) {
+      down.push(["выбранный сценарий даёт " + money(gain) + " за сутки — выше порога " + money(CAP), capPen]);
+    }
+    var coldRun = w.cold.filter(working).length;
+    if (coldRun) {
+      var cp = Math.min(14, coldRun * 2.5); v -= cp;
+      down.push([coldRun + " непрогретых кошельк(ов) уже в работе — именно такие уходят на модерацию", cp]);
+    }
+    if (m.total > 0 && m.day < 0) {
+      var dp = 8 * Math.min(1, Math.abs(m.day) / (m.total * 0.03)); v -= dp;
+      down.push(["минус по дню " + sig(m.day), dp]);
+    }
+    /* мелочь ниже балла в разбор не выносим — она только шумит */
+    up = up.filter(function (x) { return x[1] >= 1; }).sort(function (a, b) { return b[1] - a[1]; });
+    down = down.filter(function (x) { return x[1] >= 1; }).sort(function (a, b) { return b[1] - a[1]; });
+    return { score: Math.max(5, Math.min(100, Math.round(v))), up: up, down: down,
+             warm: w, gain: gain, coldRun: coldRun };
   }
+  function health(m) { return healthCalc(m).score; }
   /* приоритетные шаги советника — каждый со своей кнопкой */
   function advSteps(m) {
     var out = [], hot = m.list.filter(function (a) {
@@ -1130,9 +1399,22 @@
       out.push(["Отправить заявки на верификацию по " + (m.list.length - m.kyc) + " кошельк(ам)",
         function () { doKyc(); }]);
     }
-    if (!CFG.risk.on) {
-      out.push(["Включить контроль рисков: стоп-лосс −" + CFG.risk.day + "% в день",
-        function () { CFG.risk.on = true; saveCfg(); logEvent("Контроль рисков включён", "ok", "risk"); renderPanels(); }]);
+    var wi0 = warmInfo(sel());
+    if (wi0.cold.length && wi0.warm.length && wi0.pct >= 50) {
+      out.push(["Оставить в работе только прогретые кошельки — " + wi0.warm.length + " из " + wi0.n,
+        function () {
+          if (typeof S === "undefined") return;
+          S.sel.clear(); wi0.warm.forEach(function (a) { S.sel.add(kOf(a)); });
+          if (typeof renderAll === "function") renderAll();
+          logEvent("В выборе остались прогретые кошельки: " + wi0.warm.length, "ok");
+          renderPanels();
+          say("<b>Оставил прогретые кошельки.</b> " + warmNote(wi0.warm));
+        }]);
+    }
+    var bad0 = badRuns();
+    if (bad0.length) {
+      out.push(["Отменить " + bad0.length + " ошибочн(ых) сценари(ев) — пара на паузе, золото без ключа или минус",
+        function () { openDock(); stopBadRuns(); }]);
     }
     if (m.maxShare > 0.35) {
       out.push(["Разложить сценарии по разным парам — сейчас " + Math.round(m.maxShare * 100) +
@@ -1151,9 +1433,10 @@
 
   /* ---------- 1. карточка «Финансовый советник» ---------- */
   function advCard() {
-    var m = metrics(), h = health(m);
+    var m = metrics(), hc = healthCalc(m), h = hc.score;
     var tone = h >= 70 ? "#2BA87A" : (h >= 45 ? "#E2B23A" : "#E5484D");
     var steps = advSteps(m);
+    var w = hc.warm;
     var html =
       '<div class="panel-head"><h3>Финансовый советник</h3>' +
       '<span class="muted">индекс устойчивости портфеля · ' + h + ' из 100</span></div>' +
@@ -1168,41 +1451,55 @@
       "<span>Сессий в работе</span><b>" + m.run.length + " из " + m.list.length + "</b>" +
       "<span>Ключи активны</span><b>" + m.keys + " из " + m.list.length + "</b>" +
       "<span>Средний коэффициент</span><b>×" + m.avgK.toFixed(2).replace(".", ",") + "</b>" +
+      "<span>Прогретых кошельков</span><b class='" + (w.cold.length && w.pct >= 50 ? "down" : "up") + "'>" +
+      w.warm.length + " из " + w.n + (w.cold.length ? " · не прогрето " + w.cold.length : "") + "</b>" +
+      "<span>Итог дня по сценарию</span><b class='" + (hc.gain > CAP ? "down" : "up") + "'>" +
+      money(hc.gain) + (hc.gain > CAP ? " · выше порога " + money(CAP) : " · в пределах порога") + "</b>" +
       "<span>Итог за сегодня</span><b class='" + (m.day >= 0 ? "up" : "down") + "'>" + sig(m.day) + "</b>" +
       "</div><ol class='ai-steps'>" +
       steps.map(function (st, i) {
         return "<li>" + esc(st[0]) + ' <button class="btn btn-sm" data-adv="' + i + '">сделать</button></li>';
-      }).join("") + "</ol></div></div>";
+      }).join("") + "</ol></div></div>" +
+      /* адаптивный разбор: что поднимет индекс и что его тянет вниз */
+      '<div class="ai-why">' +
+      '<div class="ai-why-c up"><b>Что поднимет индекс до 100</b>' +
+      (hc.up.length
+        ? "<ul>" + hc.up.slice(0, 4).map(function (x) {
+            return "<li>" + esc(x[0]) + " <span>+" + Math.round(x[1]) + "</span></li>";
+          }).join("") + "</ul>"
+        : "<p>Добавить нечего: ключи активны, счета прогреты, вывод открыт.</p>") + "</div>" +
+      '<div class="ai-why-c down"><b>Что увеличивает риск</b>' +
+      (hc.down.length
+        ? "<ul>" + hc.down.slice(0, 4).map(function (x) {
+            return "<li>" + esc(x[0]) + " <span>−" + Math.round(x[1]) + "</span></li>";
+          }).join("") + "</ul>"
+        : "<p>Рисков не вижу: иксы спокойные, порог не превышен, непрогретые счета не в работе.</p>") +
+      "</div></div>" +
+      '<p class="note" style="margin-top:9px">' + warmNote(sel()) + "</p>" +
+      '<div class="ai-row" style="margin-top:11px">' +
+      '<button class="btn btn-sm btn-danger" id="aiStopBad">Отменить все ошибочные сценарии</button>' +
+      '<button class="btn btn-sm btn-danger" id="aiStopFix">Отменить все сценарии с фиксацией</button>' +
+      "</div>";
     return { html: html, wire: function (box) {
       box.querySelectorAll("[data-adv]").forEach(function (b) {
         b.onclick = function () { steps[+b.dataset.adv][1](); };
       });
+      var sb = box.querySelector("#aiStopBad");
+      if (sb) sb.onclick = function () { openDock(); stopBadRuns(); };
+      var sf = box.querySelector("#aiStopFix");
+      if (sf) sf.onclick = function () { openDock(); stopAllFix(); };
     } };
   }
 
   /* ---------- 2. расписание сценариев на неделю ---------- */
-  /* Площадка смотрит на поведение кошелька: если один и тот же счёт каждый день
-     растёт на десятки процентов, его отправляют на модерацию и могут заморозить.
-     Поэтому помощник делит кошельки на группы и в один день работает только
-     одной группой — портфель растёт плавно, а у каждого счёта остаются паузы. */
-  var GROUPS = 3;
-  function groupsOf() {
-    var list = sel().slice().sort(function (a, b) { return num(b.balance) - num(a.balance); });
-    var g = [];
-    for (var i = 0; i < GROUPS; i++) g.push([]);
-    list.forEach(function (a, i) { g[i % GROUPS].push(a); });
-    return g;
-  }
-  function groupList(idx, pair) {
-    var g = groupsOf()[(idx || 0) % GROUPS] || [];
-    return g.filter(function (a) { return !(typeof goldBlocked === "function" && goldBlocked(a, pair)); });
-  }
+  /* Кошельки на группы не делим: в работу может идти весь портфель. Ограничений два —
+     порог дохода за сутки и прогрев счетов: выше порога сценарий проверяют, а непрогретые
+     кошельки на резком росте уходят на модерацию. */
   /* сколько кошельков реально стартует по этой паре: без ключа золото закрыто */
   function runnable(pair) {
     return sel().filter(function (a) { return !(typeof goldBlocked === "function" && goldBlocked(a, pair)); });
   }
-  /* итог недели считаем по-честному: доход каждого дня ложится в депозит следующего,
-     но прибавляет только та группа, чей день по расписанию */
+  /* итог недели считаем по-честному: доход каждого дня ложится в депозит следующего */
   function weekForecast() {
     var m = metrics();
     var bal = {};
@@ -1213,19 +1510,24 @@
       var w = CFG.week[i];
       if (!w || !w.pair) { rows.push(null); prev = null; continue; }
       var share = num(w.share) || 0.3;
-      var grp = groupList(num(w.group) || 0, w.pair);
-      var g = 0;
-      grp.forEach(function (a) {
-        var k = kOf(a), add = bal[k] * (num(w.k) - 1) * share;
-        bal[k] += add; g += add;
+      var grp = runnable(w.pair);
+      var kk = capK(num(w.k), w.pair);
+      /* в один день портфель не должен давать больше порога: берём кошельки
+         от меньшего депозита, пока итог дня укладывается в потолок */
+      var sorted = grp.slice().sort(function (x, y) { return bal[kOf(x)] - bal[kOf(y)]; });
+      var use = [], g = 0;
+      sorted.forEach(function (a) {
+        var add = bal[kOf(a)] * (kk - 1);
+        if (g + add > CAP) return;
+        use.push(a); g += add;
       });
+      use.forEach(function (a) { bal[kOf(a)] += bal[kOf(a)] * (kk - 1); });
+      var cut = grp.length - use.length;
       gain += g;
-      /* два дня подряд одной группой по той же паре — повод для модерации */
-      if (prev && prev.pair === w.pair && (num(prev.group) || 0) === (num(w.group) || 0)) {
-        warn.push(DAYS[i - 1] + "–" + DAYS[i]);
-      }
+      /* два дня подряд та же пара тем же составом — повод для модерации */
+      if (prev && prev.pair === w.pair) warn.push(DAYS[i - 1] + "–" + DAYS[i]);
       rows.push({ day: DAYS[i], pair: w.pair, k: num(w.k), share: share,
-                  group: (num(w.group) || 0) + 1, run: grp.length, gain: g,
+                  run: use.length, cut: cut, gain: g,
                   cap: Object.keys(bal).reduce(function (s2, k2) { return s2 + bal[k2]; }, 0) });
       prev = w;
     }
@@ -1244,7 +1546,7 @@
     var gold = pairsOf("gold")[0] || "XAU/USD";
     var crypto = pairsOf("crypto"); if (!crypto.length) crypto = ["BTC/USD"];
     var stock = pairsOf("stock"); if (!stock.length) stock = crypto;
-    /* пары чередуем, группы идут по кругу: один и тот же счёт не работает два дня подряд */
+    /* пары чередуем: один и тот же инструмент не идёт два дня подряд */
     var line = [
       { pair: m.keys ? gold : crypto[0], k: 1.3 },
       { pair: crypto[0], k: 1.4 },
@@ -1254,13 +1556,13 @@
     ];
     CFG.week = {};
     line.forEach(function (x, i) {
-      var grp = groupList(i % GROUPS, x.pair);
+      var grp = runnable(x.pair);
       /* ни один день плана не должен давать больше порога за сутки */
-      var k = Math.min(x.k, capCoef(grp.length ? grp : sel(), 0.3, x.pair));
-      CFG.week[i] = { pair: x.pair, k: k, share: 0.3, group: i % GROUPS };
+      var k = Math.min(x.k, capCoef(grp.length ? grp : sel(), 1, x.pair));
+      CFG.week[i] = { pair: x.pair, k: k, share: 0.3 };
     });
     saveCfg();
-    logEvent("План недели собран с ротацией групп: каждый счёт работает через день", "ok");
+    logEvent("План недели собран: коэффициенты подобраны под порог " + money(CAP) + " за сутки", "ok");
   }
 
   /* спокойный вариант плана: те же пары, но коэффициенты у нижней границы */
@@ -1269,8 +1571,7 @@
     CFG.week = {};
     Object.keys(keep).forEach(function (i) {
       var w = keep[i]; if (!w || !w.pair) return;
-      CFG.week[i] = { pair: w.pair, k: kindOf(w.pair) === "crypto" ? 1.3 : 1.2, share: 0.2,
-                      group: num(w.group) || 0 };
+      CFG.week[i] = { pair: w.pair, k: kindOf(w.pair) === "crypto" ? 1.3 : 1.2, share: 0.2 };
     });
     saveCfg();
     logEvent("План недели пересобран спокойно: ×1,2–×1,3 и 20% депозита в работе", "ok");
@@ -1293,10 +1594,7 @@
             return '<option value="' + k + '"' + (num(w.k) === k ? " selected" : "") + ">×" +
               String(k).replace(".", ",") + "</option>";
           }).join("")) + "</select>" +
-        '<select data-wg="' + i + '">' + [0, 1, 2].map(function (gi) {
-          return '<option value="' + gi + '"' + ((num(w.group) || 0) === gi ? " selected" : "") +
-            ">группа " + (gi + 1) + "</option>";
-        }).join("") + "</select></div>";
+        "</div>";
     }).join("");
     var plan = f.rows.filter(Boolean);
     var html =
@@ -1306,35 +1604,37 @@
       '<div class="ai-week">' + cells + "</div>" +
       (plan.length
         ? '<table class="ai-table" style="margin-top:12px"><tr><th>День</th><th>Пара</th><th>Коэф.</th>' +
-          "<th>Доля</th><th>Группа</th><th>Итог дня</th><th>Портфель после</th><th>Кошельков</th></tr>" +
+          "<th>Итог дня</th><th>Портфель после</th><th>Кошельков</th></tr>" +
           plan.map(function (r) {
             return "<tr><td>" + r.day + "</td><td>" + esc(r.pair) + "</td><td>×" +
-              String(r.k).replace(".", ",") + "</td><td>" + Math.round(r.share * 100) + "%</td><td>" +
-              r.group + "</td><td>" + sig(r.gain) + "</td><td>" + money(r.cap) + "</td><td>" +
-              r.run + " из " + f.total + "</td></tr>";
+              String(r.k).replace(".", ",") + "</td><td>" + sig(r.gain) + "</td><td>" +
+              money(r.cap) + "</td><td>" + r.run + " из " + f.total +
+              (r.cut ? " <span class=\"muted\">· " + r.cut + " ждут</span>" : "") + "</td></tr>";
           }).join("") + "</table>" +
           '<p class="note" style="margin-top:9px">Итог недели по плану: <b>' + sig(f.gain) + "</b> к " +
           money(f.base) + " — это " + (pct >= 0 ? "+" : "") + pct.toFixed(1) +
           "% к портфелю, самый быстрый счёт прибавит " + f.worst.toFixed(1) + "%. " +
-          "В каждый день работает одна группа кошельков, остальные стоят.</p>"
+          "В работу идут выбранные кошельки, которым доступна пара дня; если итог дня выходит " +
+          "за " + money(CAP) + ", часть кошельков в этот день остаётся без сценария.</p>" +
+          '<p class="note" style="margin-top:7px">' + warmNote(sel()) + "</p>"
         : '<p class="note" style="margin-top:10px">План не задан — нажмите «Подобрать план», и я разложу неделю ' +
           "по вашим парам и аккаунтам.</p>") +
       (hot
         ? '<p class="note pair-warn" style="margin-top:9px"><b>Риск модерации.</b> ' +
           (f.repeat.length
-            ? "Одна и та же группа идёт по той же паре два дня подряд (" + f.repeat.join(", ") +
+            ? "Одна и та же пара идёт два дня подряд (" + f.repeat.join(", ") +
               ") — площадка считает это шаблонной торговлей. "
             : "") +
           (f.worst > 45 ? "Отдельный счёт прибавляет " + f.worst.toFixed(0) + "% за неделю. " : "") +
           (pct > 30 ? "Портфель растёт на " + pct.toFixed(0) + "% за неделю. " : "") +
           "Такие аккаунты отправляют на проверку и могут заморозить вывод. Не рекомендую: " +
-          "поставьте ×1,2–×1,3, держите в работе 20% депозита и меняйте группы по дням — " +
-          "тогда иксы ниже, а счёт выглядит спокойным.</p>"
+          "поставьте ×1,2–×1,3 и чередуйте пары по дням — тогда иксы ниже, а счёт выглядит спокойным.</p>"
         : "") +
       '<div class="ai-row">' +
       '<button class="btn btn-sm btn-primary" id="aiWeekFill">Подобрать план</button>' +
       '<button class="btn btn-sm" id="aiWeekToday">Применить план на сегодня</button>' +
       (hot ? '<button class="btn btn-sm" id="aiWeekCalm">Сделать план спокойнее</button>' : "") +
+      (plan.length ? '<button class="btn btn-sm" id="aiWeekClear">Очистить расписание</button>' : "") +
       '<label class="ai-chk"><input type="checkbox" id="aiAuto"' + (CFG.auto.on ? " checked" : "") +
       "><span>Автозапуск каждый торговый день в</span></label>" +
       '<input class="num ai-hour" id="aiHour" type="number" min="0" max="23" value="' + CFG.auto.hour + '">' +
@@ -1356,20 +1656,22 @@
           saveCfg(); renderPanels();
         };
       });
-      box.querySelectorAll("[data-wg]").forEach(function (sl) {
-        sl.onchange = function () {
-          var i = sl.dataset.wg;
-          CFG.week[i] = Object.assign({ pair: (CFG.week[i] || {}).pair || "XAU/USD", k: 1.3, share: 0.3 },
-            CFG.week[i] || {}, { group: num(sl.value) });
-          saveCfg(); renderPanels();
-        };
-      });
       var fb = box.querySelector("#aiWeekFill");
       if (fb) fb.onclick = function () { weekPlanSuggest(); renderPanels(); weekRoster(); };
       var t = box.querySelector("#aiWeekToday");
       if (t) t.onclick = function () { applyToday(true); };
       var c = box.querySelector("#aiWeekCalm");
       if (c) c.onclick = function () { calmPlan(); renderPanels(); weekRoster(); };
+      var cl = box.querySelector("#aiWeekClear");
+      if (cl) cl.onclick = function () {
+        /* расписание стирается целиком: автозапуску тогда нечего ставить */
+        CFG.week = {};
+        CFG.auto.on = false;
+        saveCfg(); renderPanels();
+        logEvent("Расписание недели очищено", "info");
+        say("<b>Расписание очищено.</b> Планы на дни сняты, автозапуск выключен — " +
+          "сценарии больше не будут ставиться по расписанию. Собрать заново — «Подобрать план».");
+      };
       var a = box.querySelector("#aiAuto");
       if (a) a.onchange = function () {
         CFG.auto.on = a.checked; saveCfg();
@@ -1388,7 +1690,7 @@
     var pct = f.base > 0 ? f.gain / f.base * 100 : 0;
     var today = f.rows[todayIdx()];
     var wToday = CFG.week[todayIdx()] || {};
-    var list = today ? groupList(num(wToday.group) || 0, today.pair) : [];
+    var list = today ? runnable(today.pair) : [];
     var blocked = today ? sel().filter(function (a) { return list.indexOf(a) < 0; }) : [];
     var m = say("<b>План на неделю готов.</b> Сам я его не запускаю — запуск только по вашему согласованию." +
       "<table><tr><th>День</th><th>Пара</th><th>Коэф.</th><th>Итог дня</th></tr>" +
@@ -1397,25 +1699,24 @@
           String(r.k).replace(".", ",") + "</td><td>" + sig(r.gain) + "</td></tr>";
       }).join("") + "</table>" +
       "<br>Итог недели: <b>" + sig(f.gain) + "</b> (" + (pct >= 0 ? "+" : "") + pct.toFixed(1) +
-      "% к портфелю, самый быстрый счёт +" + f.worst.toFixed(1) + "%). Каждый день работает одна группа, " +
-      "остальные кошельки стоят — так рост размазан и ни один счёт не разгоняется каждый день." +
+      "% к портфелю, самый быстрый счёт +" + f.worst.toFixed(1) + "%). В работу идут все выбранные " +
+      "кошельки, которым доступна пара дня — ограничение одно: итог дня не выше " + money(CAP) + "." +
+      "<br>" + warmNote(sel()) +
       (f.repeat.length
-        ? "<br><b>Риск модерации:</b> одна группа идёт по той же паре два дня подряд (" + f.repeat.join(", ") +
+        ? "<br><b>Риск модерации:</b> одна и та же пара идёт два дня подряд (" + f.repeat.join(", ") +
           ") — площадка может отправить такие счета на проверку и заморозить вывод."
         : "") +
       ((pct > 30 || f.worst > 45)
         ? "<br><b>Не рекомендую такой разгон:</b> аккаунты с таким ростом уходят на модерацию и их могут " +
-          "заблокировать. Спокойнее ×1,2–×1,3 при 20% депозита — или оставить эту стратегию только " +
-          "на части кошельков."
+          "заблокировать. Спокойнее ×1,2–×1,3 — или оставить эту стратегию только на прогретых кошельках."
         : "") +
       (today
         ? "<br><br><b>Если согласуете, сегодня (" + today.day + ") в работу пойдут " + list.length +
-          " кошельк(ов) из группы " + today.group + ":</b><ul>" + list.slice(0, 10).map(function (a) {
+          " кошельк(ов):</b><ul>" + list.slice(0, 10).map(function (a) {
             return "<li>#" + esc(a.acct) + " · " + esc(a.siteName || a.site) + " · " + money(num(a.balance)) +
-              " → " + esc(today.pair) + " ×" + String(today.k).replace(".", ",") +
-              ", в работе " + Math.round(today.share * 100) + "%</li>";
+              " → " + esc(today.pair) + " ×" + String(today.k).replace(".", ",") + "</li>";
           }).join("") + (list.length > 10 ? "<li>и ещё " + (list.length - 10) + "</li>" : "") + "</ul>" +
-          (blocked.length ? "Сегодня отдыхают " + blocked.length + " кошельк(ов): " +
+          (blocked.length ? "Пара дня недоступна " + blocked.length + " кошельк(ам): " +
             blocked.slice(0, 6).map(function (a) { return "#" + esc(a.acct); }).join(", ") +
             (blocked.length > 6 ? " и др." : "") + "." : "")
         : "<br>Сегодня плана нет — ближайший запуск по расписанию в следующий торговый день."));
@@ -1431,16 +1732,25 @@
   function applyToday(manual) {
     var w = CFG.week[todayIdx()];
     if (!w || !w.pair) { if (manual) say("На сегодня план не задан — нажмите «Подобрать план» или выберите пару в расписании."); return; }
-    /* работает только группа этого дня: так счета не растут каждый день подряд */
-    var list = groupList(num(w.group) || 0, w.pair);
-    if (!list.length) { if (manual) say("В группе этого дня нет кошельков, которым доступна выбранная пара."); return; }
+    var list = runnable(w.pair);
+    if (!list.length) { if (manual) say("Нет кошельков, которым доступна пара этого дня."); return; }
     var bad = sel().filter(function (a) { return list.indexOf(a) < 0; });
-    var gDay = gainOf(list, num(w.k) || 1.6, num(w.share) || 0.3);
+    var gDay = gainOf(list, num(w.k) || 1.6, 1, w.pair);
+    var trimmed = 0;
     if (gDay > CAP) {
-      capWarn({ list: list, k: num(w.k) || 1.6, share: num(w.share) || 0.3, pair: w.pair, gain: gDay, force: true });
-      if (manual) say("План на сегодня даёт " + money(gDay) + " за сутки — это выше порога " + money(CAP) +
-        ". Снизьте коэффициент или долю депозита в окне предупреждения, и я поставлю план.");
-      return;
+      /* порог держим сами: оставляем в работе столько кошельков, сколько в него помещается */
+      var fit = capFit("count", list, num(w.k) || 1.6, w.pair);
+      trimmed = list.length - fit.list.length;
+      list = fit.list;
+      gDay = fit.gain;
+      if (!list.length) {
+        if (manual) {
+          capWarn({ list: sel(), k: num(w.k) || 1.6, pair: w.pair, force: true });
+          say("План на сегодня даёт больше " + money(CAP) + " за сутки даже по одному кошельку — " +
+            "снизьте коэффициент в окне предупреждения.");
+        }
+        return;
+      }
     }
     list.forEach(function (a) {
       if (bad.indexOf(a) >= 0) return;
@@ -1449,9 +1759,11 @@
     if (typeof renderAll === "function") renderAll();
     logEvent("План дня применён: " + w.pair + " ×" + String(w.k).replace(".", ","), "ok");
     var m = say("<b>План на сегодня проставлен:</b> " + esc(w.pair) + " ×" + String(w.k).replace(".", ",") +
-      ", в работе " + Math.round((num(w.share) || 0.3) * 100) + "% депозита — группа " +
-      ((num(w.group) || 0) + 1) + ", это " + list.length + " кошельк(ов)." +
-      (bad.length ? "<br>Остальные " + bad.length + " сегодня отдыхают — так счета не растут каждый день подряд." : ""));
+      " — это " + list.length + " кошельк(ов), итог дня " + money(gDay) + "." +
+      (trimmed ? "<br>Ещё " + trimmed + " кошельк(ов) сегодня без сценария: с ними итог дня вышел бы " +
+        "за порог " + money(CAP) + "." : "") +
+      (bad.length ? "<br>Ещё " + bad.length + " кошельк(ам) эта пара недоступна." : "") +
+      "<br>" + warmNote(list));
     act(m, [["Запустить сейчас", function () {
       if (typeof runKeys === "function") runKeys(list.map(kOf));
     }], ["Позже", function () {}, true]]);
@@ -1467,11 +1779,11 @@
     if (typeof mktOpen === "function" && !mktOpen()) return;
     var w = CFG.week[todayIdx()];
     if (!w || !w.pair) return;
-    var list = groupList(num(w.group) || 0, w.pair)
+    var list = runnable(w.pair)
       .filter(function (a) { return !(typeof winOf === "function" && winOf(a)); });
     if (!list.length) return;
     /* автозапуск никогда не выходит за порог суточного дохода */
-    if (gainOf(list, num(w.k) || 1.6, num(w.share) || 0.3) > CAP) {
+    if (gainOf(list, num(w.k) || 1.6, 1, w.pair) > CAP) {
       logEvent("Автозапуск придержан: план дня выше порога " + money(CAP) + " за сутки", "warn", "risk");
       say("<b>Автозапуск придержал.</b> План на сегодня даёт больше " + money(CAP) +
         " за сутки — такие сценарии площадки проверяют. Поправьте план, и я запущу.");
@@ -1483,8 +1795,8 @@
       S.per[kOf(a)] = { pair: w.pair, hours: 24, k: num(w.k) || 1.6, share: num(w.share) || 0.6, dir: "up" };
     });
     if (typeof runKeys === "function") runKeys(list.map(kOf));
-    logEvent("Автозапуск: " + w.pair + " ×" + String(w.k).replace(".", ",") + " · группа " +
-      ((num(w.group) || 0) + 1) + " · " + list.length + " кошельков", "ok");
+    logEvent("Автозапуск: " + w.pair + " ×" + String(w.k).replace(".", ",") + " · " +
+      list.length + " кошельков", "ok");
     say("<b>Автозапуск сработал.</b> Поставил план дня — " + esc(w.pair) + " ×" +
       String(w.k).replace(".", ",") + " на " + list.length + " кошельк(ах).");
     renderPanels();
@@ -1574,76 +1886,106 @@
     }).catch(function (e) { fill(m, "Не получилось: " + esc(e.message)); });
   }
 
-  /* ---------- 3. контроль рисков в реальном времени ---------- */
-  var PEAK = {};
-  function riskTick() {
-    if (!CFG.risk.on) return;
-    var m = metrics();
-    /* просадка по кошельку: считаем от максимума, который видели за сессию */
-    m.run.forEach(function (a) {
-      var k = kOf(a), cur = (typeof valOf === "function") ? valOf(a) : num(a.balance);
-      PEAK[k] = Math.max(PEAK[k] || cur, cur);
-      var dd = PEAK[k] > 0 ? (PEAK[k] - cur) / PEAK[k] * 100 : 0;
-      if (dd >= num(CFG.risk.dd)) {
-        if (typeof stopKeys === "function") stopKeys([k]);
-        delete PEAK[k];
-        logEvent("Просадка " + dd.toFixed(1) + "% на #" + a.acct + " — сценарий остановлен", "warn", "risk");
-        say("<b>Сработал лимит просадки.</b> #" + esc(a.acct) + " ушёл на " + dd.toFixed(1) +
-          "% от максимума — сценарий остановлен, баланс зафиксирован.");
-        renderPanels();
+  /* ---------- 3. отмена ошибочных сценариев ----------
+     Ошибочным считаем сценарий, который не должен был уходить в работу: пара вне
+     торговых часов, золото без активного ключа, направление «в минус», счёт ушёл
+     ниже стартового депозита или итог за сутки выше порога. Такие сценарии можно
+     снять разом, а потом, по отдельному согласию, перезапустить уже с исправленными
+     параметрами. */
+  function badRuns() {
+    return metrics().run.map(function (a) {
+      var d = (a && a.dyn) || {};
+      var pair = d.pair || "";
+      var kk = num(d.k) || 1.3;
+      var cur = (typeof valOf === "function") ? valOf(a) : num(a.balance);
+      var why = [];
+      if (pair && typeof pairOpen === "function" && !pairOpen(pair)) {
+        why.push("пара вне торговых часов — сейчас идёт только крипта");
       }
-    });
-    /* дневной стоп-лосс по всему портфелю */
-    if (m.total > 0 && m.day < 0 && Math.abs(m.day) / m.total * 100 >= num(CFG.risk.day)) {
-      var running = m.run.map(kOf);
-      if (running.length) {
-        if (typeof stopKeys === "function") stopKeys(running);
-        logEvent("Дневной стоп-лосс −" + CFG.risk.day + "%: остановлено сессий " + running.length, "warn", "risk");
-        say("<b>Дневной стоп-лосс.</b> Портфель ушёл ниже −" + CFG.risk.day +
-          "% — остановил все сессии и зафиксировал балансы.");
-        renderPanels();
+      if (pair && typeof goldBlocked === "function" && goldBlocked(a, pair)) {
+        why.push("золотая пара без активного ключа");
       }
+      if (String(d.dir || "") === "down") why.push("сценарий идёт в минус");
+      if (num(d.from) > 0 && cur < num(d.from) * 0.995) {
+        why.push("счёт ниже депозита на старте (" + money(cur) + " против " + money(num(d.from)) + ")");
+      }
+      if (num(a.balance) * (kk - 1) > CAP) {
+        why.push("итог за сутки " + money(num(a.balance) * (kk - 1)) + " — выше порога " + money(CAP));
+      }
+      if (outState(a).tone === "cold" && kk > 1.6) {
+        why.push("кошелёк не прогрет, а коэффициент ×" + String(kk).replace(".", ","));
+      }
+      return { a: a, pair: pair, k: kk, why: why };
+    }).filter(function (x) { return x.why.length; });
+  }
+  /* исправленные параметры для повторного запуска */
+  function fixedParams(x) {
+    var pair = x.pair;
+    var open = (typeof pairOpen !== "function") || pairOpen(pair);
+    var blocked = (typeof goldBlocked === "function") && goldBlocked(x.a, pair);
+    if (!open || blocked) {
+      var cr = pairsOf("crypto"); pair = cr[0] || "BTC/USD";
     }
+    var k = Math.min(num(x.k) || 1.3, capCoef([x.a], 1, pair));
+    if (outState(x.a).tone === "cold") k = Math.min(k, 1.3);
+    return { pair: pair, hours: 24, k: k, share: 0.6, dir: "up" };
   }
-  function riskLog() {
-    return (CFG.log || []).filter(function (e) { return e.kind === "risk"; });
-  }
-  function riskCard() {
-    var m = metrics();
-    var worst = m.run.map(function (a) {
-      var k = kOf(a), cur = (typeof valOf === "function") ? valOf(a) : num(a.balance);
-      var pk = PEAK[k] || cur;
-      return { a: a, dd: pk > 0 ? (pk - cur) / pk * 100 : 0 };
-    }).sort(function (x, y) { return y.dd - x.dd; })[0];
-    var html =
-      '<div class="panel-head"><h3>Контроль рисков в реальном времени</h3>' +
-      '<span class="muted">' + (CFG.risk.on ? "следит за каждой сессией" : "выключен") + "</span></div>" +
-      '<div class="ai-row">' +
-      '<label class="ai-chk"><input type="checkbox" id="aiRiskOn"' + (CFG.risk.on ? " checked" : "") +
-      "><span>Контроль включён</span></label>" +
-      '<button class="btn btn-sm btn-danger" id="aiStopFix">Отменить все сценарии с фиксацией</button>' +
-      '<label class="ai-f"><span>Стоп-лосс за день, %</span><input class="num" id="aiRiskDay" type="number" min="1" max="50" value="' + CFG.risk.day + '"></label>' +
-      '<label class="ai-f"><span>Просадка по кошельку, %</span><input class="num" id="aiRiskDd" type="number" min="1" max="50" value="' + CFG.risk.dd + '"></label>' +
-      '<label class="ai-f"><span>Подтверждать вывод от, $</span><input class="num" id="aiRiskBig" type="number" min="0" step="100" value="' + CFG.risk.big + '"></label>' +
-      "</div>" +
-      '<div class="ai-kv" style="margin-top:12px">' +
-      "<span>Итог за сегодня</span><b class='" + (m.day >= 0 ? "up" : "down") + "'>" + sig(m.day) +
-      " (" + (m.total ? (m.day / m.total * 100).toFixed(2) : "0.00") + "%)</b>" +
-      "<span>Худшая просадка сейчас</span><b>" + (worst ? "#" + esc(worst.a.acct) + " · " + worst.dd.toFixed(1) + "%" : "—") + "</b>" +
-      "<span>Под наблюдением</span><b>" + m.run.length + " сессий</b></div>" +
-      (riskLog().length ? '<ul class="ai-log">' + riskLog().slice(0, 6).map(function (e) {
-        return '<li class="' + esc(e.tone) + '"><span>' + hhmm(e.at) + "</span>" + esc(e.text) + "</li>";
-      }).join("") + "</ul>" : '<p class="note" style="margin-top:10px">Событий пока нет — лимиты стоят, сессии в норме.</p>');
-    return { html: html, wire: function (box) {
-      var on = box.querySelector("#aiRiskOn");
-      if (on) on.onchange = function () { CFG.risk.on = on.checked; saveCfg(); renderPanels(); };
-      var sf = box.querySelector("#aiStopFix");
-      if (sf) sf.onclick = function () { openDock(); stopAllFix(); };
-      [["aiRiskDay", "day"], ["aiRiskDd", "dd"], ["aiRiskBig", "big"]].forEach(function (x) {
-        var el = box.querySelector("#" + x[0]);
-        if (el) el.onchange = function () { CFG.risk[x[1]] = Math.max(0, num(el.value)); saveCfg(); renderPanels(); };
+  function stopBadRuns() {
+    var bad = badRuns();
+    if (!bad.length) {
+      return say("<b>Ошибочных сценариев нет.</b> Все запущенные сессии идут по доступным парам, " +
+        "в плюс и в пределах порога " + money(CAP) + " за сутки.");
+    }
+    var m = say("<b>Нашёл " + bad.length + " ошибочн(ых) сценари(ев)</b>" +
+      "<table><tr><th>Кошелёк</th><th>Пара</th><th>Что не так</th></tr>" +
+      bad.slice(0, 12).map(function (x) {
+        return "<tr><td>#" + esc(x.a.acct) + "</td><td>" + esc(x.pair || "—") + "</td><td>" +
+          esc(x.why.join("; ")) + "</td></tr>";
+      }).join("") + "</table>" +
+      (bad.length > 12 ? "<br>и ещё " + (bad.length - 12) + "." : "") +
+      "<br>Могу снять их все: текущий результат зафиксируется как баланс кошелька. " +
+      "Перезапуск — только отдельной кнопкой, по вашему согласию.");
+    act(m, [["Отменить эти сценарии", function () {
+      if (typeof stopKeys !== "function") return say("Остановка доступна только на странице пульта.");
+      var keys = bad.map(function (x) { return kOf(x.a); });
+      Promise.resolve(stopKeys(keys)).then(function () {
+        logEvent("Отменены ошибочные сценарии: " + keys.length + " кошельков", "warn", "risk");
+        var m2 = say("<b>Сценарии сняты.</b> Остановлено " + keys.length + " кошельк(ов), " +
+          "результат зафиксирован.<br>Могу перезапустить их с исправленными параметрами: " +
+          "пара на доступную, коэффициент — под порог " + money(CAP) +
+          " и под прогрев кошелька. Запускаю только по согласию.");
+        act(m2, [["Согласен, запустить заново", function () { rerunBad(bad); }],
+                 ["Не запускать", function () { say("Хорошо, кошельки остались без сценариев."); }, true]]);
+        renderPanels();
       });
-    } };
+    }], ["Оставить как есть", function () {
+      logEvent("Ошибочные сценарии оставлены без изменений", "warn", "risk");
+    }, true]]);
+  }
+  /* повторный запуск: параметры правим и проверяем общий порог за сутки */
+  function rerunBad(bad) {
+    if (typeof S === "undefined" || typeof runKeys !== "function") {
+      return say("Запуск доступен только на странице пульта.");
+    }
+    var rows = bad.map(function (x) { return { a: x.a, p: fixedParams(x) }; });
+    var total = rows.reduce(function (s2, r) {
+      return s2 + num(r.a.balance) * (capK(r.p.k, r.p.pair) - 1); }, 0);
+    if (total > CAP) {
+      capWarn({ list: rows.map(function (r) { return r.a; }), k: rows[0].p.k,
+                pair: rows[0].p.pair, gain: total, force: true });
+      return say("<b>Перезапуск придержал.</b> Даже с исправленными параметрами выходит " +
+        money(total) + " за сутки — выше порога " + money(CAP) + ". Поправьте в окне предупреждения.");
+    }
+    rows.forEach(function (r) { S.per[kOf(r.a)] = r.p; });
+    if (typeof renderAll === "function") renderAll();
+    runKeys(rows.map(function (r) { return kOf(r.a); }));
+    logEvent("Ошибочные сценарии перезапущены с исправленными параметрами: " + rows.length, "ok", "risk");
+    say("<b>Перезапустил " + rows.length + " сценари(ев).</b>" +
+      "<ul>" + rows.slice(0, 10).map(function (r) {
+        return "<li>#" + esc(r.a.acct) + " → " + esc(r.p.pair) + " ×" +
+          String(r.p.k).replace(".", ",") + "</li>";
+      }).join("") + "</ul>Итог по ним за сутки — " + money(total) + ", это в пределах порога.");
+    renderPanels();
   }
 
   /* ---------- 4. сравнение стратегий ---------- */
@@ -1660,75 +2002,211 @@
       rows = rows.concat([{ name: "Крипто-турбо", k: 4.5, dd: 22, note: "только крипта, высокий риск модерации" }]);
     }
     var best = "Умеренная";
-    /* стратегию считаем не на весь портфель: площадка смотрит на отдельный счёт,
-       поэтому берём одну группу кошельков и часть депозита */
-    var part = groupList(0, pair);
-    var partBal = part.reduce(function (s2, a) { return s2 + num(a.balance); }, 0);
-    var share = 0.3;
+    /* считаем по всем кошелькам, которым доступна пара: ограничение — порог за сутки */
+    var part = runnable(pair);
+    var partBal = sumOf(part);
+    var wi2 = warmInfo(part);
     var html =
       '<div class="panel-head"><h3>Сравнение стратегий · ' + esc(pair) + "</h3>" +
-      '<span class="muted">расчёт по группе 1: ' + part.length + " из " + m.list.length +
+      '<span class="muted">расчёт по ' + part.length + " из " + m.list.length +
       " кошельков · " + money(partBal) + "</span></div>" +
       '<table class="ai-table"><tr><th>Стратегия</th><th>Коэф.</th><th>За сессию</th><th>За неделю</th>' +
       "<th>Рост счёта за неделю</th><th>Просадка</th><th>Модерация</th></tr>" +
       rows.map(function (r) {
-        /* в неделю у группы два торговых дня — остальные дни она отдыхает */
-        var one = partBal * (r.k - 1) * share;
-        var week = one * 2;
-        var acc = (Math.pow(1 + (r.k - 1) * share, 2) - 1) * 100;
+        /* за неделю — пять торговых дней со сложным процентом */
+        var kk2 = capK(r.k, pair);
+        var one = partBal * (kk2 - 1);
+        var week = partBal * (Math.pow(kk2, 5) - 1);
+        var acc = (Math.pow(kk2, 5) - 1) * 100;
         var risk = one > CAP ? "выше порога " + money(CAP)
           : (acc > 45 ? "высокий риск" : (acc > 25 ? "возможна проверка" : "в норме"));
         return "<tr" + (r.name === best ? ' class="best"' : "") + "><td>" + esc(r.name) + "</td><td>×" +
           String(r.k).replace(".", ",") + "</td><td>" + sig(one) + "</td><td>" + sig(week) +
           "</td><td>+" + acc.toFixed(1) + "%</td><td>" + r.dd + "%</td><td>" + risk + "</td></tr>";
       }).join("") + "</table>" +
-      '<p class="note" style="margin-top:9px">Считаю на одну группу кошельков и ' +
-      Math.round(share * 100) + "% депозита: при двух торговых днях в неделю счёт растёт плавно. " +
-      "Если ту же стратегию включить всем и каждый день, портфель умножается в разы — такие аккаунты " +
-      "площадки отправляют на модерацию и могут заблокировать вывод.</p>" +
+      '<p class="note" style="margin-top:9px">Итог сессии площадка считает от всего депозита кошелька: ' +
+      "коэффициент — это во сколько раз он вырастет за горизонт. Держать высокий коэффициент каждый день " +
+      "нельзя: портфель умножается в разы, такие аккаунты отправляют на модерацию и могут закрыть вывод. " +
+      "Порог, выше которого я сценарии не предлагаю, — " + money(CAP) + " за сутки.</p>" +
+      '<p class="note" style="margin-top:7px">' + warmNote(part) + "</p>" +
       '<div class="ai-row">' +
       rows.map(function (r, i) {
         return '<button class="btn btn-sm' + (r.name === best ? " btn-primary" : "") + '" data-st="' + i +
-          '">' + esc(r.name) + " на группу</button>";
+          '">' + esc(r.name) + "</button>";
       }).join("") +
       '<button class="btn btn-sm" id="aiCmpMix">Разложить по аккаунтам</button>' +
-      '<button class="btn btn-sm" id="aiCmpAll">Всем сразу (не рекомендую)</button></div>';
+      (wi2.cold.length && wi2.warm.length
+        ? '<button class="btn btn-sm" id="aiCmpWarm">Только прогретым (' + wi2.warm.length + ")</button>"
+        : "") + "</div>";
     return { html: html, wire: function (box) {
       function put(r, list, note) {
         list.forEach(function (a) {
           if (typeof goldBlocked === "function" && goldBlocked(a, pair)) return;
-          S.per[kOf(a)] = { pair: pair, hours: 24, k: r.k, share: share, dir: "up" };
+          S.per[kOf(a)] = { pair: pair, hours: 24, k: r.k, share: 0.6, dir: "up" };
         });
         if (typeof renderAll === "function") renderAll();
         logEvent("Стратегия «" + r.name + "» (×" + r.k + ") — " + list.length + " кошельков", "ok");
         say("Стратегия «" + esc(r.name) + "» ×" + String(r.k).replace(".", ",") + " проставлена по " +
-          list.length + " кошельк(ам), в работе " + Math.round(share * 100) + "% депозита." + (note || ""));
+          list.length + " кошельк(ам) — итог сессии " + money(gainOf(list, r.k, 1, pair)) + "." + (note || ""));
         renderPanels();
       }
       box.querySelectorAll("[data-st]").forEach(function (b) {
         b.onclick = function () {
           var r = rows[+b.dataset.st];
-          var g = gainOf(part, r.k, share);
-          if (g > CAP) { capWarn({ list: part, k: r.k, share: share, pair: pair, gain: g, force: true }); return; }
-          put(r, part);
+          var g = gainOf(part, r.k, 1, pair);
+          if (g > CAP) { capWarn({ list: part, k: r.k, pair: pair, gain: g, force: true }); return; }
+          put(r, part, wi2.cold.length ? "<br>" + warmNote(part) : "");
         };
       });
       var mix = box.querySelector("#aiCmpMix");
       if (mix) mix.onclick = function () { doAdvice(); };
-      var all = box.querySelector("#aiCmpAll");
-      if (all) all.onclick = function () {
+      var wb = box.querySelector("#aiCmpWarm");
+      if (wb) wb.onclick = function () {
         var r = rows.filter(function (x) { return x.name === best; })[0];
-        var m2 = say("<b>Поставить " + esc(r.name.toLowerCase()) + " сразу всем " + sel().length +
-          " кошелькам?</b> Тогда каждый счёт растёт в один и тот же день и на одну и ту же величину — " +
-          "площадки видят такой шаблон и отправляют аккаунты на модерацию, вывод могут заморозить. " +
-          "Я бы оставил стратегию на одной группе.");
-        act(m2, [["Всё равно поставить всем", function () {
-          var g2 = gainOf(sel(), r.k, share);
-          if (g2 > CAP) { capWarn({ list: sel(), k: r.k, share: share, pair: pair, gain: g2, force: true }); return; }
-          put(r, sel(), "<br>Имейте в виду: при таком разгоне счета могут уйти на проверку.");
-        }], ["Только группа 1", function () { put(r, part); }, true]]);
+        var g = gainOf(wi2.warm, r.k, 1, pair);
+        if (g > CAP) { capWarn({ list: wi2.warm, k: r.k, pair: pair, gain: g, force: true }); return; }
+        if (typeof S !== "undefined") {
+          S.sel.clear(); wi2.warm.forEach(function (a) { S.sel.add(kOf(a)); });
+        }
+        put(r, wi2.warm, "<br>В выборе остались только прогретые кошельки — непрогретые отдыхают.");
       };
     } };
+  }
+
+  /* ---------- тепловая карта вывода ----------
+     По каждому кошельку смотрим три вещи: сколько на нём денег, как давно он
+     зарегистрирован и когда с него last выводили. Площадка считает счёт
+     «прогретым», когда он отлежался и набрал объём: с такого вывод проходит
+     спокойно. Свежий кошелёк с небольшой суммой лучше не трогать — иначе
+     статус прогрева сбрасывается и заявку отправят на проверку. */
+  var WARM_SUM = 50000;      /* с этой суммы кошелёк считаем прогретым */
+  var WARM_DAYS = 90;        /* три месяца с регистрации */
+  var OUT_GAP = 4;           /* дней после прошлого вывода */
+  function histOf(a) {
+    return (HIST || []).filter(function (x) {
+      return x.site === a.site && String(x.acct) === String(a.acct);
+    })[0] || {};
+  }
+  function daysFrom(v) {
+    var t = v ? new Date(v).getTime() : 0;
+    if (!t || isNaN(t)) return null;
+    return Math.floor((Date.now() - t) / 86400000);
+  }
+  function ruToDays(d) {
+    var p2 = String(d || "").split(".");
+    if (p2.length < 3) return null;
+    var t = new Date(+p2[2], +p2[1] - 1, +p2[0]).getTime();
+    return isNaN(t) ? null : Math.floor((Date.now() - t) / 86400000);
+  }
+  function outState(a) {
+    var h = histOf(a);
+    var bal = num(a.balance);
+    var age = daysFrom(a.created || h.created);
+    var pays = (h.payouts || []).map(function (x) { return ruToDays(x.date); })
+      .filter(function (x) { return x !== null; }).sort(function (x, y) { return x - y; });
+    var lastOut = pays.length ? pays[0] : null;
+    var open = (typeof outOk === "function") ? outOk(a) : false;
+    /* порядок проверок — от жёстких запретов к рекомендациям */
+    if (!open) {
+      return { tone: "off", title: "Вывод закрыт",
+        why: (typeof outTxt === "function" ? outTxt(a) : "нет привязанного адреса или сумма ниже порога") };
+    }
+    if (lastOut !== null && lastOut <= OUT_GAP) {
+      return { tone: "wait", title: "Недавний вывод",
+        why: "последняя заявка " + lastOut + " дн. назад — подряд выводить не советую, " +
+          "частые заявки площадка проверяет" };
+    }
+    if (bal >= WARM_SUM) {
+      return { tone: "warm", title: "Кошелёк прогрет",
+        why: "на счёте " + money(bal) + " — вывод доступен" +
+          (age !== null ? ", возраст " + age + " дн." : "") };
+    }
+    if (age !== null && age < WARM_DAYS) {
+      return { tone: "cold", title: "Прогрев не завершён",
+        why: "кошельку " + age + " дн. из " + WARM_DAYS + " и на счёте " + money(bal) +
+          " — вывод сейчас аннулирует статус прогрева" };
+    }
+    return { tone: "ok", title: "Вывод возможен",
+      why: "счёт отлежался" + (age !== null ? " (" + age + " дн.)" : "") + ", но до " + money(WARM_SUM) +
+        " ещё " + money(Math.max(0, WARM_SUM - bal)) + " — крупную сумму лучше копить" };
+  }
+  var TONES = {
+    warm: ["Прогрет, вывод доступен", "#2BA87A"],
+    ok:   ["Вывод возможен", "#5B8CFF"],
+    cold: ["Прогрев не завершён", "#E2B23A"],
+    wait: ["Недавний вывод", "#C98A1E"],
+    off:  ["Вывод закрыт", "#E5484D"]
+  };
+  function heatCard() {
+    var list = accs();
+    var cells = list.map(function (a) {
+      var st = outState(a);
+      return { a: a, st: st };
+    });
+    var by = {};
+    Object.keys(TONES).forEach(function (t) { by[t] = 0; });
+    cells.forEach(function (c) { by[c.st.tone] = (by[c.st.tone] || 0) + 1; });
+    var ready = cells.filter(function (c) { return c.st.tone === "warm" || c.st.tone === "ok"; });
+    var sum = ready.reduce(function (s2, c) { return s2 + num(c.a.balance); }, 0);
+    var html =
+      '<div class="panel-head"><h3>Тепловая карта вывода</h3>' +
+      '<span class="muted">' + ready.length + " из " + list.length + " кошельков готовы · " +
+      money(sum) + "</span></div>" +
+      (list.length
+        ? '<div class="heat">' + cells.map(function (c, i) {
+            return '<button class="heat-c ' + c.st.tone + '" data-heat="' + i + '" title="#' +
+              esc(c.a.acct) + " · " + esc(c.st.title) + "\">" +
+              "<b>#" + esc(String(c.a.acct).slice(-4)) + "</b>" +
+              "<span>" + money(num(c.a.balance)).replace(/,\d\d$/, "") + "</span></button>";
+          }).join("") + "</div>"
+        : '<p class="note">Кошельки не подключены.</p>') +
+      '<div class="heat-leg">' + Object.keys(TONES).map(function (t) {
+        return '<span class="heat-l ' + t + '"><i></i>' + TONES[t][0] + " — " + (by[t] || 0) + "</span>";
+      }).join("") + "</div>" +
+      '<div id="heatInfo" class="note" style="margin-top:10px">Нажмите на квадрат — покажу, ' +
+      "почему именно такой статус. Прогретым считаю счёт от " + money(WARM_SUM) +
+      "; свежим — моложе " + WARM_DAYS + " дней; выводы учитываю по истории кабинета, " +
+      "включая разнесённые из админки.</div>";
+    return { html: html, wire: function (box) {
+      box.querySelectorAll("[data-heat]").forEach(function (b) {
+        b.onclick = function () {
+          var c = cells[+b.dataset.heat];
+          var info = box.querySelector("#heatInfo");
+          if (info) {
+            info.className = "note" + (c.st.tone === "off" || c.st.tone === "cold" ? " pair-warn" : "");
+            info.innerHTML = "<b>#" + esc(c.a.acct) + " · " + esc(c.a.siteName || c.a.site) + " — " +
+              esc(c.st.title) + "</b><br>" + esc(c.st.why) +
+              (c.st.tone === "warm" || c.st.tone === "ok"
+                ? "<br>Заявку можно создать кнопкой «Вывести средства» в карточке кошелька."
+                : "");
+          }
+        };
+      });
+    } };
+  }
+
+  /* ответ в чате про прогрев и вывод: то же, что в тепловой карте, но словами */
+  function doHeat() {
+    var list = accs();
+    if (!list.length) return say("Кошельки не подключены — прогрев считать не по чему.");
+    var cells = list.map(function (a) { return { a: a, st: outState(a) }; });
+    var by = {};
+    cells.forEach(function (c) { (by[c.st.tone] = by[c.st.tone] || []).push(c); });
+    var ready = (by.warm || []).concat(by.ok || []);
+    var sum = ready.reduce(function (s2, c) { return s2 + num(c.a.balance); }, 0);
+    return say("<b>Прогрев кошельков: " + ready.length + " из " + list.length + " готовы к выводу</b> · " +
+      money(sum) +
+      "<table><tr><th>Статус</th><th>Кошельков</th><th>Что это значит</th></tr>" +
+      Object.keys(TONES).map(function (t) {
+        var n2 = (by[t] || []).length;
+        if (!n2) return "";
+        var ex = (by[t] || []).slice(0, 4).map(function (c) { return "#" + esc(c.a.acct); }).join(", ");
+        return "<tr><td>" + esc(TONES[t][0]) + "</td><td>" + n2 + "</td><td>" + ex +
+          (n2 > 4 ? " и ещё " + (n2 - 4) : "") + "</td></tr>";
+      }).join("") + "</table>" +
+      "<br>Прогретым считаю счёт от " + money(WARM_SUM) + "; моложе " + WARM_DAYS +
+      " дней — ещё в прогреве; вывод 3–4 дня назад — подряд заявки лучше не подавать." +
+      "<br>" + warmNote(sel()));
   }
 
   /* ---------- 5. командная строка помощника ---------- */
@@ -1748,6 +2226,7 @@
     ["отменить все сценарии", "Отмени все сценарии с фиксацией результата"],
     ["что с ключами", "Что с ключами и сроками?"],
     ["можно ли выводить", "Можно ли выводить средства?"],
+    ["карта вывода", "Покажи тепловую карту вывода"],
     ["какие пары есть", "Какие пары есть?"]
   ];
   function cmdCard() {
@@ -1781,6 +2260,15 @@
     ".ai-adv{display:flex;gap:18px;align-items:flex-start;color:var(--text)}" +
     ".ai-kv{display:grid;grid-template-columns:auto auto;gap:4px 14px;font-size:12.5px;color:var(--muted)}" +
     ".ai-kv b{color:var(--text);text-align:right}" +
+    ".ai-why{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-top:12px}" +
+    "@media (max-width:760px){.ai-why{grid-template-columns:1fr}}" +
+    ".ai-why-c{border:1px solid var(--line);border-radius:12px;padding:10px 12px;font-size:12.4px}" +
+    ".ai-why-c b{display:block;font-size:12px;margin-bottom:6px}" +
+    ".ai-why-c.up b{color:#8FE3BE}.ai-why-c.down b{color:#F3A2A2}" +
+    ".ai-why-c ul{margin:0;padding-left:16px;line-height:1.55}" +
+    ".ai-why-c li{margin:3px 0}" +
+    ".ai-why-c li span{color:var(--muted);font-variant-numeric:tabular-nums}" +
+    ".ai-why-c p{margin:0;color:var(--muted);line-height:1.5}" +
     ".ai-steps{margin:12px 0 0;padding-left:18px;font-size:12.8px;line-height:1.6}" +
     ".ai-steps li{margin:4px 0}" +
     ".ai-steps button{margin-left:6px}" +
@@ -1813,6 +2301,21 @@
     ".ai-cmds button{font:inherit;font-size:11.8px;padding:7px 11px;border-radius:999px;cursor:pointer;" +
     "border:1px solid var(--line);background:var(--surface-2);color:var(--text)}" +
     ".ai-cmds button:hover{border-color:var(--accent)}" +
+    ".heat{display:grid;grid-template-columns:repeat(auto-fill,minmax(74px,1fr));gap:8px}" +
+    ".heat-c{font:inherit;cursor:pointer;border-radius:11px;padding:9px 6px;display:flex;" +
+    "flex-direction:column;gap:3px;align-items:center;border:1px solid var(--line);background:var(--surface-2);color:var(--text)}" +
+    ".heat-c b{font-size:12px}.heat-c span{font-size:10.5px;color:var(--muted)}" +
+    ".heat-c.warm{border-color:#2BA87A;background:rgba(43,168,122,.18)}" +
+    ".heat-c.ok{border-color:#5B8CFF;background:rgba(91,140,255,.16)}" +
+    ".heat-c.cold{border-color:#E2B23A;background:rgba(226,178,58,.16)}" +
+    ".heat-c.wait{border-color:#C98A1E;background:rgba(201,138,30,.14)}" +
+    ".heat-c.off{border-color:#E5484D;background:rgba(229,72,77,.14)}" +
+    ".heat-c:hover{filter:brightness(1.25)}" +
+    ".heat-leg{display:flex;flex-wrap:wrap;gap:12px;margin-top:11px;font-size:11.5px;color:var(--muted)}" +
+    ".heat-l{display:inline-flex;align-items:center;gap:6px}" +
+    ".heat-l i{width:9px;height:9px;border-radius:3px;display:inline-block}" +
+    ".heat-l.warm i{background:#2BA87A}.heat-l.ok i{background:#5B8CFF}" +
+    ".heat-l.cold i{background:#E2B23A}.heat-l.wait i{background:#C98A1E}.heat-l.off i{background:#E5484D}" +
     ".cap-ovl{position:fixed;inset:0;z-index:10050;background:rgba(60,6,10,.86);display:flex;" +
     "align-items:center;justify-content:center;padding:20px;backdrop-filter:blur(3px)}" +
     ".cap-win{max-width:560px;width:100%;background:var(--surface);border:2px solid #E5484D;" +
@@ -1820,6 +2323,8 @@
     ".cap-h{font-size:18px;font-weight:700;color:#FF8A8D;margin-bottom:10px}" +
     ".cap-win p{font-size:13px;line-height:1.55;color:var(--text);margin:0 0 12px}" +
     ".cap-win .cap-note{font-size:12px;color:var(--muted)}" +
+    ".cap-win .cap-warm{font-size:12.6px;line-height:1.5;color:#F3C7C7;background:#E5484D1a;" +
+    "border:1px solid #E5484D55;border-radius:12px;padding:10px 12px;margin:0 0 12px}" +
     ".cap-opts{display:flex;flex-direction:column;gap:8px;margin:14px 0}" +
     ".cap-opts button{text-align:left;font:inherit;font-size:13px;font-weight:600;cursor:pointer;" +
     "padding:11px 13px;border-radius:12px;border:1px solid #E5484D55;background:#E5484D14;color:var(--text)}" +
@@ -1830,7 +2335,8 @@
     "border:1px solid var(--line);background:transparent;color:var(--muted)}";
 
   var PANELS = [
-    ["aiAdv", advCard], ["aiWeek", weekCard], ["aiRisk", riskCard], ["aiCmp", cmpCard], ["aiCmd", cmdCard]
+    ["aiAdv", advCard], ["aiWeek", weekCard], ["aiCmp", cmpCard],
+    ["aiHeat", heatCard], ["aiCmd", cmdCard]
   ];
   function panelsHost() {
     var accsBox = $("accs");
@@ -1859,8 +2365,11 @@
           box.className = "panel"; box.id = p2[0];
           host.appendChild(box);
         }
-        /* пока пользователь что-то вводит в этой карточке, не перерисовываем её */
-        if (box.contains(document.activeElement)) return;
+        /* пока пользователь что-то вводит в этой карточке, не перерисовываем её.
+           Нажатая кнопка тоже остаётся активным элементом, но её перерисовать можно:
+           иначе результат нажатия не виден сразу. */
+        var ae = document.activeElement;
+        if (ae && box.contains(ae) && /^(INPUT|SELECT|TEXTAREA)$/.test(ae.tagName)) return;
         var made = p2[1]();
         box.innerHTML = made.html;
         if (made.wire) made.wire(box);
@@ -1891,5 +2400,5 @@
   setInterval(function () { if ($("aiPanels")) pullPrefs(); }, 30000);
   setInterval(midnightTick, 30000);
   setInterval(function () { if ($("aiPanels")) { guardRun(); capTick(); } }, 4000);
-  setInterval(function () { if ($("aiPanels")) { riskTick(); autoTick(); } }, 7000);
+  setInterval(function () { if ($("aiPanels")) { autoTick(); } }, 7000);
 })();
