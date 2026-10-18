@@ -638,6 +638,41 @@ app.post('/api/admin/mass-day', requireAdmin, async (req, res) => {
    до которого кривая дошла к этой минуте, записываем его как итог торгового дня
    в кабинет клиента и фиксируем баланс. Запуск сохраняется пачкой в mass_days
    по каждой площадке, поэтому в админке его можно отменить целиком. */
+/* Выставить итоговые балансы списком: по номеру кошелька меняем только поле
+   баланса на обеих площадках. История операций и сделок не трогается — она
+   остаётся ровно такой, какой была, меняется лишь конечная цифра. */
+app.post('/api/admin/set-balances', requireAdmin, async (req, res) => {
+  try {
+    const rows = Array.isArray((req.body || {}).rows) ? req.body.rows.slice(0, 500) : [];
+    if (!rows.length) return bad(res, 400, 'Список пуст: нужны пары «номер кошелька — баланс»');
+    const dry = !!(req.body || {}).dry;
+    const out = [];
+    for (const r of rows) {
+      const acct = String((r && r.acct) || '').replace(/\D/g, '');
+      const val = Number(String((r && r.balance) !== undefined ? r.balance : '')
+        .toString().replace(/\s|\u00a0/g, '').replace(',', '.'));
+      if (!acct || !isFinite(val) || val < 0) {
+        out.push({ acct: acct || String((r && r.acct) || ''), ok: false, error: 'Не разобрал строку' });
+        continue;
+      }
+      let done = false;
+      for (const site of Object.keys(HUB_SITES)) {
+        const t = HUB_SITES[site].users;
+        const cur = await q('SELECT id, balance, name FROM ' + t + ' WHERE acct = $1 LIMIT 1', [acct]);
+        const u = cur.rows[0];
+        if (!u) continue;
+        const was = Number(u.balance) || 0;
+        if (!dry) await q('UPDATE ' + t + ' SET balance = $2 WHERE id = $1', [u.id, val.toFixed(2)]);
+        out.push({ acct, site, siteName: HUB_SITES[site].label, name: u.name || '',
+                   was: +was.toFixed(2), now: +val.toFixed(2), diff: +(val - was).toFixed(2), ok: true });
+        done = true;
+      }
+      if (!done) out.push({ acct, ok: false, error: 'Кошелёк не найден ни на одной площадке' });
+    }
+    res.json({ ok: true, dry, applied: out.filter(x => x.ok).length, items: out });
+  } catch (e) { bad(res, 500, e.message); }
+});
+
 app.post('/api/admin/fix-day-all', requireAdmin, async (req, res) => {
   const dry = !!(req.body || {}).dry;
   const iso = new Date().toISOString().slice(0, 10);
@@ -1137,7 +1172,7 @@ const FIX_TZ = 'Asia/Shanghai';
 const FIX_HOUR = 21;
 
 /* сдвиг биржевого времени — тот же расчёт, что в кабинетах */
-const MKT_TZ = 'America/New_York';
+const MKT_TZ = 'Asia/Shanghai';
 const _mktOff = new Map();
 function mktOff(ts) {
   const k = Math.floor(ts / 3600000);
@@ -1155,11 +1190,17 @@ function mktOff(ts) {
   _mktOff.set(k, off);
   return off;
 }
+/* Торговая сессия по золоту и акциям — по китайскому времени: до 1 ноября
+   20:00–05:00 следующего дня, с 1 ноября 21:00–06:00. Сессии стартуют
+   с понедельника по пятницу; пятничная закрывается в субботу утром. */
+const CN_WINTER = () => (Date.now() >= Date.UTC(2026, 9, 31, 16) ? 1 : 0);
+const mktStartH = () => 20 + CN_WINTER();
+const mktEndH = () => 5 + CN_WINTER();
 function mktSegs(dow) {
-  if (dow === 6) return [];
-  if (dow === 0) return [[18, 24]];
-  if (dow === 5) return [[0, 17]];
-  return [[0, 17], [18, 24]];
+  const s = mktStartH(), e = mktEndH(), prev = (dow + 6) % 7, out = [];
+  if (prev >= 1 && prev <= 5) out.push([0, e]);
+  if (dow >= 1 && dow <= 5) out.push([s, 24]);
+  return out;
 }
 function mktElapsed(a, b) {
   if (!(b > a)) return 0;
@@ -1174,7 +1215,9 @@ function mktElapsed(a, b) {
   }
   return total;
 }
-/* открыта ли биржа прямо сейчас: по тем же сегментам, что рисует страница */
+/* открыта ли биржа прямо сейчас: по тем же сегментам, что рисует страница.
+   Часы заданы по Китаю: до 1 ноября 20:00–05:00, с 1 ноября 21:00–06:00,
+   сессии стартуют с понедельника по пятницу. */
 function mktOpenNow(ts) {
   const t = ts || Date.now();
   const W = t + mktOff(t), d = new Date(W);

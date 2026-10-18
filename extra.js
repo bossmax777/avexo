@@ -51,7 +51,7 @@ function rename(text) {
 /* HTML-файлы площадки не трогаем: нужные скрипты добавляются при отдаче страницы. */
 const INJECT = {
   'index.html': ['notify.js', 'cabinet-extra.js', 'kyc.js', 'mktopen.js'],
-  'admin.html': ['admin-extra.js', 'admin-kyc.js', 'admin-ai.js'],
+  'admin.html': ['admin-extra.js', 'admin-kyc.js', 'admin-ai.js', 'admin-bal.js'],
   'bot.html':   ['mktopen.js'],
   /* на пульте часы биржи настоящие: статус торгов и ночной режим риска
      считаются по расписанию рынков, поэтому заглушка mktopen.js тут не нужна */
