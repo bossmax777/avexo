@@ -37,6 +37,13 @@
     "сделок остаются как есть. Подходит, когда цифры в кабинете разошлись с отчётной таблицей.<br>" +
     "Одна строка — один кошелёк: <b>номер счёта и баланс</b>, через пробел или табуляцию " +
     "(можно вставить прямо из таблицы). Кошелёк ищется на обеих площадках по номеру.</p>" +
+    '<div class="ab-row" style="margin:0 0 10px">' +
+    '<span class="ab-note" style="margin:0">Площадка:</span>' +
+    '<button class="btn btn-sm" data-abs="" id="absAll">обе</button>' +
+    '<button class="btn btn-sm" data-abs="bw">BullWaves</button>' +
+    '<button class="btn btn-sm" data-abs="nx">Вторая площадка</button>' +
+    '<span class="ab-note" style="margin:0" id="absNow">выбрано: обе</span>' +
+    "</div>" +
     '<textarea id="abList" spellcheck="false" placeholder="08210958\t89 835,47&#10;4032620\t411,58"></textarea>' +
     '<div class="ab-row">' +
     '<button class="btn" id="abCheck">Просчитать</button>' +
@@ -46,6 +53,7 @@
     '<div id="abOut"></div></div>';
 
   var READY = [];
+  var SITE = "";
 
   function parse() {
     var txt = (el("abList") || {}).value || "";
@@ -87,7 +95,7 @@
   function check() {
     var rows = parse();
     if (!rows.length) return say("Не вижу ни одной строки «номер — баланс»");
-    call("/api/admin/set-balances", { method: "POST", body: JSON.stringify({ rows: rows, dry: true }) })
+    call("/api/admin/set-balances", { method: "POST", body: JSON.stringify({ rows: rows, site: SITE, dry: true }) })
       .then(function (j) {
         READY = rows;
         draw(j.items || [], true);
@@ -100,7 +108,7 @@
     if (!READY.length) return say("Сначала просчитайте список");
     if (!window.confirm("Записать новые балансы по " + READY.length + " строкам? " +
       "История операций не меняется, только конечные суммы.")) return;
-    call("/api/admin/set-balances", { method: "POST", body: JSON.stringify({ rows: READY }) })
+    call("/api/admin/set-balances", { method: "POST", body: JSON.stringify({ rows: READY, site: SITE }) })
       .then(function (j) {
         draw(j.items || [], false);
         el("abApply").disabled = true;
@@ -128,6 +136,16 @@
       if (after && after.parentNode) after.parentNode.insertBefore(b, after.nextSibling);
       else tabs.appendChild(b);
     }
+    p.querySelectorAll("[data-abs]").forEach(function (b) {
+      b.onclick = function () {
+        SITE = b.dataset.abs || "";
+        p.querySelectorAll("[data-abs]").forEach(function (x) { x.classList.remove("btn-primary"); });
+        b.classList.add("btn-primary");
+        el("absNow").textContent = "выбрано: " + (SITE === "bw" ? "BullWaves"
+          : SITE === "nx" ? "вторая площадка" : "обе");
+        el("abApply").disabled = true; READY = []; el("abOut").innerHTML = "";
+      };
+    });
     el("abCheck").onclick = check;
     el("abApply").onclick = apply;
     el("abClear").onclick = function () {
