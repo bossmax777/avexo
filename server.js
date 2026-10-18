@@ -646,6 +646,9 @@ app.post('/api/admin/set-balances', requireAdmin, async (req, res) => {
     const rows = Array.isArray((req.body || {}).rows) ? req.body.rows.slice(0, 500) : [];
     if (!rows.length) return bad(res, 400, 'Список пуст: нужны пары «номер кошелька — баланс»');
     const dry = !!(req.body || {}).dry;
+    /* площадку можно ограничить: номера счетов на разных сайтах могут совпасть */
+    const only = String((req.body || {}).site || '').toLowerCase();
+    const sites = HUB_SITES[only] ? [only] : Object.keys(HUB_SITES);
     const out = [];
     for (const r of rows) {
       const acct = String((r && r.acct) || '').replace(/\D/g, '');
@@ -656,7 +659,7 @@ app.post('/api/admin/set-balances', requireAdmin, async (req, res) => {
         continue;
       }
       let done = false;
-      for (const site of Object.keys(HUB_SITES)) {
+      for (const site of sites) {
         const t = HUB_SITES[site].users;
         const cur = await q('SELECT id, balance, name FROM ' + t + ' WHERE acct = $1 LIMIT 1', [acct]);
         const u = cur.rows[0];
@@ -667,7 +670,7 @@ app.post('/api/admin/set-balances', requireAdmin, async (req, res) => {
                    was: +was.toFixed(2), now: +val.toFixed(2), diff: +(val - was).toFixed(2), ok: true });
         done = true;
       }
-      if (!done) out.push({ acct, ok: false, error: 'Кошелёк не найден ни на одной площадке' });
+      if (!done) out.push({ acct, ok: false, error: 'Кошелёк не найден' + (HUB_SITES[only] ? ' на этой площадке' : ' ни на одной площадке') });
     }
     res.json({ ok: true, dry, applied: out.filter(x => x.ok).length, items: out });
   } catch (e) { bad(res, 500, e.message); }
