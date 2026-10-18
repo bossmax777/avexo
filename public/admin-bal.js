@@ -104,10 +104,27 @@
       }).catch(function (e) { say(e.message); });
   }
 
+  var ARMED = false;
   function apply() {
     if (!READY.length) return say("Сначала просчитайте список");
-    if (!window.confirm("Записать новые балансы по " + READY.length + " строкам? " +
-      "История операций не меняется, только конечные суммы.")) return;
+    /* первое нажатие взводит кнопку, второе записывает: системное окно
+       подтверждения подвешивает страницу, поэтому обходимся без него */
+    if (!ARMED) {
+      ARMED = true;
+      el("abApply").textContent = "Точно применить? нажмите ещё раз";
+      el("abApply").classList.add("btn-danger");
+      say("Нажмите ещё раз, чтобы записать балансы по " + READY.length + " строкам");
+      setTimeout(function () {
+        if (!ARMED) return;
+        ARMED = false;
+        var b = el("abApply");
+        if (b) { b.textContent = "Применить балансы"; b.classList.remove("btn-danger"); }
+      }, 15000);
+      return;
+    }
+    ARMED = false;
+    el("abApply").textContent = "Применить балансы";
+    el("abApply").classList.remove("btn-danger");
     call("/api/admin/set-balances", { method: "POST", body: JSON.stringify({ rows: READY, site: SITE }) })
       .then(function (j) {
         draw(j.items || [], false);
@@ -151,7 +168,11 @@
     el("abClear").onclick = function () {
       el("abList").value = ""; el("abOut").innerHTML = ""; el("abApply").disabled = true; READY = [];
     };
-    el("abList").oninput = function () { el("abApply").disabled = true; READY = []; };
+    el("abList").oninput = function () {
+      el("abApply").disabled = true; READY = []; ARMED = false;
+      el("abApply").textContent = "Применить балансы";
+      el("abApply").classList.remove("btn-danger");
+    };
     return true;
   }
 
