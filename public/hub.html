@@ -629,7 +629,7 @@ async function api(url,opt){
 }
 
 /* ============ часы биржи ============ */
-const MKT_TZ="America/New_York";
+const MKT_TZ="Asia/Shanghai";
 const _mktOffCache=new Map();
 function mktOff(ts){
   const k=Math.floor(ts/3600000);
@@ -645,11 +645,18 @@ function mktOff(ts){
   _mktOffCache.set(k,off);
   return off;
 }
+/* Торговая сессия по золоту и акциям задана по китайскому времени: вечером
+   открытие, под утро закрытие. До 1 ноября это 20:00–05:00, с 1 ноября —
+   21:00–06:00 (переход на зимнее время в США). Сессии стартуют с понедельника
+   по пятницу; та, что началась в пятницу вечером, закрывается в субботу утром. */
+const CN_WINTER=()=>Date.now()>=Date.UTC(2026,9,31,16)?1:0;
+const mktStartH=()=>20+CN_WINTER();
+const mktEndH=()=>5+CN_WINTER();
 function mktSegs(dow){
-  if(dow===6) return [];
-  if(dow===0) return [[18,24]];
-  if(dow===5) return [[0,17]];
-  return [[0,17],[18,24]];
+  const s=mktStartH(), e=mktEndH(), prev=(dow+6)%7, out=[];
+  if(prev>=1&&prev<=5) out.push([0,e]);   /* хвост вчерашней сессии */
+  if(dow>=1&&dow<=5) out.push([s,24]);    /* сегодняшнее открытие */
+  return out;
 }
 function mktOpen(ts){
   ts=ts||Date.now();
@@ -662,9 +669,9 @@ function mktOpen(ts){
    09:30–16:00, крипта без выходных. Время показываем в часовом поясе устройства. */
 const MKT_KINDS=[
   {k:"gold",  name:"Золото · XAU/USD", segs:dow=>mktSegs(dow),
-   note:"круглосуточно с вечера воскресенья до вечера пятницы, ежедневный перерыв 1 час"},
-  {k:"stock", name:"Акции · AAPL, TSLA, NVDA, MSFT", segs:dow=>((dow>=1&&dow<=5)?[[9.5,16]]:[]),
-   note:"основная сессия бирж США, выходные закрыты"},
+   note:"сессия по китайскому времени "+mktStartH()+":00–0"+mktEndH()+":00, с понедельника по пятницу"},
+  {k:"stock", name:"Акции · AAPL, TSLA, NVDA, MSFT", segs:dow=>mktSegs(dow),
+   note:"те же часы, что и золото: вечер — утро по Китаю, выходные закрыты"},
   {k:"crypto",name:"Криптовалюта · BTC, ETH, SOL, XRP", segs:()=>[[0,24]],
    note:"торгуется круглосуточно, без выходных и перерывов"}
 ];
@@ -784,12 +791,8 @@ setInterval(()=>{ renderMktStop(); renderMktBar(); },30000);
 /* настоящее расписание биржи: по нему расставляются сделки в журнале.
    Эти функции намеренно отдельные от mktSegs — общая заглушка «биржа открыта всегда»
    их не подменяет, иначе сделки появлялись бы и ночью, и в выходные. */
-function realSegs(dow){
-  if(dow===6) return [];
-  if(dow===0) return [[18,24]];
-  if(dow===5) return [[0,17]];
-  return [[0,17],[18,24]];
-}
+/* сделки в журнале расставляем по тем же часам, что и сессии */
+function realSegs(dow){ return mktSegs(dow); }
 /* отступить от момента t назад на need миллисекунд именно торгового времени:
    нерабочие часы и выходные перешагиваются целиком */
 function marketBack(t,need){
