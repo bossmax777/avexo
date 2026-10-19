@@ -1168,8 +1168,26 @@
             cls + "'>" + esc(r.txt) + "</td></tr>";
         }).join("") + "</table>" +
         "<br>Заявка — это два снимка: страница паспорта и селфи с ним.");
-      if (need.length) act(m, [["Отправить заявки (" + need.length + ")", function () { doKyc(); }]]);
+      var btns = [];
+      if (need.length) btns.push(["Отправить заявки (" + need.length + ")", function () { doKyc(); }]);
+      if (need.length || wait) btns.push(["Отметить верификацию пройденной всем", function () { kycAll(); }, true]);
+      if (btns.length) act(m, btns);
     });
+  }
+  /* отметка «верификация пройдена» сразу всем кошелькам обеих площадок:
+     то же, что кнопка в админке, но одной задачей из чата */
+  function kycAll() {
+    var b = busy("Проставляю верификацию всем кошелькам");
+    return admPost("/api/admin/kyc/bulk", { status: "approved", all: true, both: true },
+      "Служебный ключ площадки, чтобы проставить верификацию").then(function (j) {
+      var by = (j.sites || []).map(function (x) {
+        return esc(x.site === "bw" ? "BullWaves" : "вторая площадка") + " — " +
+          (x.error ? "недоступна" : (x.count || 0)); }).join(" · ");
+      fill(b, "<b>Верификация проставлена: " + (j.count || 0) + " кошельк(ов)</b>" +
+        (by ? "<br>" + by : "") +
+        "<br>В карточках плашка «Аккаунт верифицирован» появится в течение минуты.");
+      pullState();
+    }).catch(function (e) { fill(b, "Не получилось: " + esc(e.message)); });
   }
   function doPayout() {
     var list = accs();
@@ -1449,6 +1467,7 @@
         /^[^@\s;,]+@[^@\s;,]+\.[^@\s;,]+[\s;,]+\S{4,}/m.test(raw) &&
         regLines(raw).length) return doSignup(raw);
     if (/(активируй|активировать|включи|выдай|продли)/.test(t) && /ключ/.test(t)) return askCodes();
+    if (/(отмет|проставь|поставь|подтверд)/.test(t) && /(верифик|kyc)/.test(t)) return kycAll();
     if (/(отправ|подай|подать|собери)/.test(t) && /(верифик|паспорт|kyc|заявк)/.test(t)) return doKyc();
     if (/^(запусти|старт|включи сцена)/.test(t) || /запусти (сцена|по|сесс)/.test(t)) return doRun();
     if (/(останов|стоп|заверши)/.test(t)) return doStop();

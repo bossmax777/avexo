@@ -271,6 +271,19 @@
     };
   }
 
+  /* Состояние ключей и верификации приходит с задержкой, а узел с полем ключа
+     переносится между перерисовками как есть — поэтому строку верификации
+     обновляем отдельно, иначе под полем навсегда остаётся «аккаунт не
+     верифицирован», хотя отметка на площадке уже стоит. */
+  function kycSync(host, s, k) {
+    var row = host.querySelector(".bk-kyc");
+    var box = document.createElement("div");
+    box.innerHTML = kycRow(s, k);
+    var fresh = box.firstElementChild;
+    if (!fresh) return;
+    if (!row) { host.appendChild(fresh); return; }
+    if (row.outerHTML !== fresh.outerHTML) row.parentNode.replaceChild(fresh, row);
+  }
   function paint(host, k) {
     var s = ST[k];
     if (s && s.on) {
@@ -297,8 +310,18 @@
     }
     /* срок вышел: показываем это над полем и просим ввести новый код */
     var gone = !!(s && s.expired);
-    /* узел перенесён из прежней карточки — он уже собран, вернуть нужно только курсор */
-    if (host.querySelector("input")) { aim(host, k); return; }
+    /* узел перенесён из прежней карточки — он уже собран, вернуть нужно только курсор,
+       но статусы в нём могли устареть: верификацию подменяем на месте, а текст про срок
+       ключа переписываем полной перерисовкой, если поле пустое */
+    var cur = host.querySelector("input");
+    if (cur) {
+      kycSync(host, s, k);
+      var want = gone ? "Срок ключа истёк" : "Ключ не активирован";
+      var badge = host.querySelector(".bk-badge.off");
+      if (!(badge && badge.textContent.trim() !== want && !cur.value && !DRAFT[k])) {
+        aim(host, k); return;
+      }
+    }
     host.innerHTML =
       '<div class="bk-row"><span class="bk-badge off"><i></i>' +
       (gone ? "Срок ключа истёк" : "Ключ не активирован") + "</span>" +
