@@ -583,12 +583,14 @@ function massDrop(rows, hit) {
 app.get('/api/admin/mass-day', requireAdmin, async (_req, res) => {
   try {
     const r = await q(
-      `SELECT id, to_char(day, 'YYYY-MM-DD') AS day, pct, dir, undone, created_at,
+      `SELECT id, to_char(day, 'YYYY-MM-DD') AS day, pct, dir, undone, created_at, items,
               jsonb_array_length(items) AS wallets
          FROM mass_days WHERE site = $1 ORDER BY id DESC LIMIT 20`, [MASS_SITE]);
     res.json({ batches: r.rows.map(b => ({
       id: Number(b.id), day: b.day, pct: Number(b.pct), dir: b.dir,
-      undone: !!b.undone, wallets: Number(b.wallets), at: b.created_at
+      undone: !!b.undone, wallets: Number(b.wallets), at: b.created_at,
+      /* сумма пачки: по выводам процент ничего не говорит, нужна именно сумма */
+      total: +(b.items || []).reduce((s2, x) => s2 + (Number(x && x.amount) || 0), 0).toFixed(2)
     })) });
   } catch (e) { bad(res, 500, e.message); }
 });
@@ -737,10 +739,59 @@ app.post('/api/admin/fix-day-all', requireAdmin, async (req, res) => {
   } catch (e) { bad(res, 500, e.message); }
 });
 
+/* ---------- выводы за выбранную дату по выбранным кошелькам ---------- */
+/* Вторая половина итога дня: доход проставляется всем сразу, а вывод — точечно,
+   по номерам кошельков. Строка уходит в историю операций клиента ровно так же,
+   как обычный вывод, баланс уменьшается, а пачка сохраняется в mass_days
+   с направлением out — значит, её можно отменить целиком, как и любой запуск.
+   Отчёт за день берёт эти строки из той же истории, поэтому вывод в нём виден
+   отдельной колонкой, а на пульте сумма пересчитывается сама. */
+const MASS_OUT_TITLE = 'Вывод на реквизиты клиента';
+app.post('/api/admin/mass-out', requireAdmin, async (req, res) => {
+  const b = req.body || {};
+  const date = String(b.date || '');
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(date)) return bad(res, 400, 'Укажите дату в виде ГГГГ-ММ-ДД');
+  const list = (Array.isArray(b.items) ? b.items : []).slice(0, 500);
+  if (!list.length) return bad(res, 400, 'Не выбран ни один кошелёк');
+  const dry = !!b.dry;
+  const when = massRu(date);
+  try {
+    const items = [], skip = [];
+    for (const it of list) {
+      const acct = String((it && it.acct) || '').replace(/\D/g, '');
+      const amt = Math.round((Number(String((it && it.amount) !== undefined ? it.amount : '')
+        .toString().replace(/\s|\u00a0/g, '').replace(',', '.')) || 0) * 100) / 100;
+      if (!acct || !(amt > 0)) { skip.push({ acct: acct || String((it && it.acct) || ''), error: 'не разобрал строку' }); continue; }
+      const r = await q('SELECT * FROM users WHERE acct = $1 LIMIT 1', [acct]);
+      if (!r.rows[0]) { skip.push({ acct, error: 'кошелька нет на этой площадке' }); continue; }
+      const u = toUser(r.rows[0]);
+      const before = Number(u.balance) || 0;
+      if (amt > before) { skip.push({ acct, error: 'на кошельке меньше этой суммы' }); continue; }
+      if (dry) { items.push({ id: u.id, acct, name: u.name || '', amount: -amt, before }); continue; }
+      const sum = massSum(-amt);
+      const ref = 'AVX-' + String(Date.now()).slice(-6) + '-' +
+        Math.random().toString(36).slice(2, 5).toUpperCase();
+      const tx = [[when, MASS_OUT_TITLE + ' · заявка ' + ref, sum, 'ok', 'Списано'], ...(u.tx || [])];
+      const hist = [[when, 'Вывод', ref, sum, 'ok'], ...(u.hist || [])];
+      await q('UPDATE users SET balance = $2, tx = $3::jsonb, hist = $4::jsonb WHERE id = $1',
+        [u.id, (before - amt).toFixed(2), JSON.stringify(tx.slice(0, 200)), JSON.stringify(hist.slice(0, 200))]);
+      items.push({ id: u.id, acct, name: u.name || '', amount: -amt, before, ref });
+    }
+    const total = +items.reduce((s2, x) => s2 + x.amount, 0).toFixed(2);
+    if (dry) return res.json({ ok: true, dry: true, applied: items.length, total, items, skipped: skip });
+    if (!items.length) return res.json({ ok: true, batch: 0, applied: 0, total: 0, items: [], skipped: skip });
+    const bt = await q(
+      'INSERT INTO mass_days (site, day, pct, dir, items) VALUES ($1,$2,$3,$4,$5::jsonb) RETURNING id',
+      [MASS_SITE, date, 0, 'out', JSON.stringify(items)]);
+    res.json({ ok: true, batch: Number(bt.rows[0].id), applied: items.length, total,
+      items: items.map(x => ({ acct: x.acct, name: x.name, amount: x.amount })), skipped: skip });
+  } catch (e) { bad(res, 500, e.message); }
+});
+
 app.post('/api/admin/mass-day/undo', requireAdmin, async (req, res) => {
   const id = Number((req.body || {}).batch);
   try {
-    const b = await q(`SELECT id, to_char(day, 'YYYY-MM-DD') AS day, items, undone
+    const b = await q(`SELECT id, to_char(day, 'YYYY-MM-DD') AS day, items, undone, dir
                          FROM mass_days WHERE id = $1 AND site = $2`, [id || 0, MASS_SITE]);
     const row = b.rows[0];
     if (!row) return bad(res, 404, 'Такого запуска нет');
@@ -754,10 +805,14 @@ app.post('/api/admin/mass-day/undo', requireAdmin, async (req, res) => {
       const amt = Number(it.amount) || 0;
       const sum = massSum(amt);
       /* фиксация с пульта пишет пару в заголовок, поэтому сверяем по началу строки */
+      /* у выводов в истории свои заголовки — иначе отмена не находила строку */
+      const isOut = String(row.dir || '') === 'out';
+      const txHead = isOut ? MASS_OUT_TITLE : 'Итог торгового дня';
+      const histHead = isOut ? 'Вывод' : 'Результат дня';
       const tx = massDrop(u.tx, t => t && t[0] === when
-        && String(t[1] || '').indexOf('Итог торгового дня') === 0 && String(t[2]) === sum);
+        && String(t[1] || '').indexOf(txHead) === 0 && String(t[2]) === sum);
       const hist = massDrop(u.hist, t => t && t[0] === when
-        && String(t[1]) === 'Результат дня' && String(t[3]) === sum);
+        && String(t[1]) === histHead && String(t[3]) === sum);
       const bal = Math.max(0, (Number(u.balance) || 0) - amt);
       await q('UPDATE users SET balance = $2, tx = $3::jsonb, hist = $4::jsonb WHERE id = $1',
         [u.id, bal.toFixed(2), JSON.stringify(tx), JSON.stringify(hist)]);
