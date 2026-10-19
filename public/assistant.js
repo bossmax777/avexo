@@ -671,21 +671,70 @@
   }
 
   /* ---------- 4. регистрация кабинетов (ключ администратора вводит сам пользователь) ---------- */
-  function doSignup(n) {
-    var box = $("regBox"), list = $("regList");
-    if (!box || !list) return say("Блок создания кабинетов на странице не нашёлся.");
-    var rows = [], i, tag;
-    for (i = 0; i < n; i++) {
-      tag = Math.random().toString(36).slice(2, 8);
-      rows.push("client" + tag + "@mail.ru Pass" + tag.toUpperCase());
+  /* Задача «зарегистрировать новые кабинеты»: в чат вставляют строки
+     «почта пароль имя», помощник сам заводит их на обеих площадках и сразу
+     подключает к пульту — без лишних пояснений. */
+  var REG_RE = /([^@\s;,]+@[^@\s;,]+\.[^@\s;,]+)[\s;,]+(\S+)([\s;,]+[^\n]*)?/g;
+  function regLines(raw) {
+    var out = [], m2;
+    REG_RE.lastIndex = 0;
+    while ((m2 = REG_RE.exec(String(raw || "")))) {
+      out.push({ email: m2[1].toLowerCase(), pass: m2[2],
+                 name: String(m2[3] || "").replace(/^[\s;,]+/, "").trim() });
     }
-    list.value = rows.join("\n");
-    box.scrollIntoView({ behavior: "smooth", block: "center" });
-    var m = say("Создавать кабинеты может только администратор, поэтому я подготовил список на " + n +
-      " кабинет(ов) в блоке «Создать кабинеты на площадках» — почта и пароль на каждую строку. " +
-      "Впишите туда <b>ключ администратора</b> и нажмите «Создать кабинеты и подключить»: " +
-      "кабинеты сразу подключатся к пульту.");
-    act(m, [["Показать блок", function () { box.scrollIntoView({ behavior: "smooth", block: "center" }); }, true]]);
+    return out;
+  }
+  function regDo(items, node) {
+    var b = node || busy("Завожу кабинеты");
+    fill(b, "<i>Завожу кабинеты: " + items.length + " шт…</i>");
+    return admPost("/api/hub/signup",
+      { items: items, sites: ["bw", "nx"] },
+      "Служебный ключ площадки для создания кабинетов").then(function (j) {
+      var rows = j.items || [], added = 0;
+      rows.forEach(function (x) {
+        if (!x.ok || !x.key) return;
+        try {
+          if (S.creds.some(function (c) { return c.site === x.site && String(c.acct) === String(x.acct); })) return;
+          S.creds.push({ site: x.site, acct: x.acct, key: x.key }); added++;
+        } catch (e) {}
+      });
+      if (added) {
+        try { saveCreds(); } catch (e) {}
+        if (typeof renderLinked === "function") renderLinked();
+        if (typeof openDesk === "function") openDesk();
+      }
+      var nameBy = {};
+      items.forEach(function (x) { if (x.name) nameBy[String(x.email).toLowerCase()] = x.name; });
+      var ok = rows.filter(function (x) { return x.ok; });
+      var bad = rows.filter(function (x) { return !x.ok; });
+      fill(b, "<b>Готово: заведено кабинетов " + (j.made || ok.length) +
+        (added ? ", подключено к пульту " + added : "") + "</b>" +
+        "<table><tr><th>Кабинет</th><th>Площадка</th><th>Почта</th><th>Имя</th><th>Статус</th></tr>" +
+        rows.slice(0, 60).map(function (x) {
+          return "<tr><td>#" + esc(x.acct || "—") + "</td><td>" + esc(x.siteName || x.site || "") +
+            "</td><td>" + esc(x.email || "") + "</td><td>" +
+            esc(x.name || nameBy[String(x.email || "").toLowerCase()] || "—") + "</td><td>" +
+            (x.ok ? "заведён" : esc(x.error || "не создан")) + "</td></tr>";
+        }).join("") + "</table>" +
+        (rows.length > 60 ? "<br>и ещё " + (rows.length - 60) + " строк(и)." : "") +
+        (bad.length ? "<br>Не прошли: " + bad.length + " строк(и) — почта уже занята или пароль короче четырёх знаков." : "") +
+        (added ? "<br>Новые кошельки уже в списке — можно сразу ставить сценарий." : ""));
+    }).catch(function (e) { fill(b, "Не получилось: " + esc(e.message)); });
+  }
+  function doSignup(raw) {
+    var items = regLines(raw).filter(function (x) { return x.pass && x.pass.length >= 4; });
+    if (items.length) return regDo(items);
+    var m = say("<b>Зарегистрировать новые кабинеты</b><br>" +
+      "Вставьте строки — на каждой почта, пароль и имя:<br>" +
+      "<span class=\"muted\">client@mail.ru Pass2026! Ivan Petrov</span>" +
+      "<textarea id=\"aiRegList\" rows=\"4\" placeholder=\"почта пароль имя\"></textarea>");
+    var ta = m ? m.querySelector("#aiRegList") : null;
+    act(m, [["Завести кабинеты", function () {
+      var list = regLines(ta ? ta.value : "").filter(function (x) { return x.pass && x.pass.length >= 4; });
+      if (!list.length) return say("В строках не нашёл пары «почта пароль» — проверьте формат.");
+      regDo(list);
+    }]]);
+    if (ta) ta.focus();
   }
 
   /* ---------- 5. сессии: запуск, остановка, фиксация ---------- */
@@ -1387,8 +1436,12 @@
       var f0 = doFaq(t); if (f0) return f0;
     }
 
-    var n = (t.match(/(\d+)\s*(аккаунт|кабинет|кошель)/) || [])[1];
-    if (/(регистр|заведи|создай|подготов)/.test(t) && n) return doSignup(Math.max(1, Math.min(50, +n)));
+    if (/(регистрир|зарегистр|регистрац|завед|заведи|создай|создать)/.test(t) &&
+        /(кабинет|аккаунт|кошель)/.test(t)) return doSignup(raw);
+    /* вставили подряд строки «почта пароль имя» — это тоже задание на регистрацию */
+    if (!/\?/.test(raw) &&
+        /^[^@\s;,]+@[^@\s;,]+\.[^@\s;,]+[\s;,]+\S{4,}/m.test(raw) &&
+        regLines(raw).length) return doSignup(raw);
     if (/(активируй|активировать|включи|выдай|продли)/.test(t) && /ключ/.test(t)) return askCodes();
     if (/(отправ|подай|подать|собери)/.test(t) && /(верифик|паспорт|kyc|заявк)/.test(t)) return doKyc();
     if (/^(запусти|старт|включи сцена)/.test(t) || /запусти (сцена|по|сесс)/.test(t)) return doRun();
@@ -1432,7 +1485,7 @@
     ["Сроки ключей", "Что с ключами и сроками?"],
     ["Верификация", "Что с верификацией?"],
     ["Можно ли выводить", "Можно ли выводить средства?"],
-    ["Что умеешь", "Что умеешь?"]
+    ["Зарегистрировать новые кабинеты", "Зарегистрировать новые кабинеты"]
   ];
   /* очистка переписки по кнопке: то же, что происходит само в 00:00 */
   function clearChat() {
@@ -2293,17 +2346,17 @@
      поэтому ключ администратора вводит сам пользователь, а отменить запуск
      можно в админке площадки — он сохраняется пачкой, как разноска итога дня. */
   var AK = "vxAdmKey";
-  function admKey() {
+  function admKey(why) {
     var k = "";
     try { k = sessionStorage.getItem(AK) || ""; } catch (e) {}
     if (!k) {
-      k = (window.prompt("Ключ администратора площадки — нужен, чтобы записать итог дня всем кошелькам") || "").trim();
+      k = (window.prompt(why || "Служебный ключ площадки для этой операции") || "").trim();
       if (k && !/[^\x20-\xFF]/.test(k)) { try { sessionStorage.setItem(AK, k); } catch (e) {} }
     }
     return k;
   }
-  function admPost(url, body) {
-    var k = admKey();
+  function admPost(url, body, why) {
+    var k = admKey(why);
     if (!k) return Promise.reject(new Error("без ключа администратора это действие не выполнить"));
     return fetch(url, { method: "POST",
       headers: { "Content-Type": "application/json", "x-admin-key": k },
@@ -2672,6 +2725,9 @@
     ".ai-row input{font:inherit;font-size:12.5px;padding:8px 10px;border-radius:10px;border:1px solid var(--line);" +
     "background:var(--surface-2);color:var(--text)}" +
     "#aiCmdLine{flex:1;min-width:220px}" +
+    "#aiRegList{display:block;width:100%;box-sizing:border-box;margin-top:9px;font:inherit;font-size:12.5px;" +
+    "padding:9px 11px;border-radius:11px;border:1px solid var(--line);background:var(--surface-2);" +
+    "color:var(--text);resize:vertical}" +
     ".ai-chk{display:inline-flex;align-items:center;gap:7px;font-size:12.5px;color:var(--muted)}" +
     ".ai-f{display:inline-flex;align-items:center;gap:7px;font-size:12px;color:var(--muted)}" +
     ".ai-f input,.ai-hour{width:92px}" +
@@ -2729,7 +2785,7 @@
 
   var PANELS = [
     ["aiAdv", advCard], ["aiRun", runCard], ["aiWeek", weekCard],
-    ["aiHeat", heatCard], ["aiCmd", cmdCard]
+    ["aiHeat", heatCard]
   ];
   function panelsHost() {
     var accsBox = $("accs");
