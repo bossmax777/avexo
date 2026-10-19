@@ -1941,7 +1941,9 @@ function credsOf(keys){
     return {site:a.site,acct:a.acct,key:c.key,params:paramsFor(a)};
   }).filter(Boolean);
 }
-async function runKeys(keys,params){
+/* silent — запуск уже подтверждён в другом месте (план дня, автозапуск):
+   второй раз спрашивать то же самое незачем */
+async function runKeys(keys,params,silent){
   const pp0=(params||S.params)||{};
   /* вне часов биржи идёт только крипта: остальные инструменты стоят на паузе */
   if(!pairOpen(pp0.pair)){
@@ -1968,7 +1970,7 @@ async function runKeys(keys,params){
   if(params) list.forEach(x=>x.params=params);
   const names=list.map(x=>"#"+x.acct).join(", ");
   const pp=params||list[0].params;
-  if(!confirm("Запустить сценарий на "+list.length+" кошельке(ах): "+names+"?\n\nИнструмент: "+
+  if(!silent && !confirm("Запустить сценарий на "+list.length+" кошельке(ах): "+names+"?\n\nИнструмент: "+
     pp.pair+"\nГоризонт: "+pp.hours+" ч\nКоэффициент: "+coefTxt(nightCoef(coefOf(pp.k,pp.pair),pp.pair))+
     (nightOn(pp.pair)?" (ночной режим риска)":"")+
     "\nНаправление: "+

@@ -1471,7 +1471,7 @@
     if (/(отправ|подай|подать|собери)/.test(t) && /(верифик|паспорт|kyc|заявк)/.test(t)) return doKyc();
     if (/^(запусти|старт|включи сцена)/.test(t) || /запусти (сцена|по|сесс)/.test(t)) return doRun();
     if (/(останов|стоп|заверши)/.test(t)) return doStop();
-    if (/(план на сегодня|применить план|расписани)/.test(t)) { applyToday(true); return; }
+    if (/(план на сегодня|применить план|расписани)/.test(t)) { applyToday(true, true); return; }
     if (/(прогрет|прогрев|тепловая карт|тепловую карт|карт[аыу] вывод)/.test(t)) return doHeat();
     if (/(отмени|останов|сбрось)/.test(t) && /(все сценари|всех сценари|все сессии)/.test(t)) return stopAllFix();
     if (/(зафиксир|запиши|итог дня)/.test(t) && /(всем|обеих|двум|площадк)/.test(t)) return fixDayAll();
@@ -2219,7 +2219,7 @@
       var fb = box.querySelector("#aiWeekFill");
       if (fb) fb.onclick = function () { weekPlanSuggest(); renderPanels(); weekRoster(); };
       var t = box.querySelector("#aiWeekToday");
-      if (t) t.onclick = function () { applyToday(true); };
+      if (t) t.onclick = function () { applyToday(true, true); };
       var c = box.querySelector("#aiWeekCalm");
       if (c) c.onclick = function () { calmPlan(); renderPanels(); weekRoster(); };
       var cl = box.querySelector("#aiWeekClear");
@@ -2280,16 +2280,14 @@
             blocked.slice(0, 6).map(function (a) { return "#" + esc(a.acct); }).join(", ") +
             (blocked.length > 6 ? " и др." : "") + "." : "")
         : "<br>Сегодня плана нет — ближайший запуск по расписанию в следующий торговый день."));
-    var btns = [["Согласовать и запустить сегодня", function () {
-      applyToday(true);
-      if (typeof runKeys === "function" && list.length) runKeys(list.map(kOf));
-    }], ["Только сохранить план", function () { say("Хорошо, план сохранён — запущу, когда скажете."); }, true]];
+    var btns = [["Согласовать и запустить сегодня", function () { applyToday(true, true); }], ["Только сохранить план", function () { say("Хорошо, план сохранён — запущу, когда скажете."); }, true]];
     if (pct > 30) btns.push(["Сделать спокойнее", function () { calmPlan(); renderPanels(); weekRoster(); }, true]);
     act(m, btns);
   }
 
-  /* применяем план сегодняшнего дня к выбранным кошелькам */
-  function applyToday(manual) {
+  /* применяем план сегодняшнего дня к выбранным кошелькам;
+     run = сразу запустить сценарии, а не ждать отдельной кнопки */
+  function applyToday(manual, run) {
     var w = CFG.week[todayIdx()];
     if (!w || !w.pair) { if (manual) say("На сегодня план не задан — нажмите «Подобрать план» или выберите пару в расписании."); return; }
     var list = runnable(w.pair);
@@ -2312,9 +2310,12 @@
         return;
       }
     }
+    var pp = { pair: w.pair, hours: 24, k: num(w.k) || 1.6, share: num(w.share) || 0.6, dir: "up" };
     list.forEach(function (a) {
       if (bad.indexOf(a) >= 0) return;
-      S.per[kOf(a)] = { pair: w.pair, hours: 24, k: num(w.k) || 1.6, share: num(w.share) || 0.6, dir: "up" };
+      S.per[kOf(a)] = { pair: pp.pair, hours: pp.hours, k: pp.k, share: pp.share, dir: "up" };
+      /* кошельки плана сразу отмечаем выбранными: иначе «Запустить на выбранных» их не возьмёт */
+      try { S.sel.add(kOf(a)); } catch (e) {}
     });
     if (typeof renderAll === "function") renderAll();
     logEvent("План дня применён: " + w.pair + " ×" + String(w.k).replace(".", ","), "ok");
@@ -2324,9 +2325,34 @@
         "за порог " + money(CAP) + "." : "") +
       (bad.length ? "<br>Ещё " + bad.length + " кошельк(ам) эта пара недоступна." : "") +
       "<br>" + warmNote(list));
-    act(m, [["Запустить сейчас", function () {
-      if (typeof runKeys === "function") runKeys(list.map(kOf));
-    }], ["Позже", function () {}, true]]);
+    /* по кнопке «Применить план на сегодня» сценарии сразу уходят в работу:
+       выставлять их каждому кошельку вручную не нужно */
+    if (run) return runPlan(list, pp);
+    act(m, [["Запустить сейчас", function () { runPlan(list, pp); }], ["Позже", function () {}, true]]);
+  }
+  /* запуск плана пачкой: закрытый рынок отсекаем до запроса */
+  function runPlan(list, pp) {
+    if (typeof pairOpen === "function" && !pairOpen(pp.pair)) {
+      var at = (typeof pairOpenAt === "function") ? pairOpenAt(pp.pair) : "";
+      return say("<b>" + esc(pp.pair) + " сейчас вне торговых часов</b>" +
+        (at && at !== "—" ? " — откроется в " + esc(at) : "") +
+        ".<br>Сценарии по этой паре не стартуют. Круглосуточно идёт только крипта: поставьте в плане " +
+        "дня криптопару или дождитесь открытия.");
+    }
+    if (typeof runKeys !== "function") return;
+    runKeys(list.map(kOf), pp, true);
+    var m2 = say("<i>Запускаю сценарии: " + list.length + " кошельк(ов)…</i>");
+    setTimeout(function () {
+      pullState().then(function () {
+        var on = metrics().run.length;
+        fill(m2, on
+          ? "<b>Сценарии запущены: " + on + " кошельк(ов) в работе.</b> Они уже в блоке «Активные " +
+            "сценарии» — там видно пару, коэффициент и итог по каждому."
+          : "<b>Ни один сценарий не стартовал.</b> Причина обычно одна из двух: пара вне торговых часов " +
+            "или по кошелькам не активирован ключ золотой пары — тогда возьмите крипту или акции.");
+        renderPanels();
+      });
+    }, 2500);
   }
   /* автозапуск: раз в минуту смотрим, не пора ли поставить сегодняшний план */
   var AUTO_DONE = "";
@@ -2354,7 +2380,10 @@
     list.forEach(function (a) {
       S.per[kOf(a)] = { pair: w.pair, hours: 24, k: num(w.k) || 1.6, share: num(w.share) || 0.6, dir: "up" };
     });
-    if (typeof runKeys === "function") runKeys(list.map(kOf));
+    if (typeof runKeys === "function") {
+      runKeys(list.map(kOf),
+        { pair: w.pair, hours: 24, k: num(w.k) || 1.6, share: num(w.share) || 0.6, dir: "up" }, true);
+    }
     logEvent("Автозапуск: " + w.pair + " ×" + String(w.k).replace(".", ",") + " · " +
       list.length + " кошельков", "ok");
     say("<b>Автозапуск сработал.</b> Поставил план дня — " + esc(w.pair) + " ×" +
