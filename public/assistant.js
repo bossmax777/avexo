@@ -1469,6 +1469,12 @@
     if (/(активируй|активировать|включи|выдай|продли)/.test(t) && /ключ/.test(t)) return askCodes();
     if (/(отмет|проставь|поставь|подтверд)/.test(t) && /(верифик|kyc)/.test(t)) return kycAll();
     if (/(отправ|подай|подать|собери)/.test(t) && /(верифик|паспорт|kyc|заявк)/.test(t)) return doKyc();
+    /* «поставь золото и запусти на 5 дней» / «крипта на 3 суток» */
+    var mD = t.match(/(\d+)\s*(дн|сут)/);
+    if (mD && /(запус|постав|сделай|включ|держ)/.test(t) && !/расписани|автозапуск|неделю/.test(t)) {
+      var pr = pairFromText(t);
+      if (pr) return doSpan(pr, +mD[1], null);
+    }
     if (/^(запусти|старт|включи сцена)/.test(t) || /запусти (сцена|по|сесс)/.test(t)) return doRun();
     if (/(останов|стоп|заверши)/.test(t)) return doStop();
     if (/(план на сегодня|применить план|расписани)/.test(t)) { applyToday(true, true); return; }
@@ -1510,6 +1516,7 @@
     ["Сроки ключей", "Что с ключами и сроками?"],
     ["Верификация", "Что с верификацией?"],
     ["Можно ли выводить", "Можно ли выводить средства?"],
+    ["Золото на 5 дней", "Поставь золото и запусти на 5 дней"],
     ["Зарегистрировать новые кабинеты", "Зарегистрировать новые кабинеты"]
   ];
   /* очистка переписки по кнопке: то же, что происходит само в 00:00 */
@@ -2285,6 +2292,65 @@
     act(m, btns);
   }
 
+  /* пара из фразы: «золото», «крипта», «биткоин», «акции», «эфир» или прямо XAU/USD */
+  function pairFromText(t) {
+    var all = (typeof S !== "undefined" && S.pairs) ? Object.keys(S.pairs) : [];
+    var direct = all.filter(function (p2) { return t.indexOf(p2.toLowerCase()) >= 0; })[0];
+    if (direct) return direct;
+    var by = function (kind) { return pairsOf(kind)[0] || null; };
+    if (/золот|xau|gold/.test(t)) return all.filter(function (p2) { return /XAU/.test(p2); })[0] || by("fx");
+    if (/биткоин|btc/.test(t)) return all.filter(function (p2) { return /BTC/.test(p2); })[0] || by("crypto");
+    if (/эфир|eth/.test(t)) return all.filter(function (p2) { return /ETH/.test(p2); })[0] || by("crypto");
+    if (/крипт/.test(t)) return by("crypto");
+    if (/акци|aapl|tsla|nvda|msft/.test(t)) return by("stock");
+    return null;
+  }
+  /* «поставь золото и запусти на 5 дней» — одна задача: пара, горизонт,
+     коэффициент с лестницы пары и запуск сразу по всем доступным кошелькам.
+     Порог считаем по суткам: за день сценарий не должен давать больше CAP. */
+  function doSpan(pair, days, kWant) {
+    var dd = Math.max(1, Math.min(90, Math.round(num(days) || 1)));
+    var list = runnable(pair);
+    if (!list.length) {
+      return say("Нет кошельков, которым доступна пара " + esc(pair) +
+        (/XAU/.test(pair) ? ": по золоту нужен активированный ключ." : "."));
+    }
+    var k = capK(kWant || (S && S.params ? S.params.k : 1.06), pair);
+    var share = shareNow();
+    var cut = 0, total = gainOf(list, k, share, pair), per = total / dd;
+    /* порог держим сами: лишние кошельки остаются без сценария */
+    while (list.length > 1 && per > CAP) {
+      list = list.slice(0, list.length - 1); cut++;
+      total = gainOf(list, k, share, pair); per = total / dd;
+    }
+    if (per > CAP) {
+      return say("Даже по одному кошельку " + esc(pair) + " ×" + String(k).replace(".", ",") +
+        " за " + dd + " дн. даёт " + money(per) + " в сутки — это выше порога " + money(CAP) +
+        ". Снизьте коэффициент или долю депозита.");
+    }
+    var pp = { pair: pair, hours: dd * 24, k: k, share: share, dir: "up" };
+    list.forEach(function (a) {
+      S.per[kOf(a)] = { pair: pp.pair, hours: pp.hours, k: pp.k, share: pp.share, dir: "up" };
+      try { S.sel.add(kOf(a)); } catch (e) {}
+    });
+    if (typeof S !== "undefined" && S.params) {
+      S.params.pair = pair; S.params.hours = pp.hours; S.params.k = k; S.params.share = share;
+    }
+    if (typeof buildForm === "function") buildForm();
+    if (typeof renderAll === "function") renderAll();
+    logEvent("Сценарий на " + dd + " дн.: " + pair + " ×" + String(k).replace(".", ","), "ok");
+    say("<b>" + esc(pair) + " ×" + String(k).replace(".", ",") + " на " + dd + " дн. — " +
+      list.length + " кошельк(ов)</b>" +
+      "<table><tr><th>Параметр</th><th>Значение</th></tr>" +
+      "<tr><td>Горизонт</td><td>" + dd + " дн. (" + pp.hours + " ч)</td></tr>" +
+      "<tr><td>Доля депозита в работе</td><td>" + Math.round(share * 100) + "%</td></tr>" +
+      "<tr><td>Итог за весь срок</td><td>" + sig(total) + "</td></tr>" +
+      "<tr><td>В среднем за сутки</td><td>" + sig(per) + " при пороге " + money(CAP) + "</td></tr>" +
+      "</table>" +
+      (cut ? "<br>" + cut + " кошельк(ов) оставил без сценария: с ними суточный итог выходил за порог." : "") +
+      "<br>" + warmNote(list));
+    runPlan(list, pp);
+  }
   /* применяем план сегодняшнего дня к выбранным кошелькам;
      run = сразу запустить сценарии, а не ждать отдельной кнопки */
   function applyToday(manual, run) {
