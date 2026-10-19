@@ -239,6 +239,30 @@
         '<span class="md-sum" id="mdStopSay" style="margin:0"></span></div>' +
     '</div>' +
     '<div class="md-out" id="mdOut" hidden></div>' +
+    '<h3 style="font-size:13.5px;margin:0 0 6px">Вывод за эту же дату</h3>' +
+    '<p class="sub" style="margin:0 0 10px">Доход ставится всем сразу, а вывод — точечно. ' +
+    'Выберите кошелёк и сумму: строка «Вывод» уйдёт в историю операций клиента той же датой, ' +
+    'баланс уменьшится, в отчёте за день вывод встанет отдельной колонкой, а на пульте сумма ' +
+    'пересчитается сама. Запуск отменяется целиком, как и итог дня.</p>' +
+    '<div class="md-row">' +
+      '<div class="md-f" style="min-width:300px"><label for="mdOutAcct">Кошелёк</label>' +
+        '<select id="mdOutAcct"></select></div>' +
+      '<div class="md-f"><label for="mdOutAmt">Сумма вывода</label>' +
+        '<input id="mdOutAmt" type="number" min="1" step="0.01" placeholder="например 1500"></div>' +
+      '<div class="md-f" style="min-width:auto"><label>&nbsp;</label>' +
+        '<button class="btn btn-ghost" id="mdOutAdd">Добавить в список</button></div>' +
+    '</div>' +
+    '<div class="md-f" style="min-width:100%;margin-bottom:10px">' +
+      '<label for="mdOutList">Список выводов — строка «номер кошелька сумма»</label>' +
+      '<textarea id="mdOutList" rows="3" spellcheck="false" placeholder="4034823 1500"' +
+      ' style="width:100%;box-sizing:border-box;padding:10px 12px;border:1px solid var(--line);' +
+      'border-radius:10px;font:inherit;font-size:13px;line-height:1.6;resize:vertical"></textarea></div>' +
+    '<div class="md-row">' +
+      '<div class="md-f" style="min-width:auto"><label>&nbsp;</label>' +
+        '<button class="btn btn-primary" id="mdOutGo">Записать выводы</button></div>' +
+      '<div class="md-f" style="min-width:260px"><label>&nbsp;</label>' +
+        '<span class="md-sum" id="mdOutSay" style="margin:0"></span></div>' +
+    '</div>' +
     '<h3 style="font-size:13.5px;margin:0 0 8px">Последние запуски</h3>' +
     '<div class="md-list" id="mdList"></div></div>';
 
@@ -259,6 +283,9 @@
     });
     el("mdGo").onclick = run;
     el("mdStop").onclick = stopAll;
+    el("mdOutAdd").onclick = outAdd;
+    el("mdOutGo").onclick = outRun;
+    outFill();
     preview();
     return true;
   }
@@ -340,6 +367,82 @@
     });
   }
 
+  /* список кошельков в выпадашке вывода: номер, имя и текущий баланс */
+  function outFill() {
+    var sel = el("mdOutAcct"); if (!sel) return;
+    var us = wallets();
+    var was = sel.value;
+    sel.innerHTML = us.length
+      ? us.map(function (u) {
+          return '<option value="' + esc(u.acct || "") + '">#' + esc(u.acct || "—") + " · " +
+            esc(u.name || u.email || "—") + " · $" + (Number(u.balance) || 0).toFixed(2) + "</option>";
+        }).join("")
+      : '<option value="">кошельков нет</option>';
+    if (was) sel.value = was;
+  }
+  function outAdd() {
+    var sel = el("mdOutAcct"), amt = el("mdOutAmt"), box = el("mdOutList");
+    var a = (sel && sel.value) || "";
+    var v = Number(amt && amt.value);
+    if (!a) return;
+    if (!(v > 0)) { el("mdOutSay").textContent = "Укажите сумму вывода"; return; }
+    var cur = (box.value || "").split(/\r?\n/).map(function (x) { return x.trim(); }).filter(Boolean);
+    cur = cur.filter(function (x) { return x.split(/[\s;,]+/)[0] !== a; });
+    cur.push(a + " " + v);
+    box.value = cur.join("\n");
+    amt.value = "";
+    el("mdOutSay").textContent = "В списке строк: " + cur.length;
+  }
+  function outParse() {
+    return (el("mdOutList").value || "").split(/\r?\n/).map(function (l) {
+      var p = l.trim().split(/[\s;,]+/).filter(Boolean);
+      if (p.length < 2) return null;
+      return { acct: p[0].replace(/\D/g, ""), amount: p[1].replace(",", ".") };
+    }).filter(function (x) { return x && x.acct && Number(x.amount) > 0; });
+  }
+  /* сначала примерка: сколько спишется и у кого не выйдет, и только потом запись */
+  function outRun() {
+    var go = el("mdOutGo"), say = el("mdOutSay");
+    var date = (el("mdDate").value || "").trim();
+    var items = outParse();
+    if (!date) { say.textContent = "Укажите дату операции"; return; }
+    if (!items.length) { say.textContent = "Впишите хотя бы одну строку: номер кошелька и сумма"; return; }
+    go.disabled = true; go.textContent = "Считаем…";
+    say.textContent = "";
+    call("/api/admin/mass-out", { method: "POST",
+      body: JSON.stringify({ date: date, items: items, dry: true }) })
+      .then(function (j) {
+        go.disabled = false; go.textContent = "Записать выводы";
+        var skip = (j.skipped || []).map(function (x) { return "#" + x.acct + " — " + x.error; });
+        if (!j.applied) {
+          say.textContent = "Записывать нечего." + (skip.length ? " " + skip.join("; ") : "");
+          return;
+        }
+        if (!confirm("Записать выводы за " + date.split("-").reverse().join(".") + "?\n\n" +
+          "Кошельков: " + j.applied + "\nСписание: " + money(j.total) +
+          (skip.length ? "\n\nНе пройдут: " + skip.join("; ") : "") +
+          "\n\nОтменить можно кнопкой «Отменить» в списке запусков.")) return;
+        go.disabled = true; go.textContent = "Записываем…";
+        return call("/api/admin/mass-out", { method: "POST",
+          body: JSON.stringify({ date: date, items: items }) })
+          .then(function (r) {
+            var out = el("mdOut");
+            if (out) {
+              out.hidden = false;
+              out.innerHTML = "<b>Выводы записаны: " + r.applied + " кошельк(ов), " + money(r.total) +
+                "</b><br>Запуск №" + r.batch + " — его можно отменить целиком." +
+                ((r.skipped || []).length ? "<br>Не прошли: " + r.skipped.map(function (x) {
+                  return "#" + esc(x.acct) + " (" + esc(x.error) + ")"; }).join(", ") : "");
+            }
+            el("mdOutList").value = "";
+            say.textContent = "Готово: " + r.applied + " кошельк(ов)";
+            return refresh();
+          });
+      })
+      .catch(function (e) { say.textContent = e.message; })
+      .then(function () { go.disabled = false; go.textContent = "Записать выводы"; });
+  }
+
   function undo(id) {
     if (!confirm("Отменить запуск №" + id + "?\n\n" +
       "Балансы вернутся к прежним значениям, строки за эту дату уберутся из истории операций.")) return;
@@ -360,6 +463,7 @@
       if (typeof renderUsers === "function") renderUsers();
       if (typeof renderDash === "function") renderDash();
       preview();
+      outFill();
       return load();
     });
   }
@@ -373,7 +477,9 @@
       box.innerHTML = b.map(function (x) {
         return '<div class="md-b' + (x.undone ? " off" : "") + '"><div><b>' +
           esc(String(x.day).split("-").reverse().join(".")) + "</b> · " +
-          (x.dir === "down" ? "убыток" : "прибыль") + " " + x.pct + "% · кошельков " + x.wallets +
+          (x.dir === "out" ? "выводы " + money(x.total || 0)
+            : (x.dir === "down" ? "убыток" : "прибыль") + " " + x.pct + "%") +
+          " · кошельков " + x.wallets +
           '<br><span>запуск №' + x.id + (x.undone ? " · отменён" : "") + "</span></div>" +
           (x.undone ? "" : '<button class="btn btn-ghost btn-sm" data-md-undo="' + x.id + '">Отменить</button>') +
           "</div>";
