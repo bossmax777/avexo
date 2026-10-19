@@ -1105,6 +1105,15 @@ app.post('/api/hub/signup', requireAdmin, async (req, res) => {
             + ' VALUES ($1,$2,$3,$4,$5,$6) RETURNING *',
             [mail, hashPass(pass), name || mail.split('@')[0], acct, 'USD', key]);
           const u = r.rows[0]; u._site = site;
+          /* новый кабинет сразу считается верифицированным: иначе в пульте по нему
+             висит «аккаунт не верифицирован», пока в админке не нажмут отметку всем */
+          try {
+            await q(
+              'INSERT INTO kyc (site, user_id, email, acct, name, status, docs, comment, updated_at)'
+              + " VALUES ($1,$2,$3,$4,$5,'approved','[]'::jsonb,'',now())"
+              + ' ON CONFLICT (site, user_id) DO NOTHING',
+              [site, u.id, mail, acct, name || '']);
+          } catch (e) {}
           out.push(Object.assign(row, { ok: true, acct, key, card: await hubCard(u) }));
         } catch (e) {
           out.push(Object.assign(row, { ok: false,
