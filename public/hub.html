@@ -348,6 +348,16 @@ input[type=range]{width:100%;accent-color:var(--accent)}
       с такой парой почты и пароля — если аккаунты заведены одинаково, оба добавятся сразу.
       Пароль нигде не сохраняется: после проверки в браузере остаётся только ключ доступа,
       который отзывается в кабинете в любой момент.</p>
+    <div class="field" style="margin-top:14px">
+      <label>Общий код пульта <span class="muted" style="font-weight:400">— чтобы состав видели все</span></label>
+      <div style="display:flex;gap:8px;flex-wrap:wrap">
+        <input id="inRoom" placeholder="например verdix-team-2026" autocomplete="off" style="flex:1;min-width:180px">
+        <button class="btn btn-sm" id="btnRoom">Подключить состав</button>
+      </div>
+      <p class="note" id="roomNote">Придумайте код и введите его на всех устройствах: список подключённых
+        кошельков будет общим. Кто подключил кошелёк у себя — его увидят остальные.</p>
+    </div>
+
     <details style="margin-top:12px">
       <summary class="note" style="cursor:pointer">Подключить по ключу REST API</summary>
       <div class="field" style="margin-top:10px"><label>Ключ REST API</label>
@@ -410,7 +420,7 @@ input[type=range]{width:100%;accent-color:var(--accent)}
 
         <div class="field"><label>Кошельки сценария</label>
           <details class="wpick" id="fWho">
-            <summary><span id="whoSum">кошельки не выбраны</span></summary>
+            <summary><span id="whoPick">кошельки не выбраны</span></summary>
             <div class="wpick-act">
               <button class="btn btn-sm" id="whoAll">Выбрать свободные</button>
               <button class="btn btn-sm" id="whoNone">Снять выбор</button>
@@ -1014,8 +1024,61 @@ const S={creds:[],accounts:[],pairs:{},risks:{},sel:new Set(),open:new Set(),loa
 const keyOf=a=>a.site+":"+a.acct;
 function loadCreds(){
   try{const r=JSON.parse(localStorage.getItem(LS)||"[]");if(Array.isArray(r))S.creds=r;}catch(e){}
+  try{S.roomAt=Number(localStorage.getItem(LS_AT)||0)||0;}catch(e){}
 }
-function saveCreds(){ try{localStorage.setItem(LS,JSON.stringify(S.creds));}catch(e){} }
+function saveCreds(){
+  try{localStorage.setItem(LS,JSON.stringify(S.creds));}catch(e){}
+  /* состав уходит в общий код: другой человек с тем же кодом увидит те же кошельки */
+  S.roomAt=Date.now(); try{localStorage.setItem(LS_AT,String(S.roomAt));}catch(e){}
+  pushRoom();
+}
+/* ---------- общий состав пульта по коду ---------- */
+const LS_ROOM="verdix_room_code", LS_AT="verdix_room_at";
+function roomCode(){ try{return (localStorage.getItem(LS_ROOM)||"").trim();}catch(e){return "";} }
+function setRoom(v){ try{localStorage.setItem(LS_ROOM,String(v||"").trim());}catch(e){} }
+async function roomCall(body){
+  const code=roomCode(); if(code.length<5) return null;
+  try{
+    const r=await fetch("/api/hub/room",{method:"POST",headers:{"Content-Type":"application/json"},
+      body:JSON.stringify(Object.assign({code},body||{}))});
+    const j=await r.json().catch(()=>({}));
+    return r.ok?j:null;
+  }catch(e){ return null; }
+}
+/* отдаём свой список: сервер примет его, если он свежее сохранённого */
+async function pushRoom(){
+  if(roomCode().length<5) return;
+  await roomCall({list:S.creds,at:S.roomAt||Date.now()});
+  roomNote();
+}
+/* забираем общий список и добавляем недостающие кошельки */
+async function pullRoom(){
+  if(roomCode().length<5) return;
+  const j=await roomCall({});
+  if(!j||!Array.isArray(j.list)) return;
+  const at=Number(j.at)||0;
+  if(at>(S.roomAt||0)){
+    const was=S.creds.length;
+    S.creds=j.list.map(x=>({site:x.site,acct:String(x.acct),key:x.key}));
+    S.roomAt=at;
+    try{localStorage.setItem(LS,JSON.stringify(S.creds));localStorage.setItem(LS_AT,String(at));}catch(e){}
+    if(S.creds.length!==was||!S.accounts.length) await refresh();
+    if(S.creds.length&&$("desk").classList.contains("hidden")) openDesk();
+    roomNote();
+  }else if((S.roomAt||0)>at&&S.creds.length){
+    await roomCall({list:S.creds,at:S.roomAt});
+    roomNote();
+  }
+}
+function roomNote(){
+  const n=$("roomNote"); if(!n) return;
+  const code=roomCode();
+  n.textContent=code.length>=5
+    ? "Код «"+code+"» подключён: состав из "+S.creds.length+" кошельк(ов) общий для всех, кто введёт этот код. "+
+      "Изменения подхватываются в течение полминуты."
+    : "Придумайте код и введите его на всех устройствах: список подключённых кошельков будет общим. "+
+      "Кто подключил кошелёк у себя — его увидят остальные.";
+}
 function credOf(a){ return S.creds.find(c=>c.site===a.site&&String(c.acct)===String(a.acct)); }
 function selected(){ return S.accounts.filter(a=>!a.error&&S.sel.has(keyOf(a))); }
 function paramsFor(a){ return S.per[keyOf(a)]||S.params; }
@@ -1363,7 +1426,7 @@ function renderLog(){
 function busyOf(a){ return !!winOf(a); }
 /* сводка в заголовке списка: обновляется и отдельно от самого списка */
 function whoSummary(){
-  const sum=$("whoSum"); if(!sum) return;
+  const sum=$("whoPick"); if(!sum) return;
   const pick=S.accounts.filter(a=>!a.error&&S.sel.has(keyOf(a)));
   sum.textContent=pick.length
     ? pick.length+" кошельк(ов) в сценарии · "+usd(pick.reduce((s2,a)=>s2+valOf(a),0))
@@ -2087,6 +2150,14 @@ regWire();
 ["inMail","inPass"].forEach(id=>{
   const el=$(id); if(el) el.onkeydown=e=>{ if(e.key==="Enter") $("btnLogin").click(); };
 });
+on("btnRoom",async ()=>{
+  const v=($("inRoom").value||"").trim();
+  if(v.length<5) return toast("Код пульта — минимум пять знаков");
+  setRoom(v); roomNote();
+  toast("Код подключён — тяну общий состав");
+  await pullRoom();
+  if(S.creds.length) await pushRoom();
+});
 on("btnAdd",showAuth);
 on("btnOut",logoutAll);
 on("btnAll",()=>{ S.accounts.filter(a=>!a.error&&!busyOf(a)).forEach(a=>S.sel.add(keyOf(a))); renderAll(); });
@@ -2115,6 +2186,8 @@ if(S.creds.length){
 }
 setInterval(()=>{ if(!$("desk").classList.contains("hidden")&&!document.hidden) renderTick(); },1000);
 setInterval(()=>{ if(!$("desk").classList.contains("hidden")) refresh(); },20000);
+/* общий состав подтягиваем и в пульте, и на экране входа */
+setInterval(()=>{ if(!document.hidden) pullRoom(); },25000);
 </script>
 </body>
 </html>
