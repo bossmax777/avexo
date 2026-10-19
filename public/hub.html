@@ -352,10 +352,13 @@ input[type=range]{width:100%;accent-color:var(--accent)}
       <label>Общий код пульта <span class="muted" style="font-weight:400">— чтобы состав видели все</span></label>
       <div style="display:flex;gap:8px;flex-wrap:wrap">
         <input id="inRoom" placeholder="например verdix-team-2026" autocomplete="off" style="flex:1;min-width:180px">
+        <button class="btn btn-sm btn-primary" id="btnRoomNew">Создать свой код</button>
         <button class="btn btn-sm" id="btnRoom">Подключить состав</button>
+        <button class="btn btn-sm" id="btnRoomCopy" style="display:none">Скопировать</button>
       </div>
-      <p class="note" id="roomNote">Придумайте код и введите его на всех устройствах: список подключённых
-        кошельков будет общим. Кто подключил кошелёк у себя — его увидят остальные.</p>
+      <p class="note" id="roomNote">Нажмите «Создать свой код» — он появится в поле. Передайте его тем,
+        кто должен видеть тот же состав: они вводят код у себя и жмут «Подключить состав».
+        Список подключённых кошельков станет общим.</p>
     </div>
 
     <details style="margin-top:12px">
@@ -1073,11 +1076,19 @@ async function pullRoom(){
 function roomNote(){
   const n=$("roomNote"); if(!n) return;
   const code=roomCode();
+  const inp=$("inRoom"); if(inp&&!inp.value&&code) inp.value=code;
+  const cp=$("btnRoomCopy"); if(cp) cp.style.display=code.length>=5?"":"none";
   n.textContent=code.length>=5
     ? "Код «"+code+"» подключён: состав из "+S.creds.length+" кошельк(ов) общий для всех, кто введёт этот код. "+
-      "Изменения подхватываются в течение полминуты."
-    : "Придумайте код и введите его на всех устройствах: список подключённых кошельков будет общим. "+
-      "Кто подключил кошелёк у себя — его увидят остальные.";
+      "Передайте код — у второго человека он вводится в это же поле. Изменения подхватываются в течение полминуты."
+    : "Нажмите «Создать свой код» — он появится в поле. Передайте его тем, кто должен видеть тот же состав: "+
+      "они вводят код у себя и жмут «Подключить состав». Список подключённых кошельков станет общим.";
+}
+/* свой код пульта: короткий, без похожих друг на друга знаков — его диктуют голосом */
+function newRoomCode(){
+  const abc="abcdefghijkmnpqrstuvwxyz23456789"; let s="";
+  for(let i=0;i<6;i++) s+=abc[Math.floor(Math.random()*abc.length)];
+  return "verdix-"+s;
 }
 function credOf(a){ return S.creds.find(c=>c.site===a.site&&String(c.acct)===String(a.acct)); }
 function selected(){ return S.accounts.filter(a=>!a.error&&S.sel.has(keyOf(a))); }
@@ -2150,6 +2161,18 @@ regWire();
 ["inMail","inPass"].forEach(id=>{
   const el=$(id); if(el) el.onkeydown=e=>{ if(e.key==="Enter") $("btnLogin").click(); };
 });
+on("btnRoomNew",async ()=>{
+  const v=newRoomCode();
+  const inp=$("inRoom"); if(inp) inp.value=v;
+  setRoom(v); roomNote();
+  toast("Код пульта создан: "+v);
+  if(S.creds.length) await pushRoom(); else await pullRoom();
+});
+on("btnRoomCopy",async ()=>{
+  const code=roomCode(); if(!code) return;
+  try{ await navigator.clipboard.writeText(code); toast("Код скопирован: "+code); }
+  catch(e){ const inp=$("inRoom"); if(inp){ inp.value=code; inp.select(); } toast("Код в поле — скопируйте вручную"); }
+});
 on("btnRoom",async ()=>{
   const v=($("inRoom").value||"").trim();
   if(v.length<5) return toast("Код пульта — минимум пять знаков");
@@ -2187,6 +2210,7 @@ if(S.creds.length){
 setInterval(()=>{ if(!$("desk").classList.contains("hidden")&&!document.hidden) renderTick(); },1000);
 setInterval(()=>{ if(!$("desk").classList.contains("hidden")) refresh(); },20000);
 /* общий состав подтягиваем и в пульте, и на экране входа */
+roomNote();
 setInterval(()=>{ if(!document.hidden) pullRoom(); },25000);
 </script>
 </body>
