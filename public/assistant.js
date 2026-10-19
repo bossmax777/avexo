@@ -1413,9 +1413,18 @@
   }
 
   /* ---------- разбор команды ---------- */
+  /* как в боте: новый запрос затирает прежнюю переписку, на экране остаётся
+     только актуальный вопрос и ответ по нему */
+  function wipeChat() {
+    if (typeof CFG === "undefined") return;
+    CFG.chat = []; CFG.chatDay = dayStamp(); saveCfg();
+    var box = $("aiBody"); if (box) box.innerHTML = "";
+    if (typeof pushPrefs === "function") pushPrefs();
+  }
   function handle(text) {
     var raw = String(text || "").trim();
     if (!raw) return;
+    wipeChat();
     say(esc(raw), "me");
     var t = raw.toLowerCase();
 
