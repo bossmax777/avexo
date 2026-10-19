@@ -883,9 +883,13 @@ async function hubCard(u) {
     demo: true
   };
 }
+/* сколько кошельков пульт может держать подключёнными за раз: раньше предел
+   был 40, и после создания новых кабинетов «лишние» просто не возвращались —
+   список на странице не менялся */
+const HUB_MAX = 250;
 function hubList(body) {
   const arr = (body && Array.isArray(body.accounts)) ? body.accounts : [];
-  return arr.slice(0, 40);
+  return arr.slice(0, HUB_MAX);
 }
 
 /* вход по почте и паролю: ищем кошельки с такими данными на обеих площадках
