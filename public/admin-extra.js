@@ -568,7 +568,7 @@
   var PANE =
     '<div class="card" id="rpCard"><h2>Отчёт за день</h2>' +
     '<p class="sub">Построчно по каждому клиенту площадки: итог торгового дня за выбранную дату, ' +
-    'пополнения и выводы в этот же день и текущий баланс кошелька. ' +
+    'пополнения и выводы в этот же день отдельными колонками и текущий баланс кошелька. ' +
     'Строки берутся из истории операций — той самой, что видит клиент в кабинете.</p>' +
     '<div class="rp-row">' +
       '<div class="rp-f"><label for="rpDate">Дата</label><input id="rpDate" type="date"></div>' +
@@ -636,15 +636,20 @@
 
   /* разбираем историю одного кошелька за выбранный день */
   function rowFor(u, day) {
-    var res = { day: 0, cash: 0, has: false, note: "" };
+    /* доход за день и движение денег считаем раздельно: вывод и пополнение —
+       это не результат торгов, и в отчёте они должны стоять своими строками */
+    var res = { day: 0, cash: 0, out: 0, inc: 0, has: false, note: "" };
     (u.tx || []).forEach(function (t) {
       if (!t || String(t[0]) !== day) return;
       var v = num(t[2]);
       if (String(t[1]).indexOf(DAY) === 0) { res.day += v; res.has = true; res.note = String(t[4] || ""); }
-      else res.cash += v;
+      else if (v < 0) { res.out += v; res.cash += v; }
+      else { res.inc += v; res.cash += v; }
     });
     res.day = +res.day.toFixed(2);
     res.cash = +res.cash.toFixed(2);
+    res.out = +res.out.toFixed(2);
+    res.inc = +res.inc.toFixed(2);
     return res;
   }
 
@@ -658,7 +663,7 @@
         acct: u.acct || "",
         balance: Number(u.balance) || 0,
         cur: u.cur || "USD",
-        day: r.day, cash: r.cash, has: r.has, note: r.note
+        day: r.day, cash: r.cash, out: r.out, inc: r.inc, has: r.has, note: r.note
       };
     }).sort(function (a, b) { return b.day - a.day; });
   }
@@ -673,9 +678,13 @@
   /* построчный текст для копирования:
      Sergei Shklyaev (ID 08211372) - 05.10.2026 +33$ */
   function text(list, day) {
-    return list.filter(function (x) { return RP.all || x.has; })
+    return list.filter(function (x) { return RP.all || x.has || x.out || x.inc; })
       .map(function (x) {
-        return x.name + " (ID " + x.acct + ") - " + day + " " + short(x.day);
+        var line = x.name + " (ID " + x.acct + ") - " + day + " " +
+          (x.has ? short(x.day) : "без итога дня");
+        if (x.inc) line += ", пополнение " + short(x.inc);
+        if (x.out) line += ", вывод " + short(x.out);
+        return line;
       }).join("\n");
   }
 
@@ -717,6 +726,9 @@
     }
     var sum = list.reduce(function (s, x) { return s + x.day; }, 0);
     var cash = list.reduce(function (s, x) { return s + x.cash; }, 0);
+    var outs = list.reduce(function (s, x) { return s + x.out; }, 0);
+    var incs = list.reduce(function (s, x) { return s + x.inc; }, 0);
+    var nOut = list.filter(function (x) { return x.out; }).length;
     var up = list.filter(function (x) { return x.day > 0; }).length;
     var dn = list.filter(function (x) { return x.day < 0; }).length;
     var no = list.filter(function (x) { return !x.has; }).length;
@@ -727,16 +739,20 @@
       '<div class="rp-k"><span>В плюсе</span><b class="up">' + up + "</b></div>" +
       '<div class="rp-k"><span>В минусе</span><b class="dn">' + dn + "</b></div>" +
       '<div class="rp-k"><span>Без записи</span><b class="zero">' + no + "</b></div>" +
+      '<div class="rp-k"><span>Выводы за день</span><b class="' + (outs ? "dn" : "zero") + '">' +
+        money(outs) + (nOut ? " · " + nOut + " шт." : "") + "</b></div>" +
+      '<div class="rp-k"><span>Пополнения</span><b class="' + (incs ? "up" : "zero") + '">' +
+        money(incs) + "</b></div>" +
       '<div class="rp-k"><span>Касса за день</span><b>' + money(cash) + "</b></div>";
     box.innerHTML = '<div class="rp-scroll"><table><thead><tr>' +
-      "<th>Клиент</th><th>Счёт</th><th>Итог дня</th><th>Пополнения и выводы</th>" +
+      "<th>Клиент</th><th>Счёт</th><th>Итог дня</th><th>Пополнения</th><th>Выводы</th>" +
       "<th>Баланс сейчас</th><th>Статус</th></tr></thead><tbody>" +
       list.map(function (x) {
         return "<tr><td>" + esc(x.name) + "<br><span class=\"zero\">" + esc(x.mail) + "</span></td>" +
           "<td>#" + esc(x.acct) + '</td><td class="n ' +
           (x.day > 0 ? "up" : x.day < 0 ? "dn" : "zero") + '">' + (x.has ? money(x.day) : "—") + "</td>" +
-          '<td class="n ' + (x.cash ? (x.cash > 0 ? "up" : "dn") : "zero") + '">' +
-          (x.cash ? money(x.cash) : "—") + "</td>" +
+          '<td class="n ' + (x.inc ? "up" : "zero") + '">' + (x.inc ? money(x.inc) : "—") + "</td>" +
+          '<td class="n ' + (x.out ? "dn" : "zero") + '">' + (x.out ? money(x.out) : "—") + "</td>" +
           '<td class="n">' + plain(x.balance) + " " + esc(x.cur) + "</td>" +
           "<td>" + esc(x.has ? (x.note || (x.day >= 0 ? "Прибыль" : "Убыток")) : "нет записи за этот день") +
           "</td></tr>";
@@ -755,11 +771,19 @@
     var day = (el("rpDate") || {}).value || "";
     var list = rows();
     var q = function (v) { return '"' + String(v == null ? "" : v).replace(/"/g, '""') + '"'; };
-    var lines = [["Клиент", "Email", "Счёт", "Итог дня", "Пополнения и выводы", "Баланс", "Валюта", "Статус"].map(q).join(";")];
+    var lines = [["Клиент", "Email", "Счёт", "Итог дня", "Пополнения", "Выводы", "Касса за день",
+      "Баланс", "Валюта", "Статус"].map(q).join(";")];
     list.forEach(function (x) {
-      lines.push([x.name, x.mail, x.acct, x.has ? plain(x.day) : "", plain(x.cash),
-        plain(x.balance), x.cur, x.has ? (x.note || "") : "нет записи"].map(q).join(";"));
+      lines.push([x.name, x.mail, x.acct, x.has ? plain(x.day) : "", plain(x.inc), plain(x.out),
+        plain(x.cash), plain(x.balance), x.cur,
+        x.has ? (x.note || "") : "нет записи"].map(q).join(";"));
     });
+    /* итоговая строка: по ней сразу видно доход и вывод за день целиком */
+    lines.push(["ИТОГО", "", "", plain(list.reduce(function (s2, x) { return s2 + x.day; }, 0)),
+      plain(list.reduce(function (s2, x) { return s2 + x.inc; }, 0)),
+      plain(list.reduce(function (s2, x) { return s2 + x.out; }, 0)),
+      plain(list.reduce(function (s2, x) { return s2 + x.cash; }, 0)),
+      plain(list.reduce(function (s2, x) { return s2 + x.balance; }, 0)), "", ""].map(q).join(";"));
     var blob = new Blob(["﻿" + lines.join("\r\n")], { type: "text/csv;charset=utf-8" });
     var a = document.createElement("a");
     a.href = URL.createObjectURL(blob);

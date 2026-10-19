@@ -1454,7 +1454,7 @@ function renderDash(){
     if(["wait","appr"].includes(t[3])){ pend++;
       pendSum+=Math.abs(parseFloat(String(t[2]).replace(/[^\d.,]/g,"").replace(",","."))||0); }
   }));
-  const goal=withDyn.reduce((a,u)=>a+(Number(dynOf(u).to)||0),0);
+  const goal=withDyn.reduce((a,u)=>a+userGoal(u),0);
   kpi.innerHTML=[
     ["Кошельков",String(us.length),us.length?"зарегистрировано на сайте":"пока никто не зарегистрировался",""],
     ["Суммарный баланс",money(total),"по всем кошелькам","accent"],
@@ -1480,7 +1480,7 @@ function renderDash(){
       const botTag = d.bot&&d.bot.startedAt
         ? ` <span class="badge ok" style="font-size:10.5px">бот · ${escapeHtml(String(d.pair||"XAU/USD"))}</span>` : "";
       const scen = n
-        ? `<b class="d-num">${money(d.from)} → ${money(d.to)}</b>${botTag}
+        ? `<b class="d-num">${money(userVal(u))} → ${money(userGoal(u))}</b>${botTag}
            <span class="d-goal">${new Date(n.st).toLocaleDateString("ru-RU")} — ${new Date(n.en).toLocaleDateString("ru-RU")}</span>`
         : (d.on?'<span style="color:var(--dim)">включён, не запущен</span>'
                :'<span style="color:var(--dim)">не задан</span>');
@@ -1491,7 +1491,7 @@ function renderDash(){
       return `<tr>
         <td class="d-user"><b>${escapeHtml(u.name||"—")}</b><small>${escapeHtml(u.email)}</small></td>
         <td class="d-num">${escapeHtml(u.acct||"—")}</td>
-        <td class="d-num"><b>${money(n?n.val:u.balance)}</b> <small style="color:var(--dim)">${escapeHtml(u.cur||"USD")}</small>${
+        <td class="d-num"><b>${money(userVal(u))}</b> <small style="color:var(--dim)">${escapeHtml(u.cur||"USD")}</small>${
           n?'<span class="d-goal">по сценарию · в базе '+money(u.balance)+'</span>':""}</td>
         <td>${scen}</td>
         <td>${prog}</td>
@@ -1824,6 +1824,22 @@ function dynNow(d){
   const from=Number(d.from)||0, to=Number(d.to)||0;
   const val=dynCurve(d,pr,st,en-st);
   return {pr,val,base:from+(to-from)*pr,st,en};
+}
+/* Значение кошелька с поправкой на то, что баланс мог измениться уже после
+   старта сценария: итог торгового дня, вывод или пополнение из админки. Кривая
+   сдвигается на эту разницу — так же, как на пульте, иначе на дашборде висела
+   старая цифра «по сценарию», не знавшая ни про доход, ни про вывод. */
+function userVal(u){
+  const d=dynOf(u), n=dynNow(d);
+  const bal=Number(u.balance)||0;
+  if(!n) return bal;
+  if(n.pr>=1) return bal;
+  return Math.max(0, n.val + (bal-(Number(d.from)||0)));
+}
+/* цель сценария — туда же со сдвигом */
+function userGoal(u){
+  const d=dynOf(u), bal=Number(u.balance)||0;
+  return Math.max(0, (Number(d.to)||0) + (bal-(Number(d.from)||0)));
 }
 function humanSpan(ms){
   const days=ms/86400000;
