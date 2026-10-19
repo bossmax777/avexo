@@ -135,6 +135,7 @@
     (CFG.chat || []).forEach(function (m2) {
       var d = document.createElement("div");
       d.className = "ai-m " + (m2.w === "me" ? "me" : "bot");
+      if (m2.id) d.dataset.mid = m2.id;
       d.innerHTML = m2.h;
       box.appendChild(d);
     });
@@ -148,17 +149,30 @@
       say("Новый день — переписку за вчера я очистил. Чем помочь?");
     }
   }
+  var MSG_ID = 0;
   function say(html, who) {
     keepMsg(html, who);
     var box = $("aiBody"); if (!box) return null;
     var d = document.createElement("div");
     d.className = "ai-m " + (who === "me" ? "me" : "bot");
+    /* помечаем сообщение, чтобы потом подменить его текст и в сохранённой
+       переписке: иначе после перерисовки чата таблица пропадала, а на её
+       месте снова появлялось «смотрю историю…» */
+    d.dataset.mid = String(++MSG_ID);
+    if ((CFG.chat || []).length) CFG.chat[CFG.chat.length - 1].id = d.dataset.mid;
     d.innerHTML = html;
     box.appendChild(d); box.scrollTop = box.scrollHeight;
     return d;
   }
   function fill(node, html) {
-    if (node) node.innerHTML = html;
+    if (node) {
+      node.innerHTML = html;
+      var id = node.dataset ? node.dataset.mid : "";
+      if (id) {
+        (CFG.chat || []).forEach(function (m2) { if (m2.id === id) m2.h = String(html); });
+        saveCfg();
+      }
+    }
     var b = $("aiBody"); if (b) b.scrollTop = b.scrollHeight;
   }
   function busy(t) { return say("<i>" + esc(t) + "…</i>"); }
@@ -514,40 +528,48 @@
     say("<b>Готово.</b> Параметры проставлены в карточки — у каждого кошелька своя пара и коэффициент. " +
       "Запускать можно кнопкой в карточке или командой «запусти по выбранным».");
   }
+  /* Подбор сценария: таблица «какой аккаунт на какую пару», сумма по всем
+     строкам не выходит за порог. Кошельки, которые в порог не влезли,
+     перечисляем отдельно — они сегодня без сценария. */
   function doAdvice() {
     var all = plan();
     if (!all.length) return say("Сначала подключите кошельки — тогда разложу их по парам.");
-    var fit = fitPlan(all, DAY_TARGET);
+    var fit = fitPlan(all, CAP);
     var rows = fit.rows, rest = fit.rest, sum = fit.total;
     if (!rows.length) {
-      return say("<b>Даже самый спокойный сценарий по этим кошелькам даёт больше " + money(DAY_TARGET) +
-        " за сутки.</b> Уменьшите долю депозита в работе или оставьте в выборе меньше кошельков — " +
-        "тогда соберу предложение.");
+      return say("<b>Даже на минимальных ступенях сумма выходит за " + money(CAP) +
+        " за сутки.</b> Уменьшите долю депозита в работе или снимите часть кошельков с выбора.");
     }
-    var m = say("<b>Предложение на день по " + rows.length + " кошелькам</b>" +
-      "<table><tr><th>Кошелёк</th><th>Пара</th><th>Коэф.</th><th>За сутки</th><th>Почему</th></tr>" +
-      rows.slice(0, 14).map(function (r) {
-        return "<tr><td>#" + esc(r.a.acct) + "</td><td>" + esc(r.pair) + "</td><td>×" +
-          String(r.k).replace(".", ",") + "</td><td>" +
-          sig(num(r.a.balance) * shareNow() * (capK(r.k, r.pair) - 1)) + "</td><td>" +
-          esc(r.why) + "</td></tr>";
-      }).join("") + "</table>" +
-      (rows.length > 14 ? "<br>и ещё " + (rows.length - 14) + " кошельк(ов) в плане." : "") +
-      "<br>Если всё отработает по плану, прибавка за сутки около " + money(sum) +
-      " — держу предложение в пределах " + money(DAY_TARGET) +
-      " за сутки, чтобы аккаунты не брали на проверку." +
+    var sh = shareNow();
+    var byPair = {};
+    rows.forEach(function (r) { byPair[r.pair] = (byPair[r.pair] || 0) + 1; });
+    var m = say("<b>Сценарий на день: " + rows.length + " кошельк(ов), итог " + money(sum) + "</b>" +
+      " · порог " + money(CAP) + " за сутки не превышен" +
+      "<table><tr><th>Кошелёк</th><th>Пара</th><th>Коэф.</th><th>Депозит</th><th>За сутки</th></tr>" +
+      rows.map(function (r) {
+        var g = num(r.a.balance) * sh * (capK(r.k, r.pair) - 1);
+        return "<tr><td>#" + esc(r.a.acct) + "<br><span class='dim'>" +
+          esc(r.a.siteName || r.a.site) + (outState(r.a).ready ? " · прогрет" : " · в прогреве") +
+          "</span></td><td>" + esc(r.pair) + "</td><td>×" + String(r.k).replace(".", ",") + "</td><td>" +
+          money(num(r.a.balance)) + "</td><td class='up'>" + sig(g) + "</td></tr>";
+      }).join("") +
+      "<tr><td><b>Итого</b></td><td>" + Object.keys(byPair).map(function (p2) {
+        return esc(p2) + " — " + byPair[p2]; }).join("<br>") + "</td><td>—</td><td>" +
+      money(sumOf(rows.map(function (r) { return r.a; }))) + "</td><td class='up'><b>" + sig(sum) +
+      "</b></td></tr></table>" +
       (rest.length
-        ? "<br><b>Сегодня без сценария остаются " + rest.length + " кошельк(ов):</b> " +
-          rest.slice(0, 8).map(function (r) { return "#" + esc(r.a.acct); }).join(", ") +
-          (rest.length > 8 ? " и др." : "") + " — с ними дневной лимит был бы превышен."
+        ? "<br><b>Без сценария сегодня: " + rest.length + "</b> — с ними итог вышел бы за порог." +
+          "<table><tr><th>Кошелёк</th><th>Депозит</th><th>Почему</th></tr>" +
+          rest.slice(0, 10).map(function (r) {
+            return "<tr><td>#" + esc(r.a.acct) + "</td><td>" + money(num(r.a.balance)) +
+              "</td><td>очередь на завтра: лимит " + money(CAP) + " уже выбран</td></tr>";
+          }).join("") + "</table>"
         : "") +
-      "<br>" + warmNote(rows.map(function (r) { return r.a; })));
+      "<br>Доля депозита в работе — " + Math.round(sh * 100) + "%. " + warmNote(rows.map(function (r) { return r.a; })));
     act(m, [["Применить к карточкам", function () { applyPlan(rows); }],
-            ["Только золото тем, у кого ключ", function () {
-              var g = rows.filter(function (r) { return live(r.a); })
-                .map(function (r) { return { a: r.a, pair: pairsOf("gold")[0] || "XAU/USD", k: 1.6 }; });
-              if (!g.length) return say("Ни у одного выбранного кошелька ключ не активирован — золото закрыто.");
-              applyPlan(g);
+            ["Применить и запустить", function () {
+              applyPlan(rows);
+              if (typeof runKeys === "function") runKeys(rows.map(function (r) { return kOf(r.a); }));
             }, true]]);
   }
 
@@ -804,19 +826,22 @@
       if (!range && /недел/.test(t)) range = 7;
       if (!range && /(месяц|30 дней)/.test(t)) range = 30;
       if (range) return fill(m, rangeHtml(items, Math.min(60, +range)));
-      var date = dateFrom(t);
+      /* все даты, по которым вообще есть записи — от свежей к старой */
+      var dates = {};
+      items.forEach(function (it) { (it.days || []).forEach(function (d) { dates[d.date] = 1; }); });
+      var known = Object.keys(dates).sort(function (a2, b2) { return ruToTime(b2) - ruToTime(a2); });
+      var date = /(последн|прошл[ыо])/.test(t) ? (known[0] || ruDay()) : dateFrom(t);
+      var asked = date;
+      /* за названный день записей может не быть — показываем последний торговый */
+      if (known.length && !dates[date]) date = known[0];
       var rows = items.map(function (it) {
         var row = dayRow(it, date);
         return { it: it, row: row, g: row ? row.amount : null };
       });
       var have = rows.filter(function (r) { return r.g !== null; });
       if (!have.length) {
-        var known = {};
-        items.forEach(function (it) { (it.days || []).forEach(function (d) { known[d.date] = 1; }); });
-        var list = Object.keys(known).slice(0, 6);
-        return fill(m, "<b>За " + esc(date) + " записей нет.</b>" +
-          (list.length ? "<br>Итоги есть за: " + list.map(esc).join(", ") +
-            ". Назовите дату — покажу по ней." : ""));
+        return fill(m, "<b>Записанных итогов пока нет.</b> Как только день будет зафиксирован " +
+          "или разнесён площадкой, покажу разбивку по кошелькам.");
       }
       var sum = have.reduce(function (s2, r) { return s2 + r.g; }, 0);
       var bySite = {};
@@ -830,6 +855,8 @@
       var posted = have.filter(function (r) { return (r.row || {}).admin; }).length;
       fill(m, "<b>Итог за " + esc(date) + ": " + sig(sum) + "</b> · кошельков с записью " +
         have.length + " из " + items.length +
+        (asked !== date ? "<br><span class='dim'>За " + esc(asked) +
+          " записей нет — показываю последний торговый день.</span>" : "") +
         "<ul>" + Object.keys(bySite).map(function (n) {
           return "<li>" + esc(n) + " — " + sig(bySite[n]) + "</li>"; }).join("") + "</ul>" +
         "<table><tr><th>Кошелёк и клиент</th><th>Пара</th><th>Итог</th></tr>" +
@@ -862,17 +889,40 @@
     var best = days.slice().sort(function (x, y) { return byDay[y] - byDay[x]; })[0];
     var worst = days.slice().sort(function (x, y) { return byDay[x] - byDay[y]; })[0];
     var avg = days.length ? sum / days.length : 0;
-    return "<b>Итоги за последние " + days.length + " дн.: " + sig(sum) + "</b>" +
-      "<ul>" + Object.keys(bySite).map(function (k) {
-        return "<li>" + esc(k) + " — " + sig(bySite[k]) + "</li>"; }).join("") + "</ul>" +
-      "<table><tr><th>Дата</th><th>Итог</th></tr>" +
+    var DOW = ["вс", "пн", "вт", "ср", "чт", "пт", "сб"];
+    /* по каждому дню — вклад каждой площадки и сколько кошельков участвовало */
+    var dayBy = {};
+    items.forEach(function (it) {
+      var site = it.siteName || it.site;
+      (it.days || []).forEach(function (d) {
+        if (!dayBy[d.date]) dayBy[d.date] = { n: 0, by: {} };
+        dayBy[d.date].n++;
+        dayBy[d.date].by[site] = (dayBy[d.date].by[site] || 0) + d.amount;
+      });
+    });
+    var sites = Object.keys(bySite);
+    return "<b>Итоги за последние " + days.length + " торговых дн.: " + sig(sum) + "</b>" +
+      "<table><tr><th>День</th>" +
+      sites.map(function (k) { return "<th>" + esc(k) + "</th>"; }).join("") +
+      "<th>Итог</th><th>Кошельков</th></tr>" +
       days.map(function (d) {
-        return "<tr><td>" + esc(d) + "</td><td class='" + (byDay[d] >= 0 ? "up" : "down") + "'>" +
-          sig(byDay[d]) + "</td></tr>"; }).join("") + "</table>" +
-      "<br>Средний день — " + sig(avg) +
+        var info = dayBy[d] || { n: 0, by: {} };
+        var dt = new Date(ruToTime(d));
+        return "<tr><td>" + esc(d) + "<br><span class='dim'>" + DOW[dt.getDay()] + "</span></td>" +
+          sites.map(function (k) {
+            return "<td class='" + ((info.by[k] || 0) >= 0 ? "up" : "down") + "'>" +
+              sig(info.by[k] || 0) + "</td>"; }).join("") +
+          "<td class='" + (byDay[d] >= 0 ? "up" : "down") + "'><b>" + sig(byDay[d]) + "</b></td><td>" +
+          info.n + "</td></tr>";
+      }).join("") +
+      "<tr><td><b>Всего</b></td>" + sites.map(function (k) {
+        return "<td class='" + (bySite[k] >= 0 ? "up" : "down") + "'><b>" + sig(bySite[k]) + "</b></td>";
+      }).join("") + "<td class='" + (sum >= 0 ? "up" : "down") + "'><b>" + sig(sum) +
+      "</b></td><td>—</td></tr></table>" +
+      "<br>Средний торговый день — " + sig(avg) +
       (best ? ", лучший " + esc(best) + " (" + sig(byDay[best]) + ")" : "") +
       (worst && worst !== best ? ", слабый " + esc(worst) + " (" + sig(byDay[worst]) + ")" : "") +
-      ".<br>В расчёте и фиксация сессий, и разноска итогов дня по обеим площадкам.";
+      ". В расчёте и фиксация сессий, и разноска итогов дня по обеим площадкам.";
   }
 
   function doBalances() {
@@ -888,21 +938,45 @@
       "</ul>Кошельков: " + list.length + ", сессий в работе: " +
       list.filter(function (a) { return (typeof winOf === "function") && winOf(a); }).length + ".");
   }
+  /* Сроки ключей: таблица по всем кошелькам — дата окончания, сколько осталось */
   function doKeysInfo() {
+    var m0 = busy("Смотрю сроки активации ключей");
     return pullState().then(function () {
       var list = accs();
-      var on = list.filter(live), off = list.filter(function (a) { return !live(a); });
-      var soon = on.map(function (a) {
-        var s = stOf(a); return { a: a, left: s.left };
-      }).filter(function (x) { return x.left !== null && x.left !== undefined; })
-        .sort(function (x, y) { return x.left - y.left; });
-      say("<b>Ключи: активны " + on.length + ", не активированы " + off.length + "</b>" +
-        (soon.length ? "<br>Ближайшие к окончанию:<ul>" + soon.slice(0, 5).map(function (x) {
-          return "<li>#" + esc(x.a.acct) + " — осталось " +
-            (typeof fmtLeft === "function" ? fmtLeft(x.left) : Math.round(x.left / 86400000) + " д") + "</li>";
-        }).join("") + "</ul>" : "") +
-        (off.length ? "<br>Без ключа золотая пара закрыта: " + off.slice(0, 8).map(function (a) {
-          return "#" + esc(a.acct); }).join(", ") + ". Пришлите коды — активирую." : ""));
+      if (!list.length) return fill(m0, "Кошельки не подключены.");
+      var rows = list.map(function (a) {
+        var st = stOf(a);
+        var left = (st.left === null || st.left === undefined) ? null : num(st.left);
+        return { a: a, on: live(a), code: st.code || "", until: st.until || null,
+                 left: left, days: left === null ? null : Math.floor(left / 86400000),
+                 expired: !!st.expired };
+      }).sort(function (x, y) {
+        if (x.on !== y.on) return x.on ? -1 : 1;
+        if (x.left === null) return 1;
+        if (y.left === null) return -1;
+        return x.left - y.left;
+      });
+      var on = rows.filter(function (r) { return r.on; });
+      var soon = on.filter(function (r) { return r.days !== null && r.days <= KEY_WARN; });
+      var m = fill(m0, "<b>Ключи бота: активны " + on.length + " из " + rows.length + "</b>" +
+        (soon.length ? " · заканчиваются у " + soon.length + " в ближайшие " + KEY_WARN + " дн." : "") +
+        "<table><tr><th>Кошелёк</th><th>Статус</th><th>Действует до</th><th>Осталось</th></tr>" +
+        rows.map(function (r) {
+          var cls = !r.on ? "down" : (r.days !== null && r.days <= KEY_WARN ? "down" : "up");
+          return "<tr><td>#" + esc(r.a.acct) + "<br><span class='dim'>" +
+            esc(r.a.siteName || r.a.site) + "</span></td><td class='" + cls + "'>" +
+            (r.on ? "активен" : (r.expired ? "срок истёк" : "не активирован")) + "</td><td>" +
+            (r.until ? esc(new Date(r.until).toLocaleDateString("ru-RU")) : (r.on ? "бессрочный" : "—")) +
+            "</td><td>" + (r.on
+              ? (r.days === null ? "без ограничения"
+                 : (r.days <= 0 ? "последний день" : r.days + " дн."))
+              : "—") + "</td></tr>";
+        }).join("") + "</table>" +
+        "<br>Без активного ключа закрыта только золотая пара — крипта и акции идут всегда. " +
+        "Коды выдаёт администратор площадки: пришлите их в чат, и я продлю активацию.");
+      if (soon.length || on.length !== rows.length) {
+        act(m, [["Прислать коды", function () { askCodes(); }]]);
+      }
     });
   }
   var KEY_WARN = 7;   /* за сколько дней предупреждать об окончании ключа */
@@ -916,91 +990,83 @@
     }).filter(function (x) { return x.days !== null && x.days <= KEY_WARN; })
       .sort(function (x, y) { return x.left - y.left; });
   }
-  /* полный разбор рисков: что прямо сейчас может привести к проверке счёта */
+  /* Риски: таблица по каждому кошельку — стадия прогрева, срок ключа,
+     верификация. Снизу — что из этого требует действий. */
   function doRisks() {
+    var m0 = busy("Собираю карту рисков по кошелькам");
     return pullState().then(function () {
-      var m = metrics(), hc = healthCalc(m), w = hc.warm;
-      var list = [];
-      if (hc.gain > CAP) {
-        list.push(["Сценарий выше порога", "выбранный состав даёт " + money(hc.gain) +
-          " за сутки — выше " + money(CAP) + ", с которого площадки берут аккаунты на проверку"]);
-      } else if (hc.gain > DAY_TARGET) {
-        list.push(["Доход выше спокойного уровня", "по расчёту " + money(hc.gain) +
-          " за сутки; я держу предложения в пределах " + money(DAY_TARGET)]);
-      }
-      var coldHot = w.cold.filter(function (a) {
+      return pullHist();
+    }).then(function () {
+      var list = accs();
+      if (!list.length) return fill(m0, "Кошельки не подключены — рисков считать не по чему.");
+      var rows = list.map(function (a) {
+        var st = outState(a), kst = stOf(a);
+        var left = (kst.left === null || kst.left === undefined) ? null : num(kst.left);
+        var days = left === null ? null : Math.floor(left / 86400000);
         var pp = (typeof paramsFor === "function") ? paramsFor(a) : {};
-        return capK(pp.k, pp.pair || "XAU/USD") > COLD_MAX;
+        var k = capK(pp.k, pp.pair || "XAU/USD");
+        var kyc = kst.kyc || "";
+        return { a: a, st: st, days: days, until: kst.until, keyOn: live(a), k: k, kyc: kyc };
+      }).sort(function (x, y) {
+        var w = function (r) { return r.st.tone === "new" ? 0 : (!r.keyOn ? 1 : (r.days !== null && r.days <= KEY_WARN ? 2 : 3)); };
+        return w(x) - w(y);
       });
-      if (coldHot.length) {
-        list.push([coldHot.length + " непрогретых с высоким коэффициентом",
-          "по ним стоит ×" + String(COLD_MAX).replace(".", ",") + " и ниже: " +
-          coldHot.slice(0, 6).map(function (a) { return "#" + esc(a.acct); }).join(", ") +
-          (coldHot.length > 6 ? " и др." : "")]);
-      }
-      var news = m.list.filter(function (a) { return outState(a).tone === "new"; });
-      if (news.length) {
-        list.push([news.length + " новорегов", "аккаунты первой недели: торговать можно, " +
-          "вывод с них не трогаем совсем"]);
-      }
-      var ks = keysSoon();
-      if (ks.length) {
-        list.push(["Ключи заканчиваются у " + ks.length + " кошельк(ов)",
-          ks.slice(0, 6).map(function (x) {
-            return "#" + esc(x.a.acct) + " — " + (x.days <= 0 ? "сегодня" : "через " + x.days + " дн.");
-          }).join(", ") + ". Коды выдаёт администратор, пришлите их в чат"]);
-      }
-      var noKey = m.list.length - m.keys;
-      if (noKey > 0) list.push([noKey + " кошельк(ов) без ключа", "по ним закрыта золотая пара"]);
-      if (m.kycNeed && m.kycNeed.length) {
-        list.push([m.kycNeed.length + " без верификации",
-          "площадка может запросить документы при выводе — могу отправить заявки"]);
-      }
-      var closed = m.list.filter(function (a) {
-        var pp = (typeof paramsFor === "function") ? paramsFor(a) : {};
-        return typeof pairOpen === "function" && !pairOpen(pp.pair || "XAU/USD");
-      });
-      if (closed.length) {
-        list.push([closed.length + " кошельк(ов) с парой вне торговых часов",
-          "сейчас запустятся только криптопары"]);
-      }
-      var down = m.run.filter(function (a) {
-        var d = (a && a.dyn) || {};
-        var cur = (typeof valOf === "function") ? valOf(a) : num(a.balance);
-        return num(d.from) > 0 && cur < num(d.from) * 0.995;
-      });
-      if (down.length) {
-        list.push([down.length + " сессий в минусе", "счёт ниже депозита на старте: " +
-          down.slice(0, 6).map(function (a) { return "#" + esc(a.acct); }).join(", ")]);
-      }
-      if (m.total > 0 && m.day < 0) list.push(["Минус по дню", sig(m.day) + " по портфелю"]);
-      if (!list.length) {
-        return say("<b>Рисков не вижу.</b> Коэффициенты спокойные, порог " + money(CAP) +
-          " не превышен, ключи в силе, по непрогретым счетам минимальные ступени. " +
-          "Индекс устойчивости — " + hc.score + " из 100.");
-      }
-      var mm = say("<b>Риски сейчас: " + list.length + "</b> · индекс устойчивости " + hc.score +
-        " из 100" +
-        "<table><tr><th>Что не так</th><th>Подробности</th></tr>" +
-        list.map(function (x) {
-          return "<tr><td><b>" + esc(x[0]) + "</b></td><td>" + x[1] + "</td></tr>";
-        }).join("") + "</table>");
+      var warmTxt = function (r) {
+        var st = r.st;
+        if (st.tone === "new") return "новорег · " + st.age + " дн. из " + NEW_DAYS;
+        if (st.ready) return "прогрет · " + money(st.bal);
+        if (st.tone === "wait") return "прогрет, но вывод " + st.lastOut + " дн. назад";
+        if (!st.needSum) return "в прогреве · сумма набрана, ждём " + (st.daysLeft || 0) + " дн.";
+        return "в прогреве · не хватает " + money(st.needSum) +
+          (st.daysLeft ? " и " + st.daysLeft + " дн." : "");
+      };
+      var keyTxt = function (r) {
+        if (!r.keyOn) return "ключа нет";
+        if (r.days === null) return "бессрочный";
+        var d = r.until ? new Date(r.until).toLocaleDateString("ru-RU") : "";
+        return (r.days <= 0 ? "истекает сегодня" : "осталось " + r.days + " дн.") + (d ? "<br><span class='dim'>до " + d + "</span>" : "");
+      };
+      var kycTxt = function (r) {
+        return r.kyc === "approved" ? "пройдена"
+          : r.kyc === "pending" ? "на проверке"
+          : r.kyc === "rejected" ? "отклонена — подать заново"
+          : r.kyc ? "не отправлена" : "нет данных";
+      };
+      var cold = rows.filter(function (r) { return !r.st.ready; }).length;
+      var news = rows.filter(function (r) { return r.st.tone === "new"; }).length;
+      var soon = rows.filter(function (r) { return r.days !== null && r.days <= KEY_WARN && r.keyOn; });
+      var noKey = rows.filter(function (r) { return !r.keyOn; }).length;
+      var needKyc = rows.filter(function (r) { return r.kyc && r.kyc !== "approved" && r.kyc !== "pending"; });
+      var hotCold = rows.filter(function (r) { return !r.st.ready && r.k > COLD_MAX; });
+      var m = fill(m0, "<b>Риски по кошелькам: " + rows.length + " счёт(ов)</b>" +
+        "<table><tr><th>Кошелёк</th><th>Прогрев</th><th>Ключ бота</th><th>Верификация</th></tr>" +
+        rows.map(function (r) {
+          return "<tr><td>#" + esc(r.a.acct) + "<br><span class='dim'>" +
+            esc(r.a.siteName || r.a.site) + " · ×" + String(r.k).replace(".", ",") + "</span></td><td>" +
+            esc(warmTxt(r)) + "</td><td>" + keyTxt(r) + "</td><td>" + esc(kycTxt(r)) + "</td></tr>";
+        }).join("") + "</table>" +
+        "<br><b>Коротко:</b> прогретых " + (rows.length - cold) + " из " + rows.length +
+        (news ? ", новорегов " + news : "") +
+        (soon.length ? ", ключ заканчивается у " + soon.length : "") +
+        (noKey ? ", без ключа " + noKey : "") +
+        (needKyc.length ? ", без верификации " + needKyc.length : "") +
+        (hotCold.length ? ", коэффициент выше ×" + String(COLD_MAX).replace(".", ",") +
+          " по " + hotCold.length + " непрогретым" : "") + ".");
       var btns = [];
-      if (coldHot.length) {
+      if (hotCold.length) {
         btns.push(["Снизить непрогретым до ×" + String(COLD_MAX).replace(".", ","), function () {
-          coldHot.forEach(function (a) {
-            var pp = Object.assign({ pair: "XAU/USD", hours: 24, share: 0.6, dir: "up" },
-              (typeof paramsFor === "function") ? paramsFor(a) : {}, { k: COLD_MAX });
-            S.per[kOf(a)] = pp;
+          hotCold.forEach(function (r) {
+            S.per[kOf(r.a)] = Object.assign({ pair: "XAU/USD", hours: 24, share: 0.6, dir: "up" },
+              (typeof paramsFor === "function") ? paramsFor(r.a) : {}, { k: COLD_MAX });
           });
           if (typeof renderAll === "function") renderAll();
           renderPanels();
           say("Готово: непрогретым кошелькам стоит ×" + String(COLD_MAX).replace(".", ",") + ".");
         }]);
       }
-      if (m.kycNeed && m.kycNeed.length) btns.push(["Отправить заявки на верификацию", function () { doKyc(); }, true]);
-      if (noKey > 0 || ks.length) btns.push(["Прислать коды ключей", function () { askCodes(); }, true]);
-      if (btns.length) act(mm, btns);
+      if (needKyc.length) btns.push(["Отправить заявки на верификацию (" + needKyc.length + ")", function () { doKyc(); }, true]);
+      if (noKey || soon.length) btns.push(["Прислать коды ключей", function () { askCodes(); }, true]);
+      if (btns.length) act(m, btns);
     });
   }
   /* напоминание об окончании ключей: раз в день, без повторов */
@@ -1026,18 +1092,37 @@
     act(mm, [["Пришлю коды", function () { askCodes(); }],
              ["Позже", function () {}, true]]);
   }
+  /* Верификация: таблица по кошелькам — у кого пройдена, у кого на проверке,
+     кому ещё подавать заявку */
   function doKycInfo() {
+    var m0 = busy("Смотрю статусы верификации");
     return pullState().then(function () {
-      var list = accs(), by = { approved: [], pending: [], none: [], rejected: [] };
-      list.forEach(function (a) { (by[stOf(a).kyc || "none"] || by.none).push(a); });
-      say("<b>Верификация</b><ul>" +
-        "<li>Пройдена: " + by.approved.length + "</li>" +
-        "<li>На проверке: " + by.pending.length + "</li>" +
-        "<li>Не отправлена: " + (by.none.length + by.rejected.length) + "</li></ul>" +
-        (by.none.length ? "Могу отправить заявки — скажите «отправь заявки на верификацию»." : ""));
+      var list = accs();
+      if (!list.length) return fill(m0, "Кошельки не подключены.");
+      var TXT = { approved: "пройдена", pending: "на проверке", rejected: "отклонена",
+                  none: "не отправлена" };
+      var rank = { rejected: 0, none: 1, pending: 2, approved: 3 };
+      var rows = list.map(function (a) {
+        var st = stOf(a).kyc || "";
+        return { a: a, st: st, txt: st ? (TXT[st] || st) : "нет данных", r: rank[st] === undefined ? 1 : rank[st] };
+      }).sort(function (x, y) { return x.r - y.r; });
+      var need = rows.filter(function (r) { return r.st && r.st !== "approved" && r.st !== "pending"; });
+      var ok = rows.filter(function (r) { return r.st === "approved"; }).length;
+      var wait = rows.filter(function (r) { return r.st === "pending"; }).length;
+      var m = fill(m0, "<b>Верификация: пройдена у " + ok + " из " + rows.length + "</b>" +
+        (wait ? " · на проверке " + wait : "") + (need.length ? " · подать заявку " + need.length : "") +
+        "<table><tr><th>Кошелёк</th><th>Клиент</th><th>Статус</th></tr>" +
+        rows.map(function (r) {
+          var cls = r.st === "approved" ? "up" : (r.st === "pending" ? "" : "down");
+          return "<tr><td>#" + esc(r.a.acct) + "<br><span class='dim'>" +
+            esc(r.a.siteName || r.a.site) + "</span></td><td>" + esc(nameOf(r.a)) + "</td><td class='" +
+            cls + "'>" + esc(r.txt) + "</td></tr>";
+        }).join("") + "</table>" +
+        "<br>Заявка — это два снимка: страница паспорта и селфи с ним. Отправить могу отсюда, " +
+        "отметку «пройдена» ставит администратор площадки.");
+      if (need.length) act(m, [["Отправить заявки (" + need.length + ")", function () { doKyc(); }]]);
     });
   }
-  /* Вывод: по каждому кошельку свой вердикт — сумма, возраст счёта и прошлые заявки */
   function doPayout() {
     var list = accs();
     if (!list.length) return say("Кошельки не подключены.");
@@ -1264,7 +1349,7 @@
       "дневного лимита и проставлю в карточки</li>" +
       "<li>«Какие риски» — разбор: порог дохода, непрогретые с высокими иксами, новореги, " +
       "сроки ключей, верификация, закрытые рынки, сессии в минусе</li>" +
-      "<li>«Сводка за вчера / за 7 дней / за 30 дней» — по обеим площадкам, с клиентом, парой " +
+      "<li>«Сводка за последний день / за неделю / за месяц» — таблицей: по кошелькам с клиентом, парой " +
       "и суммой по каждому кошельку</li>" +
       "<li>Сам напомню, когда у ключей остаётся меньше недели</li>" +
       "<li>«Посоветуй стратегию на день» — разложу кошельки по парам и проставлю в карточки</li>" +
@@ -1273,7 +1358,7 @@
       "<li>«Подготовь 10 кабинетов» — заполню форму создания, ключ администратора вводите вы</li>" +
       "<li>«Запусти / останови / зафиксируй» — по выбранным кошелькам</li>" +
       "<li>«Запиши итог дня всем кошелькам обеих площадок» — как разноска из админки, с отменой там же</li>" +
-      "<li>«Сколько заработали вчера», «какой баланс», «что с ключами», «что с верификацией», " +
+      "<li>«Какой баланс», «сроки ключей», «что с верификацией», " +
       "«можно ли выводить», «биржа открыта?», «какие пары есть»</li>" +
       "<li>«Что такое коэффициент / горизонт / доля депозита»</li></ul>");
   }
@@ -1291,7 +1376,13 @@
     /* вопрос «что значит / как / почему / когда» — сначала объяснение, а не действие */
     var asks = /^(что|как|почему|зачем|когда|где|какой|какая|сколько|можно ли|а если|это )/.test(t) ||
       /\?$/.test(raw);
-    if (asks) {
+    /* вопрос с данными — это не справка: сроки ключей, риски и сводки
+       отвечаем таблицами, а не объяснением «что такое ключ бота» */
+    var dataAsk = (/(срок|истека|заканчива|продли)/.test(t) && /ключ/.test(t)) ||
+      /(риск|что не так|проблем|опасн)/.test(t) ||
+      /(сводк|итог|отч[её]т|заработал|просадк)/.test(t) ||
+      (/(верифик|kyc|паспорт)/.test(t) && /(что с|статус|у кого|кто)/.test(t));
+    if (asks && !dataAsk) {
       var e0 = doExplain(t); if (e0) return e0;
       var f0 = doFaq(t); if (f0) return f0;
     }
@@ -1307,8 +1398,10 @@
     if (/(отмени|останов|сбрось)/.test(t) && /(все сценари|всех сценари|все сессии)/.test(t)) return stopAllFix();
     if (/(зафиксир|запиши|итог дня)/.test(t) && /(всем|обеих|двум|площадк)/.test(t)) return fixDayAll();
     if (/(зафиксир|фиксац)/.test(t) && !/когда|как|во сколько/.test(t)) return doFix();
+    /* «подбери сценарий» — это разбивка по аккаунтам, а не лестница коэффициентов */
+    if (/(подбер|лучш|оптимальн|наилучш|разложи|распредел)/.test(t) &&
+        /(сценар|стратег|вариант|план|аккаунт|кошельк)/.test(t)) return doAdvice();
     if (/(сценари|что даст|какой результат|прогноз)/.test(t) || /\d+\s*%/.test(t)) return doScenario(t);
-    if (/(подбер|лучш|оптимальн|наилучш)/.test(t) && /(сценар|стратег|вариант|план)/.test(t)) return doAdvice();
     if (/(риск|что не так|проблем|опасн|проверь портфель)/.test(t)) return doRisks();
     if (/(ключ)/.test(t) && /(срок|истека|заканчива|продли)/.test(t)) return doKeysInfo();
     if (/(стратег|совет|что поставить|разложи|предлож|рекоменд)/.test(t)) return doAdvice();
@@ -1333,7 +1426,7 @@
   var CHIPS = [
     ["Подобрать сценарий", "Подбери наилучший сценарий на день"],
     ["Какие риски", "Какие сейчас риски?"],
-    ["Сводка за вчера", "Сколько заработали вчера и у кого просадка?"],
+    ["Сводка за день", "Сводка за последний торговый день"],
     ["Сводка за неделю", "Покажи отчёт за 7 дней"],
     ["Сводка за месяц", "Покажи отчёт за 30 дней"],
     ["Сроки ключей", "Что с ключами и сроками?"],

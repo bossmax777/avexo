@@ -2067,9 +2067,14 @@ async function regRun(){
       if(S.creds.some(c=>c.site===x.site&&String(c.acct)===String(x.acct))) return;
       S.creds.push({site:x.site,acct:x.acct,key:x.key}); added++;
     });
-    if(added){ saveCreds(); renderLinked(); }
+    if(added){
+      saveCreds(); renderLinked();
+      /* созданные кабинеты сразу подтягиваем в пульт: иначе они числятся
+         подключёнными, но в списке кошельков не появляются до перезахода */
+      openDesk();
+    }
     $("regOut").innerHTML='<div class="cs-ok"><b>Готово: кабинетов создано '+(j.made||0)+
-      (added?", подключено к пульту "+added:"")+'</b><p>'+
+      (added?", подключено к пульту "+added+" — они уже в списке кошельков":"")+'</b><p>'+
       (j.items||[]).map(x=>"#"+(x.acct||"—")+" · "+x.siteName+" · "+x.email+" — "+
         (x.ok?"создан":x.error)).join("<br>")+"</p></div>";
     if(j.made) toast("Создано кабинетов: "+j.made);
