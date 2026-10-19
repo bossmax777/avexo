@@ -689,6 +689,26 @@ const MKT_KINDS=[
    note:"торгуется круглосуточно, без выходных и перерывов"}
 ];
 function mktKind(k){ return MKT_KINDS.filter(x=>x.k===k)[0]||MKT_KINDS[0]; }
+/* Сессия идёт через полночь: вечерний отрезок и утренний хвост следующего дня —
+   это одна сессия. Для показа часов и для обратного отсчёта склеиваем их в один
+   промежуток (20:00–29:00 по китайскому дню), иначе получалось «19:00–22:59». */
+function mktSpan(kind,dow){
+  if(kind==="crypto") return [[0,24]];
+  const segs=mktKind(kind).segs(dow);
+  const eve=segs.filter(x=>x[1]===24)[0];
+  if(!eve) return segs;                       /* только хвост вчерашней сессии (суббота) */
+  const nx=mktKind(kind).segs((dow+1)%7).filter(y=>y[0]===0)[0];
+  return [[eve[0], nx?24+nx[1]:24]];
+}
+/* те же промежутки со сдвигом на сутки назад и вперёд: по ним видно, что в 02:00
+   идёт сессия, открытая вчера вечером */
+function mktSpansAround(kind,dow){
+  const out=[];
+  [-1,0,1].forEach(i=>{
+    mktSpan(kind,(dow+i+7)%7).forEach(x=>out.push([x[0]+i*24, x[1]+i*24]));
+  });
+  return out.sort((a,b)=>a[0]-b[0]);
+}
 /* статус рынка: идут ли торги и когда ближайшее открытие или закрытие */
 function mktAt(kind,ts){
   ts=ts||Date.now();
@@ -697,11 +717,12 @@ function mktAt(kind,ts){
   const h=d.getUTCHours()+d.getUTCMinutes()/60;
   const day0=Math.floor(W/86400000)*86400000;
   const segs=mktKind(kind).segs(d.getUTCDay());
-  const cur=segs.filter(x=>h>=x[0]&&h<x[1])[0];
+  const spans=mktSpansAround(kind,d.getUTCDay());
+  const cur=spans.filter(x=>h>=x[0]&&h<x[1])[0];
   if(cur) return {open:true,until:day0+cur[1]*3600000-off,segs:segs};
   for(let i=0;i<9;i++){
     const dayW=day0+i*86400000;
-    for(const x of mktKind(kind).segs(new Date(dayW).getUTCDay())){
+    for(const x of mktSpan(kind,new Date(dayW).getUTCDay())){
       const t=dayW+x[0]*3600000-off;
       if(t>ts) return {open:false,until:t,segs:segs};
     }
@@ -713,10 +734,10 @@ function mktHoursLocal(kind,ts){
   ts=ts||Date.now();
   if(kind==="crypto") return "круглосуточно, 24/7";
   const off=mktOff(ts), W=ts+off, day0=Math.floor(W/86400000)*86400000;
-  const segs=mktKind(kind).segs(new Date(W).getUTCDay());
-  if(!segs.length) return "сегодня торгов нет — выходной";
+  const spans=mktSpan(kind,new Date(W).getUTCDay());
+  if(!spans.length) return "сегодня торгов нет — выходной";
   const hm=t=>new Date(t).toLocaleTimeString("ru-RU",{hour:"2-digit",minute:"2-digit"});
-  return segs.map(x=>hm(day0+x[0]*3600000-off)+"–"+hm(day0+x[1]*3600000-off-1000)).join(", ");
+  return spans.map(x=>hm(day0+x[0]*3600000-off)+"–"+hm(day0+x[1]*3600000-off)).join(", ");
 }
 function tzLabel(){
   const m=-new Date().getTimezoneOffset()/60;
@@ -729,7 +750,7 @@ function mktNextOpen(ts){
   const day0=Math.floor(W/86400000)*86400000;
   for(let i=0;i<9;i++){
     const day=day0+i*86400000;
-    for(const [a] of mktSegs(new Date(day).getUTCDay())){
+    for(const [a] of mktSpan("gold",new Date(day).getUTCDay())){
       const st=day+a*3600000;
       if(st>W) return st-off;
     }
