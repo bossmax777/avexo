@@ -1291,3 +1291,34 @@
     document.addEventListener("DOMContentLoaded", function () { setTimeout(boot, 900); });
   } else setTimeout(boot, 900);
 })();
+
+
+/* ---------------------------------------------------------------------------
+   Выпадашка «Кошелёк» в блоке вывода за день: карточка собирается раньше, чем
+   приходит список клиентов, поэтому список подставляем, как только он появился,
+   и обновляем после каждой операции — иначе там остаётся «кошельков нет».
+--------------------------------------------------------------------------- */
+(function () {
+  "use strict";
+  var esc = function (v) {
+    return String(v == null ? "" : v).replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+  };
+  function fill() {
+    var sel = document.getElementById("mdOutAcct");
+    if (!sel) return;
+    var us = [];
+    try { us = (typeof uLoad === "function" ? uLoad() : []) || []; } catch (e) { us = []; }
+    if (!us.length) return;
+    var sign = us.map(function (u) { return String(u.acct) + ":" + u.balance; }).join("|");
+    if (sel.dataset.sign === sign) return;
+    var was = sel.value;
+    sel.dataset.sign = sign;
+    sel.innerHTML = us.map(function (u) {
+      return '<option value="' + esc(u.acct || "") + '">#' + esc(u.acct || "—") + " · " +
+        esc(u.name || u.email || "—") + " · $" + (Number(u.balance) || 0).toFixed(2) + "</option>";
+    }).join("");
+    if (was) sel.value = was;
+  }
+  setInterval(fill, 2000);
+  document.addEventListener("click", function () { setTimeout(fill, 400); });
+})();
