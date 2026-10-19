@@ -2841,6 +2841,26 @@
     ".ai-row input{font:inherit;font-size:12.5px;padding:8px 10px;border-radius:10px;border:1px solid var(--line);" +
     "background:var(--surface-2);color:var(--text)}" +
     "#aiCmdLine{flex:1;min-width:220px}" +
+    ".out-log{display:flex;flex-direction:column;gap:7px}" +
+    ".out-row{display:grid;grid-template-columns:104px 1fr auto 210px;gap:12px;align-items:center;" +
+    "border:1px solid var(--line);border-left-width:3px;border-radius:12px;padding:9px 13px;" +
+    "background:rgba(255,255,255,.02);cursor:pointer;transition:background .12s}" +
+    ".out-row:hover{background:rgba(255,255,255,.05)}" +
+    "@media (max-width:880px){.out-row{grid-template-columns:92px 1fr auto}.out-row .out-pill{grid-column:1/-1}}" +
+    ".out-d b{display:block;font-size:12.8px;font-variant-numeric:tabular-nums}" +
+    ".out-d span{font-size:10.8px;color:var(--muted)}" +
+    ".out-acc b{display:block;font-size:12.8px}" +
+    ".out-acc span{font-size:10.8px;color:var(--muted)}" +
+    ".out-sum{font-size:14px;font-variant-numeric:tabular-nums;color:#F3A2A2;letter-spacing:-.01em}" +
+    ".out-pill{font-size:11px;text-align:center;border:1px solid;border-radius:999px;padding:5px 9px;" +
+    "white-space:nowrap;overflow:hidden;text-overflow:ellipsis}" +
+    ".out-warn{margin-top:12px;border:1px solid var(--line);border-radius:12px;padding:11px 13px;" +
+    "font-size:12.4px;line-height:1.55}" +
+    ".out-warn b{display:block;margin-bottom:6px;color:#F3A2A2}" +
+    ".out-warn ul{margin:0;padding-left:16px}" +
+    ".out-warn li{margin:3px 0;color:var(--muted)}" +
+    ".out-warn li span{color:var(--text);font-variant-numeric:tabular-nums}" +
+    ".out-warn p{margin:6px 0 0;color:var(--muted)}" +
     "#aiRegList{display:block;width:100%;box-sizing:border-box;margin-top:9px;font:inherit;font-size:12.5px;" +
     "padding:9px 11px;border-radius:11px;border:1px solid var(--line);background:var(--surface-2);" +
     "color:var(--text);resize:vertical}" +
@@ -2899,9 +2919,85 @@
     ".cap-x{font:inherit;font-size:12.5px;cursor:pointer;padding:9px 14px;border-radius:11px;" +
     "border:1px solid var(--line);background:transparent;color:var(--muted)}";
 
+  /* ---------- история выводов: когда, с какого кошелька и сколько ----------
+     Лог выводов по всем подключённым кошелькам: строка — одна заявка. Рядом
+     с каждой стоит текущий статус кошелька, чтобы сразу было видно, откуда
+     выводить сейчас не стоит. Данные те же, что в тепловой карте: история
+     кабинета, включая выводы, разнесённые из админки. */
+  function outRows() {
+    var rows = [];
+    accs().forEach(function (a) {
+      var st = outState(a);
+      (st.outs || []).forEach(function (o) {
+        rows.push({ a: a, st: st, date: o.date, amount: Math.abs(num(o.amount)), ago: o.ago });
+      });
+    });
+    return rows.sort(function (x, y) { return x.ago - y.ago; });
+  }
+  function agoTxt(d) {
+    if (d === null || d === undefined) return "";
+    if (d <= 0) return "сегодня";
+    if (d === 1) return "вчера";
+    if (d < 7) return d + " дн. назад";
+    if (d < 31) return Math.round(d / 7) + " нед. назад";
+    return Math.round(d / 30) + " мес. назад";
+  }
+  function outsCard() {
+    var rows = outRows();
+    var list = accs();
+    var sum = rows.reduce(function (s2, r) { return s2 + r.amount; }, 0);
+    var m30 = rows.filter(function (r) { return r.ago <= 30; });
+    var s30 = m30.reduce(function (s2, r) { return s2 + r.amount; }, 0);
+    /* кошельки, с которых сейчас выводить не стоит: статус строже «прогрет» */
+    var warn = list.map(function (a) { return { a: a, st: outState(a) }; })
+      .filter(function (c) { return !c.st.ready && c.st.tone !== "off"; })
+      .sort(function (x, y) { return num(y.a.balance) - num(x.a.balance); });
+    var html =
+      '<div class="panel-head"><h3>История выводов</h3>' +
+      '<span class="muted">' + (rows.length
+        ? "заявок " + rows.length + " · всего " + money(sum) + " · за 30 дней " + money(s30)
+        : "выводов пока не было") + "</span></div>";
+    if (!list.length) {
+      return { html: html + '<p class="note">Кошельки не подключены.</p>' };
+    }
+    if (!rows.length) {
+      html += '<p class="note">По подключённым кошелькам выводов ещё не было. Как только заявка ' +
+        "пройдёт — в кабинете или разноской из админки — она появится здесь строкой: дата, кошелёк, " +
+        "сумма и статус счёта на этот момент.</p>";
+    } else {
+      html += '<div class="out-log">' + rows.slice(0, 40).map(function (r) {
+        var t = r.st.tone;
+        var col = (TONES[t] || TONES.cold)[1];
+        return '<div class="out-row" style="border-left-color:' + col + '">' +
+          '<div class="out-d"><b>' + esc(r.date) + "</b><span>" + esc(agoTxt(r.ago)) + "</span></div>" +
+          '<div class="out-acc"><b>#' + esc(r.a.acct) + "</b><span>" +
+            esc(r.a.siteName || r.a.site) + " · " + esc(nameOf(r.a)) + "</span></div>" +
+          '<div class="out-sum">−' + esc(money(r.amount)) + "</div>" +
+          '<div class="out-pill" style="color:' + col + ';border-color:' + col + '55;background:' +
+            col + '14">' + esc((TONES[t] || TONES.cold)[0]) + "</div></div>";
+      }).join("") + "</div>" +
+      (rows.length > 40 ? '<p class="note" style="margin-top:8px">Показаны последние 40 заявок из ' +
+        rows.length + ".</p>" : "");
+    }
+    if (warn.length) {
+      html += '<div class="out-warn"><b>Сейчас выводить не советую — ' + warn.length +
+        " кошельк(ов)</b><ul>" + warn.slice(0, 6).map(function (c) {
+          return "<li><span>#" + esc(c.a.acct) + " · " + esc(money(num(c.a.balance))) + "</span> " +
+            esc(c.st.rec.split(". ")[0]) + "</li>";
+        }).join("") + "</ul>" +
+        (warn.length > 6 ? "<p>и ещё " + (warn.length - 6) + " — полный разбор в ответе «Можно ли выводить».</p>" : "") +
+        "</div>";
+    }
+    return { html: html, wire: function (box) {
+      box.querySelectorAll(".out-row").forEach(function (n) {
+        n.onclick = function () { handle("Можно ли выводить средства?"); };
+      });
+    } };
+  }
+
   var PANELS = [
     ["aiAdv", advCard], ["aiRun", runCard], ["aiWeek", weekCard],
-    ["aiHeat", heatCard]
+    ["aiHeat", heatCard], ["aiOuts", outsCard]
   ];
   function panelsHost() {
     var accsBox = $("accs");
