@@ -141,6 +141,14 @@ CREATE TABLE IF NOT EXISTS mass_days (
   created_at  TIMESTAMPTZ NOT NULL DEFAULT now()
 );
 CREATE INDEX IF NOT EXISTS mass_days_site_idx ON mass_days(site, id DESC);
+/* общий состав пульта: по одному коду несколько человек видят одинаковый
+   список подключённых кошельков. В data лежит список ключей и отметка времени —
+   побеждает самая свежая запись, так что порядок правок не важен. */
+CREATE TABLE IF NOT EXISTS hub_rooms (
+  code        TEXT PRIMARY KEY,
+  data        JSONB NOT NULL DEFAULT '{}'::jsonb,
+  updated_at  TIMESTAMPTZ NOT NULL DEFAULT now()
+);
 INSERT INTO bot_keys (site, code, note) VALUES
   ('bw','X7K9P-4M2QD-V8R3N','стартовая партия'),
   ('bw','F3W8L-Z6T1K-Q9P4X','стартовая партия'),

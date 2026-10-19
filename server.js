@@ -1144,6 +1144,40 @@ app.post('/api/hub/stop', async (req, res) => {
   } catch (e) { bad(res, 500, e.message); }
 });
 
+/* ---------- общий состав пульта ----------
+   Пульт хранит подключённые кошельки в браузере, поэтому у второго человека
+   список был свой. Теперь список можно держать на сервере под общим кодом:
+   у кого код совпадает, у того и состав одинаковый. Код придумывает сам
+   пользователь, он нигде не выдаётся и ничего, кроме состава, не открывает. */
+function roomCode(v) {
+  return String(v || '').trim().toLowerCase().replace(/[^a-z0-9а-я._-]/gi, '').slice(0, 40);
+}
+app.post('/api/hub/room', async (req, res) => {
+  try {
+    const b = req.body || {};
+    const code = roomCode(b.code);
+    if (code.length < 5) return bad(res, 400, 'Код пульта короче пяти знаков');
+    const r = await q('SELECT data FROM hub_rooms WHERE code = $1', [code]);
+    const cur = (r.rows[0] && r.rows[0].data) || { at: 0, list: [] };
+    const curAt = Number(cur.at) || 0;
+    const inAt = Number(b.at) || 0;
+    /* список приходит только если он свежее сохранённого */
+    if (Array.isArray(b.list) && inAt > curAt) {
+      const list = b.list.slice(0, HUB_MAX).map(x => ({
+        site: String((x && x.site) || '').slice(0, 4),
+        acct: String((x && x.acct) || '').replace(/\D/g, '').slice(0, 20),
+        key: String((x && x.key) || '').slice(0, 120)
+      })).filter(x => x.site && x.acct && x.key.length >= 12);
+      const data = { at: inAt, list };
+      await q('INSERT INTO hub_rooms (code, data, updated_at) VALUES ($1, $2::jsonb, now())'
+        + ' ON CONFLICT (code) DO UPDATE SET data = EXCLUDED.data, updated_at = now()',
+        [code, JSON.stringify(data)]);
+      return res.json({ ok: true, at: data.at, list: data.list, saved: true });
+    }
+    res.json({ ok: true, at: curAt, list: Array.isArray(cur.list) ? cur.list : [], saved: false });
+  } catch (e) { bad(res, 500, e.message); }
+});
+
 /* ---------- отмена сессий без сохранения результата ----------
    Обычная остановка фиксирует достигнутое значение как баланс кошелька. Здесь
    наоборот: сессия снимается, а баланс возвращается к депозиту на момент старта —
