@@ -2851,6 +2851,13 @@
     ".keyg-h b{display:block;font-size:12.8px}" +
     ".keyg-h span{font-size:11px;color:var(--muted)}" +
     ".keyg .heat{grid-template-columns:repeat(auto-fill,minmax(68px,1fr));gap:7px}" +
+    ".key-plan{margin-top:12px}" +
+    ".key-plan-h{display:flex;gap:9px;align-items:center;flex-wrap:wrap;margin-bottom:7px}" +
+    ".key-plan-h b{font-size:12.8px}" +
+    ".key-plan-h span{font-size:11.5px}" +
+    "#keyPlan{width:100%;box-sizing:border-box;padding:11px 13px;border:1px solid var(--line);" +
+    "border-radius:12px;background:var(--surface-2);color:var(--text);font:inherit;font-size:12.4px;" +
+    "line-height:1.6;white-space:pre;resize:vertical}" +
     ".out-log{display:flex;flex-direction:column;gap:7px}" +
     ".out-row{display:grid;grid-template-columns:104px 1fr auto 210px;gap:12px;align-items:center;" +
     "border:1px solid var(--line);border-left-width:3px;border-radius:12px;padding:9px 13px;" +
@@ -3025,13 +3032,16 @@
     });
     return keyed.concat(ever, free);
   }
+  /* цвет = срочность платежа: зелёный — время есть, жёлтый — на этой неделе,
+     красный — платить сейчас или уже просрочено */
   function keyTone(r) {
-    if (r.kind === "none") return "new";
     if (r.kind === "gone") return "off";
+    if (r.kind === "key" && r.left !== null && r.left <= 0) return "off";
     if (r.kind === "ever") return "warm";
-    if (r.left !== null && r.left <= 0) return "off";
-    if (r.add === 0) return "warm";
-    return r.add <= 7 ? "ok" : "cold";
+    var d = r.pay ? dayDiff(r.pay) : 99;
+    if (d <= 1) return "off";
+    if (d <= 5) return "cold";
+    return "warm";
   }
   function keyNote(r) {
     if (r.kind === "none" || r.kind === "gone")
@@ -3040,6 +3050,75 @@
     if (r.kind === "ever") return "бессрочный";
     if (r.left <= 0) return "срок вышел · оплатить " + payTxt(r.pay);
     return "до " + r.until.toLocaleDateString("ru-RU") + (r.add ? " · +" + r.add + " дн." : " · день в день");
+  }
+  var KEY_PICK = "";
+  function keyPickHtml(rows) {
+    var r = rows.filter(function (x) { return kOf(x.a) === KEY_PICK; })[0];
+    if (!r) {
+      var toExt = rows.filter(function (x) { return x.kind === "key" && x.add > 0; })
+        .sort(function (x, y) { return x.left - y.left; });
+      var toAct = rows.filter(function (x) { return x.kind === "none" || x.kind === "gone"; });
+      return (toExt.length
+        ? "<b>Продлить, чтобы срок лёг на дату оплаты — " + toExt.length + " кошельк(ов):</b> " +
+          toExt.slice(0, 8).map(function (x) {
+            return "#" + esc(x.a.acct) + " на " + x.add + " дн. (до " + payTxt(x.pay) + ")";
+          }).join(", ") + (toExt.length > 8 ? " и ещё " + (toExt.length - 8) : "") + ". "
+        : "<b>Сроки ключей уже сходятся с датами оплаты.</b> ") +
+        (toAct.length
+          ? "<br><b>Без ключа — " + toAct.length + " кошельк(ов), активировать:</b> " +
+            toAct.slice(0, 8).map(function (x) {
+              return "#" + esc(x.a.acct) + " — " + payTxt(x.pay) + " (" + x.target + "-е число)";
+            }).join(", ") + (toAct.length > 8 ? " и ещё " + (toAct.length - 8) : "") + ". "
+          : "") +
+        "<br>Кошельки разложены по трём датам поровну: сначала берётся ближайшая дата после " +
+        "окончания ключа, а когда группа набрала свою треть — следующая свободная. Нажмите " +
+        "на квадрат — покажу срок ключа, дату платежа и продление.";
+    }
+    var fio = (typeof nameOf === "function") ? nameOf(r.a) : "";
+    return "<b>#" + esc(r.a.acct) + " · " + esc(r.a.siteName || r.a.site) +
+      (fio ? " · " + esc(fio) : "") + "</b><br>" +
+      (r.kind === "key"
+        ? "Сейчас ключ активирован <b>до " + r.until.toLocaleDateString("ru-RU") + "</b>" +
+          (r.left > 0 ? " — осталось " + r.left + " дн." : " — срок уже вышел") +
+          (r.st && r.st.days ? " (оплачен на " + r.st.days + " дн.)" : "") + ". " +
+          (r.add > 0
+            ? "Чтобы попасть в платёжную дату, продлите на <b>" + r.add + " дн.</b> — срок станет " +
+              payTxt(r.pay) + ", дальше платить " + r.day + "-го числа."
+            : "Срок уже ложится на дату оплаты " + payTxt(r.pay) + " — группа «" + r.day + "-е число».")
+        : r.kind === "ever"
+          ? "Ключ активирован бессрочно — продлевать не нужно, платёж по нему не планируется."
+          : (r.kind === "gone" ? "Ключ истёк, золотая пара закрыта. " : "Ключ не активирован. ") +
+            "Я отнёс его в группу «" + (r.target || r.day) + "-е число»: активировать <b>" +
+            payTxt(r.pay) + "</b> (через " + Math.max(0, dayDiff(r.pay)) + " дн.), дальше платить " +
+            "вместе с этой группой.");
+  }
+  /* готовый текст плана: по каждой дате — что оплатить и на сколько дней брать ключ */
+  function keyPlanText(rows) {
+    var out = [];
+    PAY_DAYS.forEach(function (d) {
+      var g = rows.filter(function (r) { return r.day === d; })
+        .sort(function (x, y) { return (x.add === null ? 999 : x.add) - (y.add === null ? 999 : y.add); });
+      if (!g.length) return;
+      out.push("ОПЛАТА " + payTxt(slotNext(d)).toUpperCase() + " (" + d + "-е число · " +
+        g.length + " кошельк(ов))");
+      g.forEach(function (r) {
+        if (r.kind === "ever") { out.push("#" + r.a.acct + " — ключ бессрочный, платить не нужно"); return; }
+        out.push("#" + r.a.acct + " — ключ на " + (r.add > 0 ? r.add : 30) + " дн." +
+          (r.until ? " (сейчас до " + r.until.toLocaleDateString("ru-RU") + ")" : "") +
+          (r.add > 0 ? "" : " — срок уже совпадает, дальше 30 дн."));
+      });
+      out.push("Дальше по этой группе — ключ на 30 дн., платёж " + d + "-го числа каждый месяц.");
+      out.push("");
+    });
+    var free = rows.filter(function (r) { return r.day === 0; });
+    if (free.length) {
+      out.push("БЕЗ КЛЮЧА — АКТИВИРОВАТЬ (" + free.length + " кошельк(ов))");
+      free.sort(function (x, y) { return (x.pay - y.pay); }).forEach(function (r) {
+        out.push("#" + r.a.acct + " — активировать " + payTxt(r.pay) + ", ключ на 30 дн. (группа " +
+          r.target + "-го числа)");
+      });
+    }
+    return out.join("\n").trim();
   }
   function keysCard() {
     var rows = keyRows();
@@ -3079,51 +3158,45 @@
           : '<p class="note" style="margin:0">Пока пусто.</p>') + "</div>";
     });
     html += "</div>";
-    var toExt = rows.filter(function (r) { return r.kind === "key" && r.add > 0; })
-      .sort(function (x, y) { return x.left - y.left; });
-    var toAct = rows.filter(function (r) { return r.kind === "none" || r.kind === "gone"; });
-    html += '<div id="keyInfo" class="note" style="margin-top:11px">' +
-      (toExt.length
-        ? "<b>Продлить, чтобы срок лёг на дату оплаты — " + toExt.length + " кошельк(ов):</b> " +
-          toExt.slice(0, 8).map(function (r) {
-            return "#" + esc(r.a.acct) + " на " + r.add + " дн. (до " + payTxt(r.pay) + ")";
-          }).join(", ") + (toExt.length > 8 ? " и ещё " + (toExt.length - 8) : "") + ". "
-        : "<b>Сроки ключей уже сходятся с датами оплаты.</b> ") +
-      (toAct.length
-        ? "<br><b>Без ключа — " + toAct.length + " кошельк(ов), активировать:</b> " +
-          toAct.slice(0, 8).map(function (r) {
-            return "#" + esc(r.a.acct) + " — " + payTxt(r.pay) + " (" + r.target + "-е число)";
-          }).join(", ") + (toAct.length > 8 ? " и ещё " + (toAct.length - 8) : "") + ". "
-        : "") +
-      "<br>Кошельки разложены по трём датам поровну: сначала берётся ближайшая дата после " +
-      "окончания ключа, а когда группа набрала свою треть — следующая свободная. Продлеваете " +
-      "каждый на указанное число дней, и дальше все платежи идут ровно 30, 10 и 20 числа, " +
-      "тремя равными частями. Нажмите на квадрат — покажу срок, дату платежа и продление.</div>";
+    var byTone = { warm: 0, cold: 0, off: 0 };
+    rows.forEach(function (r) { byTone[keyTone(r)] = (byTone[keyTone(r)] || 0) + 1; });
+    html += '<div class="heat-leg" style="margin-top:10px">' +
+      '<span class="heat-l warm"><i></i>Время есть — платёж позже чем через 5 дней · ' + byTone.warm + "</span>" +
+      '<span class="heat-l cold"><i></i>Скоро платить — 2–5 дней · ' + byTone.cold + "</span>" +
+      '<span class="heat-l off"><i></i>Платить сейчас или просрочено · ' + byTone.off + "</span></div>";
+    html += '<div id="keyInfo" class="note" style="margin-top:11px">' + keyPickHtml(rows) + "</div>" +
+      '<div class="key-plan"><div class="key-plan-h"><b>План платежей — можно скопировать</b>' +
+      '<button class="btn btn-sm btn-primary" id="keyCopy">Скопировать</button>' +
+      '<span class="muted" id="keyCopyNote"></span></div>' +
+      '<textarea id="keyPlan" rows="10" spellcheck="false">' + esc(keyPlanText(rows)) + "</textarea></div>";
     return { html: html, wire: function (box) {
       box.querySelectorAll("[data-key]").forEach(function (n) {
         n.onclick = function () {
-          var r = rows.filter(function (x) { return kOf(x.a) === n.getAttribute("data-key"); })[0];
-          var info = box.querySelector("#keyInfo");
-          if (!r || !info) return;
-          var fio = (typeof nameOf === "function") ? nameOf(r.a) : "";
-          info.innerHTML = "<b>#" + esc(r.a.acct) + " · " + esc(r.a.siteName || r.a.site) +
-            (fio ? " · " + esc(fio) : "") + "</b><br>" +
-            (r.kind === "key"
-              ? "Сейчас ключ активирован <b>до " + r.until.toLocaleDateString("ru-RU") + "</b>" +
-                (r.left > 0 ? " — осталось " + r.left + " дн." : " — срок уже вышел") +
-                (r.st && r.st.days ? " (оплачен на " + r.st.days + " дн.)" : "") + ". " +
-                (r.add > 0
-                  ? "Чтобы попасть в платёжную дату, продлите на <b>" + r.add + " дн.</b> — срок станет " +
-                    payTxt(r.pay) + ", дальше платить " + r.day + "-го числа."
-                  : "Срок уже ложится на дату оплаты " + payTxt(r.pay) + " — группа «" + r.day + "-е число».")
-              : r.kind === "ever"
-                ? "Ключ активирован бессрочно — продлевать не нужно, платёж по нему не планируется."
-                : (r.kind === "gone" ? "Ключ истёк, золотая пара закрыта. " : "Ключ не активирован. ") +
-                  "Я отнёс его в группу «" + (r.target || r.day) + "-е число»: активировать " +
-                  "<b>" + payTxt(r.pay) + "</b> (через " + Math.max(0, dayDiff(r.pay)) + " дн.), " +
-                  "дальше платить вместе с этой группой.");
+          var k = n.getAttribute("data-key");
+          KEY_PICK = (KEY_PICK === k) ? "" : k;
+          renderPanels();
         };
       });
+      var cp = box.querySelector("#keyCopy"), ta = box.querySelector("#keyPlan"),
+          note = box.querySelector("#keyCopyNote");
+      if (cp && ta) {
+        cp.onclick = function () {
+          var done = function () {
+            if (note) { note.textContent = "скопировано"; setTimeout(function () { note.textContent = ""; }, 2500); }
+          };
+          ta.focus(); ta.select();
+          if (navigator.clipboard && navigator.clipboard.writeText) {
+            navigator.clipboard.writeText(ta.value).then(done, function () {
+              try { document.execCommand("copy"); done(); } catch (e) {
+                if (note) note.textContent = "скопируйте вручную: Ctrl+C";
+              }
+            });
+            return;
+          }
+          try { document.execCommand("copy"); done(); }
+          catch (e) { if (note) note.textContent = "скопируйте вручную: Ctrl+C"; }
+        };
+      }
     } };
   }
 
