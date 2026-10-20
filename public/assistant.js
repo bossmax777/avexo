@@ -2841,6 +2841,13 @@
     ".ai-row input{font:inherit;font-size:12.5px;padding:8px 10px;border-radius:10px;border:1px solid var(--line);" +
     "background:var(--surface-2);color:var(--text)}" +
     "#aiCmdLine{flex:1;min-width:220px}" +
+    ".keyg{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:12px}" +
+    "@media (max-width:900px){.keyg{grid-template-columns:1fr}}" +
+    ".keyg-c{border:1px solid var(--line);border-radius:13px;padding:11px 12px;background:rgba(255,255,255,.02)}" +
+    ".keyg-h{margin-bottom:9px}" +
+    ".keyg-h b{display:block;font-size:12.8px}" +
+    ".keyg-h span{font-size:11px;color:var(--muted)}" +
+    ".keyg .heat{grid-template-columns:repeat(auto-fill,minmax(68px,1fr));gap:7px}" +
     ".out-log{display:flex;flex-direction:column;gap:7px}" +
     ".out-row{display:grid;grid-template-columns:104px 1fr auto 210px;gap:12px;align-items:center;" +
     "border:1px solid var(--line);border-left-width:3px;border-radius:12px;padding:9px 13px;" +
@@ -2918,6 +2925,143 @@
     ".cap-act{display:flex;justify-content:flex-end}" +
     ".cap-x{font:inherit;font-size:12.5px;cursor:pointer;padding:9px 14px;border-radius:11px;" +
     "border:1px solid var(--line);background:transparent;color:var(--muted)}";
+
+  /* ---------- тепловая карта активации ключей по датам оплаты ----------
+     Ключи продлеваются платежами 1-го, 15-го и 30-го числа. Сейчас сроки у всех
+     разъезжаются, поэтому каждый кошелёк раскладываем в ту дату оплаты, которая
+     идёт последней перед окончанием его ключа: платёж попадает впритык к сроку,
+     а кошельки сами собираются в три ровные группы. */
+  var PAY_DAYS = [1, 15, 30];
+  var MONTHS = ["января", "февраля", "марта", "апреля", "мая", "июня", "июля",
+                "августа", "сентября", "октября", "ноября", "декабря"];
+  function payDate(y, m, d) {
+    var last = new Date(y, m + 1, 0).getDate();
+    return new Date(y, m, Math.min(d, last));
+  }
+  function payTxt(dt) { return dt.getDate() + " " + MONTHS[dt.getMonth()]; }
+  function dayDiff(dt) {
+    var a = new Date(); a.setHours(0, 0, 0, 0);
+    return Math.round((dt.getTime() - a.getTime()) / 86400000);
+  }
+  /* последняя дата оплаты, которая успевает до конца ключа */
+  function slotBefore(until) {
+    var u = new Date(until); if (isNaN(u.getTime())) return null;
+    var best = null;
+    for (var i = -2; i <= 1; i++) {
+      var y = u.getFullYear(), m = u.getMonth() + i;
+      for (var k = 0; k < PAY_DAYS.length; k++) {
+        var dt = payDate(y, m, PAY_DAYS[k]);
+        if (dt.getTime() <= u.getTime() && (!best || dt.getTime() > best.getTime())) best = dt;
+      }
+    }
+    return best;
+  }
+  /* ближайшая будущая дата этой группы */
+  function slotNext(day) {
+    var n = new Date(); n.setHours(0, 0, 0, 0);
+    for (var i = 0; i <= 2; i++) {
+      var dt = payDate(n.getFullYear(), n.getMonth() + i, day);
+      if (dt.getTime() >= n.getTime()) return dt;
+    }
+    return payDate(n.getFullYear(), n.getMonth() + 1, day);
+  }
+  function keyRows() {
+    var list = accs();
+    var rows = [], free = [];
+    list.forEach(function (a) {
+      var st = stOf(a);
+      var until = st.until ? new Date(st.until) : null;
+      if (st.on && until && !isNaN(until.getTime())) {
+        var slot = slotBefore(until) || slotNext(PAY_DAYS[0]);
+        rows.push({ a: a, st: st, until: until, day: slot.getDate() >= 29 ? 30 : slot.getDate(),
+                    pay: slot, left: dayDiff(until), hasKey: true });
+      } else {
+        free.push({ a: a, st: st, until: until, hasKey: false, expired: !!st.expired });
+      }
+    });
+    /* кошельки без ключа раскладываем поровну — чтобы платежи не собрались в один день */
+    var cnt = {}; PAY_DAYS.forEach(function (d) { cnt[d] = 0; });
+    rows.forEach(function (r) { cnt[r.day] = (cnt[r.day] || 0) + 1; });
+    free.forEach(function (f) {
+      var day = PAY_DAYS.slice().sort(function (x, y) { return cnt[x] - cnt[y]; })[0];
+      cnt[day]++;
+      var slot = slotNext(day);
+      rows.push({ a: f.a, st: f.st, until: f.until, day: day, pay: slot,
+                  left: null, hasKey: false, expired: f.expired });
+    });
+    return rows;
+  }
+  function keyTone(r) {
+    if (!r.hasKey) return r.expired ? "off" : "new";
+    var toPay = dayDiff(r.pay);
+    if (r.left !== null && r.left <= 0) return "off";
+    if (toPay <= 0) return "cold";
+    if (toPay <= 3) return "cold";
+    return "warm";
+  }
+  function keysCard() {
+    var rows = keyRows();
+    if (!rows.length) {
+      return { html: '<div class="panel-head"><h3>Тепловая карта активации ключей</h3></div>' +
+        '<p class="note">Кошельки не подключены.</p>' };
+    }
+    var live = rows.filter(function (r) { return r.hasKey; }).length;
+    var html = '<div class="panel-head"><h3>Тепловая карта активации ключей</h3>' +
+      '<span class="muted">ключей активно ' + live + " из " + rows.length +
+      " · три даты оплаты: 1, 15 и 30 числа</span></div><div class=\"keyg\">";
+    PAY_DAYS.forEach(function (d) {
+      var g = rows.filter(function (r) { return r.day === d; })
+        .sort(function (x, y) { return (x.left === null ? 9999 : x.left) - (y.left === null ? 9999 : y.left); });
+      var next = slotNext(d);
+      var soon = g.filter(function (r) { return keyTone(r) !== "warm"; }).length;
+      html += '<div class="keyg-c"><div class="keyg-h"><b>Оплата ' + d + "-го числа</b>" +
+        "<span>" + g.length + " кошельк(ов) · ближайший платёж " + payTxt(next) +
+        " (через " + Math.max(0, dayDiff(next)) + " дн.)" +
+        (soon ? " · срочных " + soon : "") + "</span></div>" +
+        (g.length
+          ? '<div class="heat">' + g.map(function (r) {
+              var note = r.hasKey
+                ? (r.left > 0 ? "до " + r.until.toLocaleDateString("ru-RU") : "срок вышел")
+                : (r.expired ? "ключ истёк" : "нет ключа");
+              return '<button class="heat-c ' + keyTone(r) + '" data-key="' + esc(kOf(r.a)) +
+                '" title="#' + esc(r.a.acct) + " · " + esc(r.a.siteName || r.a.site) + " · " +
+                esc(note) + ', платёж ' + payTxt(r.pay) + '">' +
+                "<b>#" + esc(String(r.a.acct).slice(-4)) + "</b><span>" + esc(note) + "</span></button>";
+            }).join("") + "</div>"
+          : '<p class="note" style="margin:0">Пока пусто.</p>') + "</div>";
+    });
+    html += "</div>";
+    /* совет: что оплачивать в первую очередь */
+    var urgent = rows.filter(function (r) { return keyTone(r) !== "warm"; })
+      .sort(function (x, y) { return dayDiff(x.pay) - dayDiff(y.pay); });
+    html += '<div id="keyInfo" class="note" style="margin-top:11px">' +
+      (urgent.length
+        ? "<b>Оплатить в первую очередь — " + urgent.length + " кошельк(ов):</b> " +
+          urgent.slice(0, 8).map(function (r) {
+            return "#" + esc(r.a.acct) + " (" + payTxt(r.pay) + ")";
+          }).join(", ") + (urgent.length > 8 ? " и ещё " + (urgent.length - 8) : "") + "."
+        : "<b>Все ключи оплачены с запасом.</b> Ближайшие платежи — по датам в группах выше.") +
+      "<br>Кошелёк попадает в ту дату, которая идёт последней перед окончанием его ключа: " +
+      "так платёж ложится впритык к сроку, а не раньше времени. Кошельки без ключа разложены " +
+      "по группам поровну — чтобы платежи не собрались в один день. Нажмите на квадрат — покажу " +
+      "срок ключа и дату платежа.</div>";
+    return { html: html, wire: function (box) {
+      box.querySelectorAll("[data-key]").forEach(function (n) {
+        n.onclick = function () {
+          var r = rows.filter(function (x) { return kOf(x.a) === n.getAttribute("data-key"); })[0];
+          var info = box.querySelector("#keyInfo");
+          if (!r || !info) return;
+          info.innerHTML = "<b>#" + esc(r.a.acct) + " · " + esc(r.a.siteName || r.a.site) + "</b><br>" +
+            (r.hasKey
+              ? "Ключ действует до " + r.until.toLocaleDateString("ru-RU") +
+                (r.left > 0 ? " — осталось " + r.left + " дн." : " — срок уже вышел") + ". "
+              : (r.expired ? "Ключ истёк, золотая пара закрыта. " : "Ключ не активирован. ")) +
+            "Платёж по этому кошельку — <b>" + payTxt(r.pay) + "</b> (группа «" + r.day +
+            "-е число»" + (dayDiff(r.pay) >= 0 ? ", через " + dayDiff(r.pay) + " дн." : ", дата уже прошла") + ").";
+        };
+      });
+    } };
+  }
 
   /* ---------- история выводов: когда, с какого кошелька и сколько ----------
      Лог выводов по всем подключённым кошелькам: строка — одна заявка. Рядом
@@ -2997,7 +3141,7 @@
 
   var PANELS = [
     ["aiAdv", advCard], ["aiRun", runCard], ["aiWeek", weekCard],
-    ["aiHeat", heatCard], ["aiOuts", outsCard]
+    ["aiHeat", heatCard], ["aiKeys", keysCard], ["aiOuts", outsCard]
   ];
   function panelsHost() {
     var accsBox = $("accs");

@@ -263,6 +263,29 @@
       '<div class="md-f" style="min-width:260px"><label>&nbsp;</label>' +
         '<span class="md-sum" id="mdOutSay" style="margin:0"></span></div>' +
     '</div>' +
+    '<h3 style="font-size:13.5px;margin:0 0 6px">Пополнение за эту же дату</h3>' +
+    '<p class="sub" style="margin:0 0 10px">Зачисление в USDT: строка «Пополнение · USDT» уйдёт ' +
+    'в историю операций клиента той же датой, баланс вырастет, в отчёте за день сумма встанет ' +
+    'в колонку «Пополнения», а на пульте пересчитается сама. Запуск отменяется целиком.</p>' +
+    '<div class="md-row">' +
+      '<div class="md-f" style="min-width:300px"><label for="mdInAcct">Кошелёк</label>' +
+        '<select id="mdInAcct"></select></div>' +
+      '<div class="md-f"><label for="mdInAmt">Сумма пополнения</label>' +
+        '<input id="mdInAmt" type="number" min="1" step="0.01" placeholder="например 2000"></div>' +
+      '<div class="md-f" style="min-width:auto"><label>&nbsp;</label>' +
+        '<button class="btn btn-ghost" id="mdInAdd">Добавить в список</button></div>' +
+    '</div>' +
+    '<div class="md-f" style="min-width:100%;margin-bottom:10px">' +
+      '<label for="mdInList">Список пополнений — строка «номер кошелька сумма»</label>' +
+      '<textarea id="mdInList" rows="3" spellcheck="false" placeholder="4034823 2000"' +
+      ' style="width:100%;box-sizing:border-box;padding:10px 12px;border:1px solid var(--line);' +
+      'border-radius:10px;font:inherit;font-size:13px;line-height:1.6;resize:vertical"></textarea></div>' +
+    '<div class="md-row">' +
+      '<div class="md-f" style="min-width:auto"><label>&nbsp;</label>' +
+        '<button class="btn btn-primary" id="mdInGo">Записать пополнения</button></div>' +
+      '<div class="md-f" style="min-width:260px"><label>&nbsp;</label>' +
+        '<span class="md-sum" id="mdInSay" style="margin:0"></span></div>' +
+    '</div>' +
     '<h3 style="font-size:13.5px;margin:0 0 8px">Последние запуски</h3>' +
     '<div class="md-list" id="mdList"></div></div>';
 
@@ -285,6 +308,8 @@
     el("mdStop").onclick = stopAll;
     el("mdOutAdd").onclick = outAdd;
     el("mdOutGo").onclick = outRun;
+    el("mdInAdd").onclick = function () { cashAdd("mdIn"); };
+    el("mdInGo").onclick = function () { cashRun("mdIn"); };
     outFill();
     preview();
     return true;
@@ -443,6 +468,67 @@
       .then(function () { go.disabled = false; go.textContent = "Записать выводы"; });
   }
 
+  /* пополнение устроено так же, как вывод, только в плюс и в USDT */
+  function cashAdd(pre) {
+    var sel = el(pre + "Acct"), amt = el(pre + "Amt"), box = el(pre + "List"), say = el(pre + "Say");
+    var a = (sel && sel.value) || "";
+    var v = Number(amt && amt.value);
+    if (!a) return;
+    if (!(v > 0)) { if (say) say.textContent = "Укажите сумму пополнения"; return; }
+    var cur = (box.value || "").split(/\r?\n/).map(function (x) { return x.trim(); }).filter(Boolean);
+    cur = cur.filter(function (x) { return x.split(/[\s;,]+/)[0] !== a; });
+    cur.push(a + " " + v);
+    box.value = cur.join("\n");
+    amt.value = "";
+    if (say) say.textContent = "В списке строк: " + cur.length;
+  }
+  function cashParse(pre) {
+    return (el(pre + "List").value || "").split(/\r?\n/).map(function (l) {
+      var p = l.trim().split(/[\s;,]+/).filter(Boolean);
+      if (p.length < 2) return null;
+      return { acct: p[0].replace(/\D/g, ""), amount: p[1].replace(",", ".") };
+    }).filter(function (x) { return x && x.acct && Number(x.amount) > 0; });
+  }
+  function cashRun(pre) {
+    var go = el(pre + "Go"), say = el(pre + "Say");
+    var date = (el("mdDate").value || "").trim();
+    var items = cashParse(pre);
+    if (!date) { say.textContent = "Укажите дату операции"; return; }
+    if (!items.length) { say.textContent = "Впишите хотя бы одну строку: номер кошелька и сумма"; return; }
+    go.disabled = true; go.textContent = "Считаем…";
+    say.textContent = "";
+    call("/api/admin/mass-in", { method: "POST",
+      body: JSON.stringify({ date: date, items: items, dry: true }) })
+      .then(function (j) {
+        go.disabled = false; go.textContent = "Записать пополнения";
+        var skip = (j.skipped || []).map(function (x) { return "#" + x.acct + " — " + x.error; });
+        if (!j.applied) {
+          say.textContent = "Записывать нечего." + (skip.length ? " " + skip.join("; ") : "");
+          return;
+        }
+        if (!confirm("Записать пополнения за " + date.split("-").reverse().join(".") + "?\n\n" +
+          "Кошельков: " + j.applied + "\nЗачисление: " + money(j.total) +
+          (skip.length ? "\n\nНе пройдут: " + skip.join("; ") : "") +
+          "\n\nОтменить можно кнопкой «Отменить» в списке запусков.")) return;
+        go.disabled = true; go.textContent = "Записываем…";
+        return call("/api/admin/mass-in", { method: "POST",
+          body: JSON.stringify({ date: date, items: items }) })
+          .then(function (r) {
+            var out = el("mdOut");
+            if (out) {
+              out.hidden = false;
+              out.innerHTML = "<b>Пополнения записаны: " + r.applied + " кошельк(ов), " + money(r.total) +
+                "</b><br>Запуск №" + r.batch + " — его можно отменить целиком.";
+            }
+            el(pre + "List").value = "";
+            say.textContent = "Готово: " + r.applied + " кошельк(ов)";
+            return refresh();
+          });
+      })
+      .catch(function (e) { say.textContent = e.message; })
+      .then(function () { go.disabled = false; go.textContent = "Записать пополнения"; });
+  }
+
   function undo(id) {
     if (!confirm("Отменить запуск №" + id + "?\n\n" +
       "Балансы вернутся к прежним значениям, строки за эту дату уберутся из истории операций.")) return;
@@ -477,7 +563,8 @@
       box.innerHTML = b.map(function (x) {
         return '<div class="md-b' + (x.undone ? " off" : "") + '"><div><b>' +
           esc(String(x.day).split("-").reverse().join(".")) + "</b> · " +
-          (x.dir === "out" ? "выводы " + money(x.total || 0)
+          (x.dir === "in" ? "пополнения " + money(x.total || 0)
+            : x.dir === "out" ? "выводы " + money(x.total || 0)
             : (x.dir === "down" ? "убыток" : "прибыль") + " " + x.pct + "%") +
           " · кошельков " + x.wallets +
           '<br><span>запуск №' + x.id + (x.undone ? " · отменён" : "") + "</span></div>" +
@@ -1304,20 +1391,22 @@
     return String(v == null ? "" : v).replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
   };
   function fill() {
-    var sel = document.getElementById("mdOutAcct");
-    if (!sel) return;
     var us = [];
     try { us = (typeof uLoad === "function" ? uLoad() : []) || []; } catch (e) { us = []; }
     if (!us.length) return;
     var sign = us.map(function (u) { return String(u.acct) + ":" + u.balance; }).join("|");
-    if (sel.dataset.sign === sign) return;
-    var was = sel.value;
-    sel.dataset.sign = sign;
-    sel.innerHTML = us.map(function (u) {
+    var html = us.map(function (u) {
       return '<option value="' + esc(u.acct || "") + '">#' + esc(u.acct || "—") + " · " +
         esc(u.name || u.email || "—") + " · $" + (Number(u.balance) || 0).toFixed(2) + "</option>";
     }).join("");
-    if (was) sel.value = was;
+    ["mdOutAcct", "mdInAcct"].forEach(function (id) {
+      var sel = document.getElementById(id);
+      if (!sel || sel.dataset.sign === sign) return;
+      var was = sel.value;
+      sel.dataset.sign = sign;
+      sel.innerHTML = html;
+      if (was) sel.value = was;
+    });
   }
   setInterval(fill, 2000);
   document.addEventListener("click", function () { setTimeout(fill, 400); });

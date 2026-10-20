@@ -1212,20 +1212,32 @@ function renderKpis(){
   /* в работе — только сессии, у которых горизонт ещё не закончился */
   const live=S.accounts.filter(a=>!a.error&&winOf(a)&&!overOf(a));
   const bal=S.accounts.filter(a=>!a.error).reduce((s,a)=>s+valOf(a),0);
-  const day=S.accounts.filter(a=>!a.error).reduce((s,a)=>s+todayOf(a)+dayPosted(a),0);
+  /* Итог дня, проставленный в админке, — это факт. Как только он есть, обе
+     плитки показывают именно его: доход сценариев сверху не прибавляется (он уже
+     учтён в этой цифре), остаётся только живой тик в пределах доллара, чтобы
+     было видно, что пульт на связи. */
+  const posted=S.accounts.filter(a=>!a.error).reduce((s,a)=>s+dayPosted(a),0);
+  const fixed=S.accounts.filter(a=>!a.error&&dayPosted(a)).length;
+  const tick=fixed?Math.sin(Date.now()/9000)*0.97:0;
+  const day=fixed?posted+tick
+    :S.accounts.filter(a=>!a.error).reduce((s,a)=>s+todayOf(a),0);
   /* точка отсчёта — баланс, записанный на площадке: разница с кривой и есть
      результат идущих сессий, а начисления из админки в неё не попадают */
   const start=S.accounts.filter(a=>!a.error).reduce((s,a)=>s+(Number(a.balance)||0),0);
-  const pl=bal-start;
+  /* итог уже записан вручную — показываем ту же сумму, а не разницу по кривой */
+  const pl=fixed?posted+tick:bal-start;
   const bw=S.accounts.filter(a=>!a.error&&a.site==="bw").length;
   const nx=S.accounts.filter(a=>!a.error&&a.site==="nx").length;
   $("kpis").innerHTML=
     kpi("#7C5CFF",KPI_IC.wallet,"Суммарный капитал",usd(bal),"",
         (bw+nx)+" кошельков · BullWaves "+bw+" · FxPRO "+nx)+
     kpi("#2196B0",KPI_IC.day,"Доход за торговые сутки",sig(day),day>=0?"up":"down",
-        (dayShown()===ruToday()?"за сегодня":"за "+dayShown())+" · сессии и итог дня, обе площадки")+
+        (dayShown()===ruToday()?"за сегодня":"за "+dayShown())+" · "+
+        (fixed?("итог дня проставлен в админке по "+fixed+" кошельк(ам)"):"по идущим сессиям")+
+        ", обе площадки")+
     kpi("#2BA87A",KPI_IC.chart,"Результат сессий",sig(pl),pl>=0?"up":"down",
-        "от старта текущих сценариев")+
+        fixed?"итог дня из админки — сценарии сверху не прибавляются"
+             :"от старта текущих сценариев")+
     kpi("#BE8716",KPI_IC.bolt,"Подключённых аккаунтов",String(bw+nx),"",
         live.length?("активных сессий: "+live.length):"ни один сценарий не запущен");
   /* в пилюле — сколько кошельков подключено к пульту; каждая площадка считается
