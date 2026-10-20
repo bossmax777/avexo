@@ -1714,28 +1714,29 @@ app.post('/api/hub/history', async (req, res) => {
      const rows = await Promise.all(list.map(async a => {
       const u = fromBatch(map, a);
       if (!u) return { site: a.site, acct: a.acct, error: 'Ключ не подходит' };
-      /* «Результат дня» в истории сделок есть и у фиксации сессии, и у разноски
-         из админки — считаем по ним, иначе одно и то же событие попадёт дважды */
+      /* Главный источник — строка «Итог торгового дня» в операциях кабинета:
+         ровно она пишется и разноской из админки, и фиксацией дня с пульта,
+         и ровно по ней считает отчёт в админке. История сделок («Результат дня»)
+         берётся только за те даты, где такой строки нет — иначе один и тот же
+         день попадал в сумму дважды и пульт расходился с админкой. */
       const byDay = {};
       const fromAdmin = {};
       const pairOf = {};
-      (Array.isArray(u.hist) ? u.hist : []).forEach(r => {
-        if (!Array.isArray(r) || String(r[1] || '').indexOf('Результат дня') < 0) return;
-        const d = histRu(r[0]);
-        byDay[d] = (byDay[d] || 0) + histMoney(r[3]);
-        /* инструмент этого дня: он записан в той же строке истории сделок */
-        if (!pairOf[d] && r[2]) pairOf[d] = String(r[2]).slice(0, 16);
-      });
-      /* строка в операциях кабинета помечает дату как разнесённую администратором;
-         сумму берём оттуда, только если в истории сделок записи за эту дату нет */
       (Array.isArray(u.tx) ? u.tx : []).forEach(r => {
         if (!Array.isArray(r) || String(r[1] || '').indexOf('Итог торгового дня') < 0) return;
         const d = histRu(r[0]);
         fromAdmin[d] = true;
-        if (!(d in byDay)) byDay[d] = histMoney(r[2]);
-        /* разноска из админки пишет пару в заголовке: «Итог торгового дня · BTC/USD» */
+        byDay[d] = (byDay[d] || 0) + histMoney(r[2]);
+        /* разноска пишет пару в заголовке: «Итог торгового дня · BTC/USD» */
         const mp = String(r[1] || '').split('·')[1];
         if (!pairOf[d] && mp) pairOf[d] = mp.trim().slice(0, 16);
+      });
+      (Array.isArray(u.hist) ? u.hist : []).forEach(r => {
+        if (!Array.isArray(r) || String(r[1] || '').indexOf('Результат дня') < 0) return;
+        const d = histRu(r[0]);
+        if (fromAdmin[d]) { if (!pairOf[d] && r[2]) pairOf[d] = String(r[2]).slice(0, 16); return; }
+        byDay[d] = (byDay[d] || 0) + histMoney(r[3]);
+        if (!pairOf[d] && r[2]) pairOf[d] = String(r[2]).slice(0, 16);
       });
       /* выводы средств из операций кабинета: по ним видно, когда был последний */
       const payouts = [];
