@@ -1761,10 +1761,12 @@
     });
     var avgK = ks.length ? ks.reduce(function (s2, x) { return s2 + x; }, 0) / ks.length : 1.3;
     var maxShare = total ? Math.max.apply(null, list.map(function (a) { return num(a.balance) / total; }).concat([0])) : 0;
-    var day = list.reduce(function (s2, a) {
-      return s2 + ((typeof todayOf === "function") ? todayOf(a) : 0) + postedToday(a);
-    }, 0);
     var posted = list.reduce(function (s2, a) { return s2 + postedToday(a); }, 0);
+    /* итог дня, проставленный в админке, — факт: доход сессий сверху не
+       прибавляем, иначе советник и плитки пульта считали бы одно и то же дважды */
+    var day = posted ? posted : list.reduce(function (s2, a) {
+      return s2 + ((typeof todayOf === "function") ? todayOf(a) : 0);
+    }, 0);
     var dayDate = dayShown();
     return { list: list, total: total, run: run, keys: keys, kyc: kyc, out: out,
              known: known, kycWait: kycWait, kycNeed: kycNeed, dayDate: dayDate,

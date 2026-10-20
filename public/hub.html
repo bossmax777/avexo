@@ -1220,7 +1220,11 @@ function accWord(n){
 function renderKpis(){
   /* в работе — только сессии, у которых горизонт ещё не закончился */
   const live=S.accounts.filter(a=>!a.error&&winOf(a)&&!overOf(a));
-  const bal=S.accounts.filter(a=>!a.error).reduce((s,a)=>s+valOf(a),0);
+  /* пока итог дня не проставлен — капитал идёт по кривой сессий; как только он
+     записан в админке, показываем ровно то, что лежит на площадках, иначе
+     цифра в пульте не сходилась бы со сводкой в админке */
+  const curve=S.accounts.filter(a=>!a.error).reduce((s,a)=>s+valOf(a),0);
+  const real=S.accounts.filter(a=>!a.error).reduce((s,a)=>s+(Number(a.balance)||0),0);
   /* Итог дня, проставленный в админке, — это факт. Как только он есть, обе
      плитки показывают именно его: доход сценариев сверху не прибавляется (он уже
      учтён в этой цифре), остаётся только живой тик в пределах доллара, чтобы
@@ -1232,9 +1236,10 @@ function renderKpis(){
     :S.accounts.filter(a=>!a.error).reduce((s,a)=>s+todayOf(a),0);
   /* точка отсчёта — баланс, записанный на площадке: разница с кривой и есть
      результат идущих сессий, а начисления из админки в неё не попадают */
-  const start=S.accounts.filter(a=>!a.error).reduce((s,a)=>s+(Number(a.balance)||0),0);
+  const start=real;
+  const bal=fixed?real:curve;
   /* итог уже записан вручную — показываем ту же сумму, а не разницу по кривой */
-  const pl=fixed?posted+tick:bal-start;
+  const pl=fixed?posted+tick:curve-start;
   const bw=S.accounts.filter(a=>!a.error&&a.site==="bw").length;
   const nx=S.accounts.filter(a=>!a.error&&a.site==="nx").length;
   $("kpis").innerHTML=
