@@ -813,10 +813,19 @@ function renderMktStop(){
   const time=d.toLocaleTimeString("ru-RU",{hour:"2-digit",minute:"2-digit"});
   const date=d.toLocaleDateString("ru-RU",{day:"numeric",month:"long"});
   const hh=Math.floor(left/3600000), mm=Math.floor(left%3600000/60000);
-  $("mktStopT").textContent=(left>6*3600000)
+  /* выходные — это суббота, воскресенье и утро понедельника до вечернего
+     открытия: тогда рынок стоит с пятничного закрытия. В будни биржа закрыта
+     не из-за выходных, а потому что торговый день ещё не начался. */
+  const now=new Date(), dow=now.getDay();
+  const weekend = dow===6 || dow===0 || (dow===1 && nx>Date.now());
+  const sameDay = d.toDateString()===now.toDateString();
+  $("mktStopT").textContent = weekend
     ? "Биржа закрыта — выходные. Торги возобновятся в "+time+" "+day+", "+date
-    : "Биржа закрыта — технический перерыв. Торги возобновятся в "+time+" "+date;
-  $("mktStopS").textContent="Новые сессии не запускаются, сценарии на паузе на обеих площадках. "+
+    : "Торговый день ещё не начался. Торги откроются в "+time+
+      (sameDay?" сегодня":" "+day+", "+date);
+  $("mktStopS").textContent=(weekend
+      ? "Новые сессии не запускаются, сценарии на паузе на обеих площадках. "
+      : "Новые сессии по золоту и акциям пока не стартуют — криптопары идут круглосуточно. ")+
     "До открытия "+(hh?hh+" ч ":"")+mm+" мин.";
 }
 setInterval(()=>{ renderMktStop(); renderMktBar(); },30000);
