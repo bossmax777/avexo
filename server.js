@@ -746,6 +746,158 @@ app.post('/api/admin/fix-day-all', requireAdmin, async (req, res) => {
   } catch (e) { bad(res, 500, e.message); }
 });
 
+/* ---------- сводная таблица за день по обеим площадкам ----------
+   Раздел админки «Сводка за день» собирает отчёт сразу по двум сайтам: итог
+   торгового дня, пополнения и выводы по каждому клиенту и общий баланс.
+   Кабинеты сопоставляются по почте — у одного клиента обычно по кабинету
+   на каждой площадке. Отдаём и JSON (для таблицы на странице), и готовый
+   .xlsx с тремя вкладками: «Сводка», «BullWaves», вторая площадка. */
+const XLSX = require('./xlsx');
+const DAY_HEAD = 'Итог торгового дня';
+function txSum(v) {
+  const n = parseFloat(String(v == null ? '' : v).replace(/[^0-9.,]/g, '').replace(',', '.'));
+  if (!isFinite(n)) return 0;
+  return /^\s*[-−]/.test(String(v)) ? -n : n;
+}
+async function dayReport(date) {
+  const when = massRu(date);
+  const out = {};
+  for (const site of Object.keys(HUB_SITES)) {
+    const rows = [];
+    try {
+      const r = await q('SELECT * FROM ' + HUB_SITES[site].users + ' ORDER BY id');
+      for (const row of r.rows) {
+        const u = toUser(row);
+        let day = 0, inc = 0, outv = 0, has = false, note = '';
+        for (const t of (u.tx || [])) {
+          if (!t || String(t[0]) !== when) continue;
+          const v = txSum(t[2]);
+          if (String(t[1] || '').indexOf(DAY_HEAD) === 0) { day += v; has = true; note = String(t[4] || ''); }
+          else if (v < 0) outv += v;
+          else inc += v;
+        }
+        rows.push({ name: u.name || u.email || '—', mail: String(u.email || '').toLowerCase(),
+          acct: String(u.acct || ''), day: +day.toFixed(2), inc: +inc.toFixed(2),
+          out: +outv.toFixed(2), has, note, balance: +(Number(u.balance) || 0).toFixed(2),
+          cur: u.cur || 'USD' });
+      }
+    } catch (e) { /* площадки может не быть в этой базе */ }
+    rows.sort((a, b) => b.day - a.day);
+    out[site] = { label: HUB_SITES[site].label, rows };
+  }
+  /* сводим кабинеты по почте: один клиент — одна строка */
+  const by = {};
+  const order = [];
+  for (const site of Object.keys(out)) {
+    for (const r of out[site].rows) {
+      const k = r.mail || (site + ':' + r.acct);
+      if (!by[k]) { by[k] = { name: r.name, mail: r.mail, acct: {}, bal: {}, day: {}, out: {}, inc: {} }; order.push(k); }
+      const m = by[k];
+      m.acct[site] = r.acct; m.bal[site] = r.balance; m.day[site] = r.day;
+      m.out[site] = r.out; m.inc[site] = r.inc;
+    }
+  }
+  const sites = Object.keys(HUB_SITES);
+  const merged = order.map(k => {
+    const m = by[k];
+    const sum = f => sites.reduce((s2, st) => s2 + (Number(m[f][st]) || 0), 0);
+    return { name: m.name, mail: m.mail,
+      acct: sites.map(st => m.acct[st] || ''), bal: sites.map(st => Number(m.bal[st]) || 0),
+      day: sites.map(st => Number(m.day[st]) || 0), total: +sum('bal').toFixed(2),
+      dayAll: +sum('day').toFixed(2), outAll: +sum('out').toFixed(2), incAll: +sum('inc').toFixed(2) };
+  }).sort((a, b) => b.total - a.total);
+  return { date, when, sites, labels: sites.map(st => HUB_SITES[st].label), bySite: out, merged };
+}
+
+app.post('/api/admin/day-report', requireAdmin, async (req, res) => {
+  const date = String((req.body || {}).date || '');
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(date)) return bad(res, 400, 'Укажите дату в виде ГГГГ-ММ-ДД');
+  try { res.json(Object.assign({ ok: true }, await dayReport(date))); }
+  catch (e) { bad(res, 500, e.message); }
+});
+
+app.post('/api/admin/day-report.xlsx', requireAdmin, async (req, res) => {
+  const date = String((req.body || {}).date || '');
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(date)) return bad(res, 400, 'Укажите дату в виде ГГГГ-ММ-ДД');
+  try {
+    const d = await dayReport(date);
+    const H = v => ({ v, h: true });
+    const M = v => ({ v, m: true });
+    const T = v => ({ v, t: true });
+    const sheets = [];
+    /* вкладка «Сводка»: общие цифры и строка на клиента */
+    const totBal = d.sites.map(st => d.bySite[st].rows.reduce((s2, r) => s2 + r.balance, 0));
+    const totDay = d.sites.map(st => d.bySite[st].rows.reduce((s2, r) => s2 + r.day, 0));
+    const totOut = d.sites.map(st => d.bySite[st].rows.reduce((s2, r) => s2 + r.out, 0));
+    const totInc = d.sites.map(st => d.bySite[st].rows.reduce((s2, r) => s2 + r.inc, 0));
+    const add2 = a => a.reduce((s2, x) => s2 + x, 0);
+    const sum = [
+      [{ v: 'Общая сводка за ' + d.when + ' — обе площадки', title: true }],
+      [{ v: 'Кабинеты сопоставлены по почте клиента. Данные берутся из истории операций обеих админок.', note: true }],
+      []
+    ];
+    d.labels.forEach((lb, i) => sum.push([{ v: 'Капитал ' + lb, b: true }, M(+totBal[i].toFixed(2))]));
+    sum.push([{ v: 'Капитал всего', b: true }, M(+add2(totBal).toFixed(2))]);
+    sum.push([{ v: 'Заработано за день', b: true }, M(+add2(totDay).toFixed(2))]);
+    sum.push([{ v: 'Пополнения за день', b: true }, M(+add2(totInc).toFixed(2))]);
+    sum.push([{ v: 'Выведено за день', b: true }, M(+add2(totOut).toFixed(2))]);
+    sum.push([{ v: 'Клиентов всего', b: true }, d.merged.length]);
+    sum.push([]);
+    sum.push([{ v: 'По клиентам', b: true }]);
+    const headRow = [H('Клиент'), H('Почта')]
+      .concat(d.labels.map(l => H('Счёт ' + l)))
+      .concat(d.labels.map(l => H('Баланс ' + l)))
+      .concat([H('Общий баланс')])
+      .concat(d.labels.map(l => H('Итог дня ' + l)))
+      .concat([H('Итог дня всего'), H('Пополнения'), H('Выводы за день')]);
+    sum.push(headRow);
+    const headAt = sum.length;
+    d.merged.forEach(m => {
+      sum.push([m.name, m.mail]
+        .concat(m.acct.map(a => a || '—'))
+        .concat(m.bal.map(M))
+        .concat([M(m.total)])
+        .concat(m.day.map(M))
+        .concat([M(m.dayAll), M(m.incAll), M(m.outAll)]));
+    });
+    const tail = [T('ИТОГО'), T('')]
+      .concat(d.labels.map(() => T('')))
+      .concat(totBal.map(v => T(+v.toFixed(2))))
+      .concat([T(+add2(totBal).toFixed(2))])
+      .concat(totDay.map(v => T(+v.toFixed(2))))
+      .concat([T(+add2(totDay).toFixed(2)), T(+add2(totInc).toFixed(2)), T(+add2(totOut).toFixed(2))]);
+    sum.push(tail);
+    sheets.push({ name: 'Сводка', freeze: headAt,
+      cols: [26, 30].concat(d.labels.map(() => 15)).concat(d.labels.map(() => 18))
+        .concat([16]).concat(d.labels.map(() => 17)).concat([16, 15, 16]),
+      rows: sum });
+    /* вкладки площадок */
+    d.sites.forEach((st, i) => {
+      const lb = d.labels[i];
+      const rows = [
+        [{ v: 'Итог торгового дня ' + d.when + ' — ' + lb, title: true }],
+        [{ v: 'Источник: история операций клиентов площадки ' + lb, note: true }],
+        [],
+        [H('Клиент'), H('Почта'), H('Счёт'), H('Итог дня'), H('Пополнения'), H('Выводы'),
+         H('Касса за день'), H('Баланс на конец дня'), H('Статус')]
+      ];
+      d.bySite[st].rows.forEach(r => {
+        rows.push([r.name, r.mail, r.acct, M(r.day), M(r.inc), M(r.out),
+          M(+(r.inc + r.out).toFixed(2)), M(r.balance),
+          r.has ? (r.note || (r.day >= 0 ? 'Прибыль' : 'Убыток')) : 'нет записи за этот день']);
+      });
+      rows.push([T('ИТОГО'), T(''), T(''), T(+totDay[i].toFixed(2)), T(+totInc[i].toFixed(2)),
+        T(+totOut[i].toFixed(2)), T(+(totInc[i] + totOut[i]).toFixed(2)), T(+totBal[i].toFixed(2)), T('')]);
+      sheets.push({ name: lb.slice(0, 28), freeze: 4,
+        cols: [26, 30, 14, 16, 14, 14, 15, 19, 18], rows });
+    });
+    const buf = XLSX.buildXlsx(sheets);
+    res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
+    res.setHeader('Content-Disposition', 'attachment; filename="svodka-' + date + '.xlsx"');
+    res.send(buf);
+  } catch (e) { bad(res, 500, e.message); }
+});
+
 /* ---------- выводы за выбранную дату по выбранным кошелькам ---------- */
 /* Вторая половина итога дня: доход проставляется всем сразу, а вывод — точечно,
    по номерам кошельков. Строка уходит в историю операций клиента ровно так же,
