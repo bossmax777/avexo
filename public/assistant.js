@@ -1957,19 +1957,29 @@
       var key = [d.pair || "—", d.k || "", d.dir || "up", d.hours || ""].join("|");
       if (!g[key]) {
         g[key] = { pair: d.pair || "—", k: num(d.k) || 0, dir: d.dir || "up",
-                   hours: num(d.hours) || 24, list: [], base: 0, now: 0, ends: 0, started: 0 };
+                   hours: num(d.hours) || 24, list: [], base: 0, now: 0, real: 0, curve: 0,
+                   posted: 0, ends: 0, started: 0 };
       }
       var it = g[key];
       it.list.push(a);
-      it.base += num(d.from) || num(a.balance);
-      it.now += (typeof valOf === "function") ? valOf(a) : num(a.balance);
+      /* «Сейчас» — живая сумма по кошелькам сценария, «Результат» — то, что
+         реально записано за день (если итог уже проставлен) или прирост кривой,
+         пока он не записан. «Депозит на старте» показываем как разницу этих двух,
+         иначе он оставался бы от старой точки и результат уходил в минус. */
+      it.real += num(a.balance);
+      it.curve += (typeof valOf === "function") ? valOf(a) : num(a.balance);
+      it.posted += postedToday(a);
       var en = new Date(d.endsAt || 0).getTime();
       var st = new Date(d.startedAt || 0).getTime();
       if (isFinite(en)) it.ends = Math.max(it.ends, en);
       if (isFinite(st)) it.started = it.started ? Math.min(it.started, st) : st;
     });
-    return Object.keys(g).map(function (k) { return g[k]; })
-      .sort(function (x, y) { return y.list.length - x.list.length; });
+    return Object.keys(g).map(function (k) { return g[k]; }).map(function (it) {
+      var res = it.posted ? it.posted : (it.curve - it.real);
+      it.now = it.posted ? it.real : it.curve;
+      it.base = it.now - res;
+      return it;
+    }).sort(function (x, y) { return y.list.length - x.list.length; });
   }
   function leftTxt(ms) {
     if (ms <= 0) return "горизонт вышел";
@@ -1997,9 +2007,8 @@
       "<th>Депозит на старте</th><th>Сейчас</th><th>Результат</th><th>Статус</th></tr>" +
       gs.map(function (g, i) {
         var pl = g.now - g.base;
-        var ms = g.ends - Date.now();
-        var st = (ms > 0 ? leftTxt(ms) : "сессия завершена") +
-          (g.dir === "down" ? " · в минус" : "");
+        /* статус всегда LIVE: сценарий идёт, пока его не остановили вручную */
+        var st = "LIVE" + (g.dir === "down" ? " · в минус" : "");
         return "<tr><td>" + esc(g.pair) + "</td><td>×" + String(g.k).replace(".", ",") + "</td><td>" +
           g.list.length + "</td><td>" + money(g.base) + "</td><td>" + money(g.now) + "</td><td class='" +
           (pl >= 0 ? "up" : "down") + "'>" + sig(pl) + "</td><td>" + esc(st) + "</td></tr>";
