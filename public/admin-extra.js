@@ -1411,3 +1411,194 @@
   setInterval(fill, 2000);
   document.addEventListener("click", function () { setTimeout(fill, 400); });
 })();
+
+/* ---------------------------------------------------------------------------
+   Админка BullWaves: вкладка «Сводка за день».
+   Собирает таблицу сразу по двум площадкам за выбранную дату — итог дня,
+   пополнения, выводы и общий баланс по каждому клиенту — и отдаёт готовый
+   .xlsx с тремя вкладками: «Сводка», «BullWaves» и вторая площадка.
+--------------------------------------------------------------------------- */
+(function () {
+  "use strict";
+  var el = function (i) { return document.getElementById(i); };
+  var esc = function (v) {
+    return String(v == null ? "" : v).replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+  };
+  var money = function (v) {
+    v = Number(v) || 0;
+    return (v < 0 ? "−" : "") + "$" + Math.abs(v).toLocaleString("ru-RU",
+      { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+  };
+  var iso = function (d) {
+    return d.getFullYear() + "-" + ("0" + (d.getMonth() + 1)).slice(-2) + "-" + ("0" + d.getDate()).slice(-2);
+  };
+  function key() {
+    try { return sessionStorage.getItem("avexo_admin_key") || ""; } catch (e) { return ""; }
+  }
+  function call(url, opt) {
+    opt = opt || {};
+    opt.headers = Object.assign({ "Content-Type": "application/json", "x-admin-key": key() }, opt.headers || {});
+    return fetch(url, opt);
+  }
+
+  var CSS =
+    "#dsCard .ds-row{display:flex;gap:10px;flex-wrap:wrap;align-items:flex-end;margin-bottom:12px}" +
+    "#dsCard .ds-f{display:flex;flex-direction:column;gap:5px}" +
+    "#dsCard .ds-f label{font-size:11.5px;color:var(--muted)}" +
+    "#dsCard .ds-f input{padding:9px 10px;border:1px solid var(--line);border-radius:9px;" +
+    "font:inherit;font-size:13px}" +
+    "#dsCard .ds-kpi{display:flex;gap:10px;flex-wrap:wrap;margin-bottom:14px}" +
+    "#dsCard .ds-k{border:1px solid var(--line);border-radius:11px;padding:9px 13px;min-width:140px}" +
+    "#dsCard .ds-k span{display:block;font-size:11px;color:var(--muted);text-transform:uppercase;letter-spacing:.05em}" +
+    "#dsCard .ds-k b{font-size:17px}" +
+    "#dsCard .ds-scroll{overflow:auto;border:1px solid var(--line);border-radius:11px}" +
+    "#dsCard table{border-collapse:collapse;width:100%;font-size:12.5px;min-width:900px}" +
+    "#dsCard th,#dsCard td{padding:9px 12px;text-align:left;border-bottom:1px solid var(--line);white-space:nowrap}" +
+    "#dsCard th{font-size:11px;color:var(--muted);text-transform:uppercase;letter-spacing:.05em}" +
+    "#dsCard td.n{text-align:right;font-variant-numeric:tabular-nums}" +
+    "#dsCard tr:last-child td{border-bottom:0;font-weight:600}" +
+    "#dsCard .up{color:var(--buy,#16A34A)}#dsCard .dn{color:var(--sell,#EF4444)}" +
+    "#dsCard .zero{color:var(--muted)}";
+
+  var PANE =
+    '<div class="card" id="dsCard"><h2>Сводка за день — обе площадки</h2>' +
+    '<p class="sub">Таблица по выбранной дате сразу по двум сайтам: итог торгового дня, пополнения, ' +
+    'выводы и общий баланс по каждому клиенту. Кабинеты сопоставляются по почте. ' +
+    'Кнопка «Скачать Excel» отдаёт файл с тремя вкладками: «Сводка», «BullWaves» и вторая площадка.</p>' +
+    '<div class="ds-row">' +
+      '<div class="ds-f"><label for="dsDate">Дата</label><input id="dsDate" type="date"></div>' +
+      '<div class="ds-f"><label>&nbsp;</label><button class="btn btn-ghost" id="dsPrev">← день назад</button></div>' +
+      '<div class="ds-f"><label>&nbsp;</label><button class="btn btn-ghost" id="dsNext">день вперёд →</button></div>' +
+      '<div class="ds-f"><label>&nbsp;</label><button class="btn btn-ghost" id="dsLoad">Собрать</button></div>' +
+      '<div class="ds-f"><label>&nbsp;</label><button class="btn btn-primary" id="dsXls">Скачать Excel</button></div>' +
+      '<div class="ds-f"><label>&nbsp;</label><span class="sub" id="dsSay" style="margin:0"></span></div>' +
+    '</div>' +
+    '<div class="ds-kpi" id="dsKpi"></div><div id="dsBox"></div></div>';
+
+  var DS = { data: null };
+
+  function build() {
+    if (el("dsCard")) return true;
+    var host = document.querySelector('[data-pane="users"]');
+    if (!host || !host.parentNode) return false;
+    var st = document.createElement("style"); st.id = "dsCss"; st.textContent = CSS;
+    document.head.appendChild(st);
+    var pane = document.createElement("div");
+    pane.id = "dsPane";
+    pane.setAttribute("data-pane", "daysum");
+    pane.hidden = true;
+    pane.innerHTML = PANE;
+    host.parentNode.insertBefore(pane, host.nextSibling);
+    var tabs = el("tabs");
+    if (tabs && !tabs.querySelector('[data-tab="daysum"]')) {
+      var after = tabs.querySelector('[data-tab="report"]') || tabs.querySelector('[data-tab="users"]');
+      var b = document.createElement("button");
+      b.setAttribute("data-tab", "daysum");
+      b.innerHTML = "<i></i>Сводка за день";
+      if (after && after.parentNode) after.parentNode.insertBefore(b, after.nextSibling);
+      else tabs.appendChild(b);
+    }
+    var d = el("dsDate");
+    if (d && !d.value) d.value = iso(new Date());
+    el("dsLoad").onclick = load;
+    el("dsXls").onclick = xls;
+    el("dsDate").onchange = load;
+    el("dsPrev").onclick = function () { shift(-1); };
+    el("dsNext").onclick = function () { shift(1); };
+    return true;
+  }
+
+  function shift(n) {
+    var d = el("dsDate"); if (!d || !d.value) return;
+    var t = new Date(d.value + "T12:00:00");
+    t.setDate(t.getDate() + n);
+    d.value = iso(t);
+    load();
+  }
+
+  function load() {
+    if (!build()) return;
+    var say = el("dsSay");
+    var date = (el("dsDate").value || "").trim();
+    if (!date) { say.textContent = "Выберите дату"; return; }
+    say.textContent = "Собираем…";
+    call("/api/admin/day-report", { method: "POST", body: JSON.stringify({ date: date }) })
+      .then(function (r) { return r.json().then(function (j) { if (!r.ok) throw new Error(j.error || "ошибка"); return j; }); })
+      .then(function (j) { DS.data = j; say.textContent = ""; draw(); })
+      .catch(function (e) { say.textContent = e.message; });
+  }
+
+  function draw() {
+    var d = DS.data; if (!d) return;
+    var kpi = el("dsKpi"), box = el("dsBox");
+    var totBal = d.sites.map(function (st) {
+      return d.bySite[st].rows.reduce(function (s, r) { return s + r.balance; }, 0); });
+    var totDay = d.sites.map(function (st) {
+      return d.bySite[st].rows.reduce(function (s, r) { return s + r.day; }, 0); });
+    var totOut = d.sites.map(function (st) {
+      return d.bySite[st].rows.reduce(function (s, r) { return s + r.out; }, 0); });
+    var totInc = d.sites.map(function (st) {
+      return d.bySite[st].rows.reduce(function (s, r) { return s + r.inc; }, 0); });
+    var add = function (a) { return a.reduce(function (s, x) { return s + x; }, 0); };
+    kpi.innerHTML =
+      d.labels.map(function (l, i) {
+        return '<div class="ds-k"><span>Капитал ' + esc(l) + "</span><b>" + money(totBal[i]) + "</b></div>";
+      }).join("") +
+      '<div class="ds-k"><span>Капитал всего</span><b>' + money(add(totBal)) + "</b></div>" +
+      '<div class="ds-k"><span>Заработано за день</span><b class="up">' + money(add(totDay)) + "</b></div>" +
+      '<div class="ds-k"><span>Пополнения</span><b class="up">' + money(add(totInc)) + "</b></div>" +
+      '<div class="ds-k"><span>Выводы</span><b class="dn">' + money(add(totOut)) + "</b></div>" +
+      '<div class="ds-k"><span>Клиентов</span><b>' + d.merged.length + "</b></div>";
+    box.innerHTML = '<div class="ds-scroll"><table><thead><tr>' +
+      "<th>Клиент</th>" +
+      d.labels.map(function (l) { return "<th>Счёт " + esc(l) + "</th>"; }).join("") +
+      d.labels.map(function (l) { return "<th>Баланс " + esc(l) + "</th>"; }).join("") +
+      "<th>Общий баланс</th><th>Итог дня</th><th>Пополнения</th><th>Выводы</th>" +
+      "</tr></thead><tbody>" +
+      d.merged.map(function (m) {
+        return "<tr><td>" + esc(m.name) + '<br><span class="zero">' + esc(m.mail) + "</span></td>" +
+          m.acct.map(function (a) { return "<td>" + (a ? "#" + esc(a) : "—") + "</td>"; }).join("") +
+          m.bal.map(function (v) { return '<td class="n">' + money(v) + "</td>"; }).join("") +
+          '<td class="n"><b>' + money(m.total) + "</b></td>" +
+          '<td class="n ' + (m.dayAll > 0 ? "up" : m.dayAll < 0 ? "dn" : "zero") + '">' +
+            (m.dayAll ? money(m.dayAll) : "—") + "</td>" +
+          '<td class="n ' + (m.incAll ? "up" : "zero") + '">' + (m.incAll ? money(m.incAll) : "—") + "</td>" +
+          '<td class="n ' + (m.outAll ? "dn" : "zero") + '">' + (m.outAll ? money(m.outAll) : "—") + "</td></tr>";
+      }).join("") +
+      "<tr><td>ИТОГО</td>" + d.labels.map(function () { return "<td></td>"; }).join("") +
+      totBal.map(function (v) { return '<td class="n">' + money(v) + "</td>"; }).join("") +
+      '<td class="n">' + money(add(totBal)) + '</td><td class="n">' + money(add(totDay)) +
+      '</td><td class="n">' + money(add(totInc)) + '</td><td class="n">' + money(add(totOut)) +
+      "</td></tr></tbody></table></div>";
+  }
+
+  function xls() {
+    var say = el("dsSay");
+    var date = (el("dsDate").value || "").trim();
+    if (!date) { say.textContent = "Выберите дату"; return; }
+    say.textContent = "Готовим файл…";
+    call("/api/admin/day-report.xlsx", { method: "POST", body: JSON.stringify({ date: date }) })
+      .then(function (r) {
+        if (!r.ok) return r.json().then(function (j) { throw new Error(j.error || "ошибка"); });
+        return r.blob();
+      })
+      .then(function (blob) {
+        var a = document.createElement("a");
+        a.href = URL.createObjectURL(blob);
+        a.download = "svodka-" + date + ".xlsx";
+        document.body.appendChild(a); a.click();
+        setTimeout(function () { URL.revokeObjectURL(a.href); a.remove(); }, 500);
+        say.textContent = "файл скачан";
+        setTimeout(function () { say.textContent = ""; }, 2500);
+      })
+      .catch(function (e) { say.textContent = e.message; });
+  }
+
+  document.addEventListener("click", function (e) {
+    if (e.target.closest && e.target.closest('[data-tab="daysum"]')) setTimeout(load, 60);
+  });
+  function boot() { build(); }
+  if (document.readyState === "loading") {
+    document.addEventListener("DOMContentLoaded", function () { setTimeout(boot, 800); });
+  } else setTimeout(boot, 800);
+})();
