@@ -598,15 +598,61 @@
   }
 
   /* итог дня списком: у каждого кошелька своя сумма и своя пара */
+  /* разбор списка итога дня: пару можно не выбирать руками — если в тексте
+     встречается строка с названием пары («--- пара BTC/USD ---»), все строки
+     ниже уходят по ней, пока не встретится следующая. Что до первой такой
+     строки — по паре из селекта. Всё лишнее (заголовки, суммы, разделители)
+     пропускается само, а чужие кошельки отсеет сервер, поэтому один и тот же
+     текст можно вставить в обе админки. */
+  var ROW_PAIRS = ["XAU/USD", "BTC/USD", "ETH/USD", "SOL/USD", "XRP/USD",
+                   "AAPL", "TSLA", "NVDA", "MSFT"];
+  function rowsPairIn(line) {
+    var up = line.toUpperCase();
+    for (var i = 0; i < ROW_PAIRS.length; i++) {
+      var p = ROW_PAIRS[i];
+      if (up.indexOf(p) < 0) continue;
+      /* для коротких тикеров проверяем, что это отдельное слово, а не часть числа */
+      if (p.indexOf("/") < 0 && !new RegExp("(^|[^A-Z0-9])" + p + "([^A-Z0-9]|$)").test(up)) continue;
+      return p;
+    }
+    return "";
+  }
+  /* какие пары и по скольку кошельков собрал список — это и показываем вместо
+     одной пары из селекта */
+  function rowsPairsTxt(items) {
+    var m = {}, order = [];
+    (items || []).forEach(function (x) {
+      if (!m[x.pair]) { m[x.pair] = 0; order.push(x.pair); }
+      m[x.pair]++;
+    });
+    return order.map(function (p) { return p + " — " + m[p]; }).join(", ");
+  }
+
+  function rowsParse(def) {
+    var cur = def, out = [];
+    (el("mdRowList").value || "").split(/\r?\n/).forEach(function (l) {
+      var t = l.trim();
+      if (!t) return;
+      var p = t.split(/[\s;,]+/).filter(Boolean);
+      var acct = p.length > 1 ? p[0].replace(/\D/g, "") : "";
+      var amt = p.length > 1 ? p[1].replace(/\s|\u00a0/g, "").replace(",", ".") : "";
+      /* строка данных — только «номер кошелька сумма», всё остальное заголовок */
+      if (acct && /^-?\$?\d/.test(amt) && isFinite(Number(amt.replace("$", ""))) &&
+          Number(amt.replace("$", "")) !== 0) {
+        out.push({ acct: acct, amount: amt.replace("$", ""), pair: cur });
+        return;
+      }
+      var np = rowsPairIn(t);
+      if (np) cur = np;
+    });
+    return out;
+  }
+
   function rowsRun() {
     var go = el("mdRowGo"), say = el("mdRowSay");
     var date = (el("mdDate").value || "").trim();
     var pair = el("mdRowPair").value;
-    var items = (el("mdRowList").value || "").split(/\r?\n/).map(function (l) {
-      var p = l.trim().split(/[\s;,]+/).filter(Boolean);
-      if (p.length < 2) return null;
-      return { acct: p[0].replace(/\D/g, ""), amount: p[1].replace(",", ".") };
-    }).filter(function (x) { return x && x.acct && isFinite(Number(x.amount)) && Number(x.amount) !== 0; });
+    var items = rowsParse(pair);
     if (!date) { say.textContent = "Укажите дату операции"; return; }
     if (!items.length) { say.textContent = "Впишите хотя бы одну строку: номер кошелька и сумма"; return; }
     go.disabled = true; go.textContent = "Считаем…";
@@ -620,8 +666,8 @@
           say.textContent = "Записывать нечего." + (skip.length ? " " + skip.slice(0, 4).join("; ") : "");
           return;
         }
-        if (!confirm("Записать итог дня за " + date.split("-").reverse().join(".") + " по паре " + pair + "?\n\n" +
-          "Кошельков: " + j.applied + "\nСумма: " + money(j.total) +
+        if (!confirm("Записать итог дня за " + date.split("-").reverse().join(".") + "?\n\n" +
+          "Пары: " + rowsPairsTxt(items) + "\nКошельков: " + j.applied + "\nСумма: " + money(j.total) +
           (skip.length ? "\n\nНе пройдут (" + skip.length + "): " + skip.slice(0, 4).join("; ") : "") +
           "\n\nОтменить можно кнопкой «Отменить» в списке запусков.")) return;
         go.disabled = true; go.textContent = "Записываем…";
@@ -632,7 +678,8 @@
             if (out) {
               out.hidden = false;
               out.innerHTML = "<b>Итог дня записан: " + r.applied + " кошельк(ов), " + money(r.total) +
-                " по паре " + esc(r.pair) + "</b><br>Запуск №" + r.batch + " — его можно отменить целиком." +
+                "</b><br>Пары: " + esc(rowsPairsTxt(items)) +
+                "<br>Запуск №" + r.batch + " — его можно отменить целиком." +
                 ((r.skipped || []).length ? "<br>Не прошли: " + r.skipped.length : "");
             }
             el("mdRowList").value = "";
