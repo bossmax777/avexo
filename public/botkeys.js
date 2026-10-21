@@ -116,6 +116,8 @@
   document.addEventListener("click", function (e) {
     var b = e.target.closest && e.target.closest("[data-kyc]");
     if (b) { e.preventDefault(); e.stopPropagation(); kycWin(b.getAttribute("data-kyc")); }
+    var b2 = e.target.closest && e.target.closest("[data-kyc2]");
+    if (b2) { e.preventDefault(); e.stopPropagation(); kycAgain(b2.getAttribute("data-kyc2")); }
   });
 
   var LOADED = 0;
@@ -179,8 +181,10 @@
   function kycRow(s, k) {
     var st = s && s.kyc;
     if (st === "approved") {
+      /* отметка стоит, но форму отправки паспорта оставляем — клиент может
+         прислать новый снимок в любой момент, без пояснений рядом */
       return '<div class="bk-kyc"><span class="bk-badge"><i></i>Аккаунт верифицирован</span>' +
-        '<span class="bk-note" style="width:auto;margin:0">документы приняты площадкой</span></div>';
+        '<button class="btn btn-sm" data-kyc2="' + k + '">Отправить паспорт на верификацию</button></div>';
     }
     if (st === "pending") {
       return '<div class="bk-kyc"><span class="bk-badge wait"><i></i>Документы на проверке</span>' +
@@ -264,6 +268,47 @@
           if (j && j.state) ST[k] = j.state;
           close(); rows();
           okBox("Документы отправлены", "Заявка на верификацию принята. Решение примет администратор площадки.");
+        })
+        .catch(function (e) {
+          err.textContent = e.message; go.disabled = false; go.textContent = "Отправить";
+        });
+    };
+  }
+
+  /* отправка паспорта по уже верифицированному кошельку: одно поле выбора
+     файла и кнопка, без пояснений — отметка о верификации при этом остаётся */
+  function kycAgain(k) {
+    var cr = credOfKey(k);
+    if (!cr) return;
+    var win = document.createElement("div");
+    win.className = "bk-win";
+    win.innerHTML = '<div class="bk-win-box">' +
+      "<h4>Отправка паспорта на верификацию</h4>" +
+      '<label class="bk-file">Паспорт — страница с фотографией' +
+        '<input type="file" accept="image/jpeg,image/png,image/webp" data-f="doc"></label>' +
+      '<p class="bk-err" data-err></p>' +
+      '<div class="bk-win-act"><button class="btn btn-sm" data-no>Отмена</button>' +
+      '<button class="btn btn-sm btn-primary" data-go>Отправить</button></div></div>';
+    document.body.appendChild(win);
+    var err = win.querySelector("[data-err]");
+    var close = function () { win.remove(); };
+    win.onclick = function (e) { if (e.target === win) close(); };
+    win.querySelector("[data-no]").onclick = close;
+    win.querySelector("[data-go]").onclick = function () {
+      var go = this;
+      var f = win.querySelector('[data-f="doc"]').files[0];
+      err.textContent = "";
+      if (!f) { err.textContent = "Выберите файл"; return; }
+      go.disabled = true; go.textContent = "Отправляем…";
+      readFile(f)
+        .then(function (doc) {
+          return call("/api/hub/kyc", { method: "POST",
+            body: JSON.stringify({ key: cr.key, again: true, docs: [doc] }) });
+        })
+        .then(function (j) {
+          if (j && j.state) ST[k] = j.state;
+          close(); rows();
+          okBox("Паспорт отправлен", "Снимок ушёл на площадку.");
         })
         .catch(function (e) {
           err.textContent = e.message; go.disabled = false; go.textContent = "Отправить";
