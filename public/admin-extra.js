@@ -235,6 +235,8 @@
     '<div class="md-row" style="margin-bottom:10px">' +
       '<div class="md-f" style="min-width:auto"><label>&nbsp;</label>' +
         '<button class="btn btn-ghost" id="mdStop">Остановить все сценарии</button></div>' +
+      '<div class="md-f" style="min-width:auto"><label>&nbsp;</label>' +
+        '<button class="btn btn-ghost" id="mdDrop">Сбросить сценарии без записи</button></div>' +
       '<div class="md-f" style="min-width:260px"><label>&nbsp;</label>' +
         '<span class="md-sum" id="mdStopSay" style="margin:0"></span></div>' +
     '</div>' +
@@ -342,6 +344,7 @@
     });
     el("mdGo").onclick = run;
     el("mdStop").onclick = stopAll;
+    el("mdDrop").onclick = dropAll;
     el("mdOutAdd").onclick = outAdd;
     el("mdOutGo").onclick = outRun;
     el("mdInAdd").onclick = function () { cashAdd("mdIn"); };
@@ -369,6 +372,33 @@
       ? "Кошельков на площадке: <b>" + us.length + "</b> · изменение капитала: <b>" +
         money(sum) + "</b> (" + (down ? "убыток" : "прибыль") + " " + p + "% к балансу каждого)"
       : "Кошельков пока нет.";
+  }
+
+  /* сброс сценариев без записи результата: баланс возвращается к депозиту на
+     момент запуска вместе со всем, что внесено руками за эти сутки. В кабинете
+     и в отчётах остаётся только ручная разноска, кривая ничего не добавляет. */
+  function dropAll() {
+    var btn = el("mdDrop"), say = el("mdStopSay");
+    btn.disabled = true; btn.textContent = "Считаем…";
+    say.textContent = "";
+    call("/api/admin/drop-all", { method: "POST", body: JSON.stringify({ dry: true }) })
+      .then(function (j) {
+        btn.disabled = false; btn.textContent = "Сбросить сценарии без записи";
+        if (!j.dropped) { say.textContent = "Запущенных сценариев нет."; return; }
+        if (!confirm("Снять сценарии на " + j.dropped + " кошельках без записи результата?\n\n" +
+          "Баланс каждого вернётся к депозиту на момент запуска, всё внесённое руками " +
+          "останется на месте.\nИзменение капитала: " + money(j.delta) + " · станет " +
+          money(j.total).replace(/^\+/, "") + "\n\nВ историю операций ничего не пишется.")) return;
+        btn.disabled = true; btn.textContent = "Снимаем…";
+        return call("/api/admin/drop-all", { method: "POST", body: JSON.stringify({}) })
+          .then(function (r) {
+            say.textContent = "Снято сценариев без записи: " + r.dropped +
+              " · капитал изменился на " + money(r.delta);
+            return refresh();
+          });
+      })
+      .catch(function (e) { say.textContent = e.message; })
+      .then(function () { btn.disabled = false; btn.textContent = "Сбросить сценарии без записи"; });
   }
 
   /* остановка всех сценариев: баланс фиксируется там, где сессия сейчас,
