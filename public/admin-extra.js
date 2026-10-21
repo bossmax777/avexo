@@ -1073,8 +1073,7 @@
       '<div class="rp-k"><span>Выводы за день</span><b class="' + (outs ? "dn" : "zero") + '">' +
         money(outs) + (nOut ? " · " + nOut + " шт." : "") + "</b></div>" +
       '<div class="rp-k"><span>Пополнения</span><b class="' + (incs ? "up" : "zero") + '">' +
-        money(incs) + "</b></div>" +
-      '<div class="rp-k"><span>Касса за день</span><b>' + money(cash) + "</b></div>";
+        money(incs) + "</b></div>";
     box.innerHTML = '<div class="rp-scroll"><table><thead><tr>' +
       "<th>Клиент</th><th>Счёт</th><th>Пара</th><th>Итог дня</th><th>Пополнения</th><th>Выводы</th>" +
       "<th>Баланс сейчас</th><th>Статус</th></tr></thead><tbody>" +
@@ -1102,18 +1101,17 @@
     var day = (el("rpDate") || {}).value || "";
     var list = rows();
     var q = function (v) { return '"' + String(v == null ? "" : v).replace(/"/g, '""') + '"'; };
-    var lines = [["Клиент", "Email", "Счёт", "Пара", "Итог дня", "Пополнения", "Выводы", "Касса за день",
+    var lines = [["Клиент", "Email", "Счёт", "Пара", "Итог дня", "Пополнения", "Выводы",
       "Баланс", "Валюта", "Статус"].map(q).join(";")];
     list.forEach(function (x) {
       lines.push([x.name, x.mail, x.acct, x.pair || "", x.has ? plain(x.day) : "", plain(x.inc), plain(x.out),
-        plain(x.cash), plain(x.balance), x.cur,
+        plain(x.balance), x.cur,
         x.has ? (x.note || "") : "нет записи"].map(q).join(";"));
     });
     /* итоговая строка: по ней сразу видно доход и вывод за день целиком */
     lines.push(["ИТОГО", "", "", "", plain(list.reduce(function (s2, x) { return s2 + x.day; }, 0)),
       plain(list.reduce(function (s2, x) { return s2 + x.inc; }, 0)),
       plain(list.reduce(function (s2, x) { return s2 + x.out; }, 0)),
-      plain(list.reduce(function (s2, x) { return s2 + x.cash; }, 0)),
       plain(list.reduce(function (s2, x) { return s2 + x.balance; }, 0)), "", ""].map(q).join(";"));
     var blob = new Blob(["﻿" + lines.join("\r\n")], { type: "text/csv;charset=utf-8" });
     var a = document.createElement("a");
