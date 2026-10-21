@@ -3331,6 +3331,7 @@
     } finally { BUSY_PANELS = false; }
   }
 
+  var BOOTED = false;
   function boot() {
     if (!$("aiCss")) {
       var st = document.createElement("style"); st.id = "aiCss"; st.textContent = CSS;
@@ -3342,12 +3343,23 @@
     }
     var desk = $("desk");
     if (!desk || desk.classList.contains("hidden")) return;
-    dock(); filterRow(); renderPanels(); guardRun();
+    dock(); filterRow(); guardRun();
+    /* полную пересборку карточек по этому таймеру не делаем: она считает карту
+       ключей и сводки по всем кошелькам, а своя перерисовка и так идёт раз в
+       шесть секунд. Здесь только досоздаём то, чего ещё нет на странице. */
+    if (PANELS.some(function (p2) { return !$(p2[0]); })) renderPanels();
     if (!HIST) pullHist().then(renderPanels);
-    /* состояние ключей приходит отдельной ручкой: без него карта активации
-       показывала бы «нет ключа» у всех, поэтому после загрузки перерисовываем */
-    pullState().then(renderPanels);
-    setInterval(function () { if (!document.hidden) pullState().then(renderPanels); }, 60000);
+    /* boot вызывается по таймеру каждые полторы секунды — он только досоздаёт
+       недостающее. Запрос состояния ключей и его таймер ставим ровно один раз:
+       иначе на странице копились десятки одинаковых таймеров, каждый дергал
+       сервер и перерисовывал карточки, и вкладка подвисала. */
+    if (!BOOTED) {
+      BOOTED = true;
+      /* состояние ключей приходит отдельной ручкой: без него карта активации
+         показывала бы «нет ключа» у всех, поэтому после загрузки перерисовываем */
+      pullState().then(renderPanels);
+      setInterval(function () { if (!document.hidden) pullState().then(renderPanels); }, 60000);
+    }
     if (!PREF_AT) pullPrefs();
   }
   if (document.readyState === "loading") document.addEventListener("DOMContentLoaded", function () { setTimeout(boot, 400); });
