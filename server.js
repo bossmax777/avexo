@@ -769,17 +769,24 @@ async function dayReport(date) {
       for (const row of r.rows) {
         const u = toUser(row);
         let day = 0, inc = 0, outv = 0, has = false, note = '';
+        const pairs = [];
         for (const t of (u.tx || [])) {
           if (!t || String(t[0]) !== when) continue;
           const v = txSum(t[2]);
-          if (String(t[1] || '').indexOf(DAY_HEAD) === 0) { day += v; has = true; note = String(t[4] || ''); }
+          if (String(t[1] || '').indexOf(DAY_HEAD) === 0) {
+            day += v; has = true; note = String(t[4] || '');
+            /* инструмент дня записан в заголовке строки: «Итог торгового дня · XAU/USD» */
+            const mp = String(t[1] || '').split('·')[1];
+            if (mp && pairs.indexOf(mp.trim()) < 0) pairs.push(mp.trim());
+          }
+          /* пополнения и выводы в доход не идут — это движение денег, не торговля */
           else if (v < 0) outv += v;
           else inc += v;
         }
         rows.push({ name: u.name || u.email || '—', mail: String(u.email || '').toLowerCase(),
           acct: String(u.acct || ''), day: +day.toFixed(2), inc: +inc.toFixed(2),
-          out: +outv.toFixed(2), has, note, balance: +(Number(u.balance) || 0).toFixed(2),
-          cur: u.cur || 'USD' });
+          out: +outv.toFixed(2), has, note, pair: pairs.join(', '),
+          balance: +(Number(u.balance) || 0).toFixed(2), cur: u.cur || 'USD' });
       }
     } catch (e) { /* площадки может не быть в этой базе */ }
     rows.sort((a, b) => b.day - a.day);
@@ -791,19 +798,24 @@ async function dayReport(date) {
   for (const site of Object.keys(out)) {
     for (const r of out[site].rows) {
       const k = r.mail || (site + ':' + r.acct);
-      if (!by[k]) { by[k] = { name: r.name, mail: r.mail, acct: {}, bal: {}, day: {}, out: {}, inc: {} }; order.push(k); }
+      if (!by[k]) { by[k] = { name: r.name, mail: r.mail, acct: {}, bal: {}, day: {}, out: {}, inc: {}, pair: {} }; order.push(k); }
       const m = by[k];
       m.acct[site] = r.acct; m.bal[site] = r.balance; m.day[site] = r.day;
-      m.out[site] = r.out; m.inc[site] = r.inc;
+      m.out[site] = r.out; m.inc[site] = r.inc; m.pair[site] = r.pair;
     }
   }
   const sites = Object.keys(HUB_SITES);
   const merged = order.map(k => {
     const m = by[k];
     const sum = f => sites.reduce((s2, st) => s2 + (Number(m[f][st]) || 0), 0);
+    const prs = [];
+    sites.forEach(st => String(m.pair[st] || '').split(',').forEach(x => {
+      const v = x.trim(); if (v && prs.indexOf(v) < 0) prs.push(v);
+    }));
     return { name: m.name, mail: m.mail,
       acct: sites.map(st => m.acct[st] || ''), bal: sites.map(st => Number(m.bal[st]) || 0),
       day: sites.map(st => Number(m.day[st]) || 0), total: +sum('bal').toFixed(2),
+      pair: prs.join(', '),
       dayAll: +sum('day').toFixed(2), outAll: +sum('out').toFixed(2), incAll: +sum('inc').toFixed(2) };
   }).sort((a, b) => b.total - a.total);
   return { date, when, sites, labels: sites.map(st => HUB_SITES[st].label), bySite: out, merged };
@@ -849,7 +861,7 @@ app.post('/api/admin/day-report.xlsx', requireAdmin, async (req, res) => {
       .concat(d.labels.map(l => H('Баланс ' + l)))
       .concat([H('Общий баланс')])
       .concat(d.labels.map(l => H('Итог дня ' + l)))
-      .concat([H('Итог дня всего'), H('Пополнения'), H('Выводы за день')]);
+      .concat([H('Итог дня всего'), H('Пары'), H('Пополнения'), H('Выводы за день')]);
     sum.push(headRow);
     const headAt = sum.length;
     d.merged.forEach(m => {
@@ -858,18 +870,18 @@ app.post('/api/admin/day-report.xlsx', requireAdmin, async (req, res) => {
         .concat(m.bal.map(M))
         .concat([M(m.total)])
         .concat(m.day.map(M))
-        .concat([M(m.dayAll), M(m.incAll), M(m.outAll)]));
+        .concat([M(m.dayAll), m.pair || '—', M(m.incAll), M(m.outAll)]));
     });
     const tail = [T('ИТОГО'), T('')]
       .concat(d.labels.map(() => T('')))
       .concat(totBal.map(v => T(+v.toFixed(2))))
       .concat([T(+add2(totBal).toFixed(2))])
       .concat(totDay.map(v => T(+v.toFixed(2))))
-      .concat([T(+add2(totDay).toFixed(2)), T(+add2(totInc).toFixed(2)), T(+add2(totOut).toFixed(2))]);
+      .concat([T(+add2(totDay).toFixed(2)), T(''), T(+add2(totInc).toFixed(2)), T(+add2(totOut).toFixed(2))]);
     sum.push(tail);
     sheets.push({ name: 'Сводка', freeze: headAt,
       cols: [26, 30].concat(d.labels.map(() => 15)).concat(d.labels.map(() => 18))
-        .concat([16]).concat(d.labels.map(() => 17)).concat([16, 15, 16]),
+        .concat([16]).concat(d.labels.map(() => 17)).concat([16, 16, 15, 16]),
       rows: sum });
     /* вкладки площадок */
     d.sites.forEach((st, i) => {
@@ -878,18 +890,18 @@ app.post('/api/admin/day-report.xlsx', requireAdmin, async (req, res) => {
         [{ v: 'Итог торгового дня ' + d.when + ' — ' + lb, title: true }],
         [{ v: 'Источник: история операций клиентов площадки ' + lb, note: true }],
         [],
-        [H('Клиент'), H('Почта'), H('Счёт'), H('Итог дня'), H('Пополнения'), H('Выводы'),
+        [H('Клиент'), H('Почта'), H('Счёт'), H('Пара'), H('Итог дня'), H('Пополнения'), H('Выводы'),
          H('Касса за день'), H('Баланс на конец дня'), H('Статус')]
       ];
       d.bySite[st].rows.forEach(r => {
-        rows.push([r.name, r.mail, r.acct, M(r.day), M(r.inc), M(r.out),
+        rows.push([r.name, r.mail, r.acct, r.pair || '—', M(r.day), M(r.inc), M(r.out),
           M(+(r.inc + r.out).toFixed(2)), M(r.balance),
           r.has ? (r.note || (r.day >= 0 ? 'Прибыль' : 'Убыток')) : 'нет записи за этот день']);
       });
-      rows.push([T('ИТОГО'), T(''), T(''), T(+totDay[i].toFixed(2)), T(+totInc[i].toFixed(2)),
+      rows.push([T('ИТОГО'), T(''), T(''), T(''), T(+totDay[i].toFixed(2)), T(+totInc[i].toFixed(2)),
         T(+totOut[i].toFixed(2)), T(+(totInc[i] + totOut[i]).toFixed(2)), T(+totBal[i].toFixed(2)), T('')]);
       sheets.push({ name: lb.slice(0, 28), freeze: 4,
-        cols: [26, 30, 14, 16, 14, 14, 15, 19, 18], rows });
+        cols: [26, 30, 14, 16, 16, 14, 14, 15, 19, 18], rows });
     });
     const buf = XLSX.buildXlsx(sheets);
     res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
@@ -917,6 +929,69 @@ function massShift(u, delta) {
   if (out.to !== undefined) out.to = +(Number(out.to) + delta).toFixed(2);
   return out;
 }
+/* ---------- итог дня списком: своя сумма каждому кошельку ----------
+   Разноска одним процентом годится, когда день одинаковый у всех. Когда часть
+   кошельков работала по золоту, часть по крипте, а часть по акциям, суммы
+   разные — их вносим списком «номер кошелька сумма» с выбором пары. Строка
+   уходит в кабинет как «Итог торгового дня · ПАРА», поэтому отчёт за день
+   видит и сумму, и инструмент, а отменяется пачка целиком. */
+const MASS_PAIRS = ['XAU/USD', 'BTC/USD', 'ETH/USD', 'SOL/USD', 'XRP/USD',
+                    'AAPL', 'TSLA', 'NVDA', 'MSFT'];
+app.post('/api/admin/mass-rows', requireAdmin, async (req, res) => {
+  const b = req.body || {};
+  const date = String(b.date || '');
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(date)) return bad(res, 400, 'Укажите дату в виде ГГГГ-ММ-ДД');
+  const pair = MASS_PAIRS.indexOf(String(b.pair || '')) >= 0 ? String(b.pair) : 'XAU/USD';
+  const list = (Array.isArray(b.items) ? b.items : []).slice(0, 500);
+  if (!list.length) return bad(res, 400, 'Не выбран ни один кошелёк');
+  const dry = !!b.dry;
+  const when = massRu(date);
+  try {
+    const items = [], skip = [];
+    for (const it of list) {
+      const acct = String((it && it.acct) || '').replace(/\D/g, '');
+      const amt = Math.round((Number(String((it && it.amount) !== undefined ? it.amount : '')
+        .toString().replace(/\s|\u00a0/g, '').replace(',', '.')) || 0) * 100) / 100;
+      if (!acct || !isFinite(amt) || amt === 0) {
+        skip.push({ acct: acct || String((it && it.acct) || ''), error: 'не разобрал строку' }); continue;
+      }
+      const r = await q('SELECT * FROM users WHERE acct = $1 LIMIT 1', [acct]);
+      if (!r.rows[0]) { skip.push({ acct, error: 'кошелька нет на этой площадке' }); continue; }
+      const u = toUser(r.rows[0]);
+      const before = Number(u.balance) || 0;
+      if (amt < 0 && Math.abs(amt) > before) { skip.push({ acct, error: 'на кошельке меньше этой суммы' }); continue; }
+      /* повторная запись за ту же дату ничего не задваивает */
+      if ((u.tx || []).some(t => t && t[0] === when
+        && String(t[1] || '').indexOf('Итог торгового дня') === 0)) {
+        skip.push({ acct, error: 'итог за эту дату уже стоял' }); continue;
+      }
+      if (dry) { items.push({ id: u.id, acct, name: u.name || '', amount: amt, before }); continue; }
+      const sum = massSum(amt);
+      const tx = [[when, 'Итог торгового дня · ' + pair, sum, 'ok', amt >= 0 ? 'Прибыль' : 'Убыток'],
+        ...(u.tx || [])];
+      const hist = [[when, 'Результат дня', pair, sum, 'ok'], ...(u.hist || [])];
+      const dynRow = massShift(u, amt);
+      if (dynRow) {
+        await q('UPDATE users SET balance = $2, tx = $3::jsonb, hist = $4::jsonb, dyn = $5::jsonb WHERE id = $1',
+          [u.id, (before + amt).toFixed(2), JSON.stringify(tx.slice(0, 200)), JSON.stringify(hist.slice(0, 200)),
+           JSON.stringify(dynRow)]);
+      } else {
+        await q('UPDATE users SET balance = $2, tx = $3::jsonb, hist = $4::jsonb WHERE id = $1',
+          [u.id, (before + amt).toFixed(2), JSON.stringify(tx.slice(0, 200)), JSON.stringify(hist.slice(0, 200))]);
+      }
+      items.push({ id: u.id, acct, name: u.name || '', amount: amt, before, pair });
+    }
+    const total = +items.reduce((s2, x) => s2 + x.amount, 0).toFixed(2);
+    if (dry) return res.json({ ok: true, dry: true, pair, applied: items.length, total, items, skipped: skip });
+    if (!items.length) return res.json({ ok: true, batch: 0, applied: 0, total: 0, items: [], skipped: skip });
+    const bt = await q(
+      'INSERT INTO mass_days (site, day, pct, dir, items) VALUES ($1,$2,$3,$4,$5::jsonb) RETURNING id',
+      [MASS_SITE, date, 0, 'rows', JSON.stringify(items)]);
+    res.json({ ok: true, batch: Number(bt.rows[0].id), applied: items.length, total, pair,
+      items: items.map(x => ({ acct: x.acct, name: x.name, amount: x.amount })), skipped: skip });
+  } catch (e) { bad(res, 500, e.message); }
+});
+
 const MASS_IN_TITLE = 'Пополнение · USDT';
 app.post('/api/admin/mass-in', requireAdmin, async (req, res) => {
   const b = req.body || {};
