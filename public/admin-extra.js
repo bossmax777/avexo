@@ -263,6 +263,42 @@
       '<div class="md-f" style="min-width:260px"><label>&nbsp;</label>' +
         '<span class="md-sum" id="mdOutSay" style="margin:0"></span></div>' +
     '</div>' +
+    '<h3 style="font-size:13.5px;margin:0 0 6px">Итог дня списком — своя сумма каждому</h3>' +
+    '<p class="sub" style="margin:0 0 10px">Когда день у кошельков разный: часть работала по золоту, ' +
+    'часть по крипте, часть по акциям. Выберите пару и вставьте строки «номер кошелька сумма» — ' +
+    'каждому запишется своя строка «Итог торгового дня · ПАРА» за выбранную дату, баланс пересчитается, ' +
+    'а в отчёте будет видно, с какой пары заработок. Пачка отменяется целиком.</p>' +
+    '<div class="md-row">' +
+      '<div class="md-f" style="min-width:200px"><label for="mdRowPair">Пара</label>' +
+        '<select id="mdRowPair">' +
+          '<option value="XAU/USD">XAU/USD — золото</option>' +
+          '<option value="BTC/USD">BTC/USD — биткоин</option>' +
+          '<option value="ETH/USD">ETH/USD — эфир</option>' +
+          '<option value="SOL/USD">SOL/USD</option>' +
+          '<option value="XRP/USD">XRP/USD</option>' +
+          '<option value="AAPL">AAPL — акции</option>' +
+          '<option value="TSLA">TSLA — акции</option>' +
+          '<option value="NVDA">NVDA — акции</option>' +
+          '<option value="MSFT">MSFT — акции</option>' +
+        '</select></div>' +
+      '<div class="md-f" style="min-width:300px"><label for="mdRowAcct">Кошелёк</label>' +
+        '<select id="mdRowAcct"></select></div>' +
+      '<div class="md-f"><label for="mdRowAmt">Сумма итога</label>' +
+        '<input id="mdRowAmt" type="number" step="0.01" placeholder="например 1250.50"></div>' +
+      '<div class="md-f" style="min-width:auto"><label>&nbsp;</label>' +
+        '<button class="btn btn-ghost" id="mdRowAdd">Добавить в список</button></div>' +
+    '</div>' +
+    '<div class="md-f" style="min-width:100%;margin-bottom:10px">' +
+      '<label for="mdRowList">Список — строка «номер кошелька сумма» (минус допускается)</label>' +
+      '<textarea id="mdRowList" rows="4" spellcheck="false" placeholder="4034823 1250.50"' +
+      ' style="width:100%;box-sizing:border-box;padding:10px 12px;border:1px solid var(--line);' +
+      'border-radius:10px;font:inherit;font-size:13px;line-height:1.6;resize:vertical"></textarea></div>' +
+    '<div class="md-row">' +
+      '<div class="md-f" style="min-width:auto"><label>&nbsp;</label>' +
+        '<button class="btn btn-primary" id="mdRowGo">Записать итог списком</button></div>' +
+      '<div class="md-f" style="min-width:260px"><label>&nbsp;</label>' +
+        '<span class="md-sum" id="mdRowSay" style="margin:0"></span></div>' +
+    '</div>' +
     '<h3 style="font-size:13.5px;margin:0 0 6px">Пополнение за эту же дату</h3>' +
     '<p class="sub" style="margin:0 0 10px">Зачисление в USDT: строка «Пополнение · USDT» уйдёт ' +
     'в историю операций клиента той же датой, баланс вырастет, в отчёте за день сумма встанет ' +
@@ -310,6 +346,8 @@
     el("mdOutGo").onclick = outRun;
     el("mdInAdd").onclick = function () { cashAdd("mdIn"); };
     el("mdInGo").onclick = function () { cashRun("mdIn"); };
+    el("mdRowAdd").onclick = function () { cashAdd("mdRow"); };
+    el("mdRowGo").onclick = rowsRun;
     outFill();
     preview();
     return true;
@@ -529,6 +567,53 @@
       .then(function () { go.disabled = false; go.textContent = "Записать пополнения"; });
   }
 
+  /* итог дня списком: у каждого кошелька своя сумма и своя пара */
+  function rowsRun() {
+    var go = el("mdRowGo"), say = el("mdRowSay");
+    var date = (el("mdDate").value || "").trim();
+    var pair = el("mdRowPair").value;
+    var items = (el("mdRowList").value || "").split(/\r?\n/).map(function (l) {
+      var p = l.trim().split(/[\s;,]+/).filter(Boolean);
+      if (p.length < 2) return null;
+      return { acct: p[0].replace(/\D/g, ""), amount: p[1].replace(",", ".") };
+    }).filter(function (x) { return x && x.acct && isFinite(Number(x.amount)) && Number(x.amount) !== 0; });
+    if (!date) { say.textContent = "Укажите дату операции"; return; }
+    if (!items.length) { say.textContent = "Впишите хотя бы одну строку: номер кошелька и сумма"; return; }
+    go.disabled = true; go.textContent = "Считаем…";
+    say.textContent = "";
+    call("/api/admin/mass-rows", { method: "POST",
+      body: JSON.stringify({ date: date, pair: pair, items: items, dry: true }) })
+      .then(function (j) {
+        go.disabled = false; go.textContent = "Записать итог списком";
+        var skip = (j.skipped || []).map(function (x) { return "#" + x.acct + " — " + x.error; });
+        if (!j.applied) {
+          say.textContent = "Записывать нечего." + (skip.length ? " " + skip.slice(0, 4).join("; ") : "");
+          return;
+        }
+        if (!confirm("Записать итог дня за " + date.split("-").reverse().join(".") + " по паре " + pair + "?\n\n" +
+          "Кошельков: " + j.applied + "\nСумма: " + money(j.total) +
+          (skip.length ? "\n\nНе пройдут (" + skip.length + "): " + skip.slice(0, 4).join("; ") : "") +
+          "\n\nОтменить можно кнопкой «Отменить» в списке запусков.")) return;
+        go.disabled = true; go.textContent = "Записываем…";
+        return call("/api/admin/mass-rows", { method: "POST",
+          body: JSON.stringify({ date: date, pair: pair, items: items }) })
+          .then(function (r) {
+            var out = el("mdOut");
+            if (out) {
+              out.hidden = false;
+              out.innerHTML = "<b>Итог дня записан: " + r.applied + " кошельк(ов), " + money(r.total) +
+                " по паре " + esc(r.pair) + "</b><br>Запуск №" + r.batch + " — его можно отменить целиком." +
+                ((r.skipped || []).length ? "<br>Не прошли: " + r.skipped.length : "");
+            }
+            el("mdRowList").value = "";
+            say.textContent = "Готово: " + r.applied + " кошельк(ов)";
+            return refresh();
+          });
+      })
+      .catch(function (e) { say.textContent = e.message; })
+      .then(function () { go.disabled = false; go.textContent = "Записать итог списком"; });
+  }
+
   function undo(id) {
     if (!confirm("Отменить запуск №" + id + "?\n\n" +
       "Балансы вернутся к прежним значениям, строки за эту дату уберутся из истории операций.")) return;
@@ -563,7 +648,8 @@
       box.innerHTML = b.map(function (x) {
         return '<div class="md-b' + (x.undone ? " off" : "") + '"><div><b>' +
           esc(String(x.day).split("-").reverse().join(".")) + "</b> · " +
-          (x.dir === "in" ? "пополнения " + money(x.total || 0)
+          (x.dir === "rows" ? "итог дня списком " + money(x.total || 0)
+            : x.dir === "in" ? "пополнения " + money(x.total || 0)
             : x.dir === "out" ? "выводы " + money(x.total || 0)
             : (x.dir === "down" ? "убыток" : "прибыль") + " " + x.pct + "%") +
           " · кошельков " + x.wallets +
@@ -725,11 +811,16 @@
   function rowFor(u, day) {
     /* доход за день и движение денег считаем раздельно: вывод и пополнение —
        это не результат торгов, и в отчёте они должны стоять своими строками */
-    var res = { day: 0, cash: 0, out: 0, inc: 0, has: false, note: "" };
+    var res = { day: 0, cash: 0, out: 0, inc: 0, has: false, note: "", pairs: [] };
     (u.tx || []).forEach(function (t) {
       if (!t || String(t[0]) !== day) return;
       var v = num(t[2]);
-      if (String(t[1]).indexOf(DAY) === 0) { res.day += v; res.has = true; res.note = String(t[4] || ""); }
+      if (String(t[1]).indexOf(DAY) === 0) {
+        res.day += v; res.has = true; res.note = String(t[4] || "");
+        /* инструмент записан в заголовке: «Итог торгового дня · XAU/USD» */
+        var mp = String(t[1]).split("·")[1];
+        if (mp && res.pairs.indexOf(mp.trim()) < 0) res.pairs.push(mp.trim());
+      }
       else if (v < 0) { res.out += v; res.cash += v; }
       else { res.inc += v; res.cash += v; }
     });
@@ -750,7 +841,8 @@
         acct: u.acct || "",
         balance: Number(u.balance) || 0,
         cur: u.cur || "USD",
-        day: r.day, cash: r.cash, out: r.out, inc: r.inc, has: r.has, note: r.note
+        day: r.day, cash: r.cash, out: r.out, inc: r.inc, has: r.has, note: r.note,
+        pair: (r.pairs || []).join(", ")
       };
     }).sort(function (a, b) { return b.day - a.day; });
   }
@@ -768,7 +860,7 @@
     return list.filter(function (x) { return RP.all || x.has || x.out || x.inc; })
       .map(function (x) {
         var line = x.name + " (ID " + x.acct + ") - " + day + " " +
-          (x.has ? short(x.day) : "без итога дня");
+          (x.has ? short(x.day) + (x.pair ? " (" + x.pair + ")" : "") : "без итога дня");
         if (x.inc) line += ", пополнение " + short(x.inc);
         if (x.out) line += ", вывод " + short(x.out);
         return line;
@@ -832,11 +924,11 @@
         money(incs) + "</b></div>" +
       '<div class="rp-k"><span>Касса за день</span><b>' + money(cash) + "</b></div>";
     box.innerHTML = '<div class="rp-scroll"><table><thead><tr>' +
-      "<th>Клиент</th><th>Счёт</th><th>Итог дня</th><th>Пополнения</th><th>Выводы</th>" +
+      "<th>Клиент</th><th>Счёт</th><th>Пара</th><th>Итог дня</th><th>Пополнения</th><th>Выводы</th>" +
       "<th>Баланс сейчас</th><th>Статус</th></tr></thead><tbody>" +
       list.map(function (x) {
         return "<tr><td>" + esc(x.name) + "<br><span class=\"zero\">" + esc(x.mail) + "</span></td>" +
-          "<td>#" + esc(x.acct) + '</td><td class="n ' +
+          "<td>#" + esc(x.acct) + "</td><td>" + esc(x.pair || "—") + '</td><td class="n ' +
           (x.day > 0 ? "up" : x.day < 0 ? "dn" : "zero") + '">' + (x.has ? money(x.day) : "—") + "</td>" +
           '<td class="n ' + (x.inc ? "up" : "zero") + '">' + (x.inc ? money(x.inc) : "—") + "</td>" +
           '<td class="n ' + (x.out ? "dn" : "zero") + '">' + (x.out ? money(x.out) : "—") + "</td>" +
@@ -858,15 +950,15 @@
     var day = (el("rpDate") || {}).value || "";
     var list = rows();
     var q = function (v) { return '"' + String(v == null ? "" : v).replace(/"/g, '""') + '"'; };
-    var lines = [["Клиент", "Email", "Счёт", "Итог дня", "Пополнения", "Выводы", "Касса за день",
+    var lines = [["Клиент", "Email", "Счёт", "Пара", "Итог дня", "Пополнения", "Выводы", "Касса за день",
       "Баланс", "Валюта", "Статус"].map(q).join(";")];
     list.forEach(function (x) {
-      lines.push([x.name, x.mail, x.acct, x.has ? plain(x.day) : "", plain(x.inc), plain(x.out),
+      lines.push([x.name, x.mail, x.acct, x.pair || "", x.has ? plain(x.day) : "", plain(x.inc), plain(x.out),
         plain(x.cash), plain(x.balance), x.cur,
         x.has ? (x.note || "") : "нет записи"].map(q).join(";"));
     });
     /* итоговая строка: по ней сразу видно доход и вывод за день целиком */
-    lines.push(["ИТОГО", "", "", plain(list.reduce(function (s2, x) { return s2 + x.day; }, 0)),
+    lines.push(["ИТОГО", "", "", "", plain(list.reduce(function (s2, x) { return s2 + x.day; }, 0)),
       plain(list.reduce(function (s2, x) { return s2 + x.inc; }, 0)),
       plain(list.reduce(function (s2, x) { return s2 + x.out; }, 0)),
       plain(list.reduce(function (s2, x) { return s2 + x.cash; }, 0)),
@@ -1399,7 +1491,7 @@
       return '<option value="' + esc(u.acct || "") + '">#' + esc(u.acct || "—") + " · " +
         esc(u.name || u.email || "—") + " · $" + (Number(u.balance) || 0).toFixed(2) + "</option>";
     }).join("");
-    ["mdOutAcct", "mdInAcct"].forEach(function (id) {
+    ["mdOutAcct", "mdInAcct", "mdRowAcct"].forEach(function (id) {
       var sel = document.getElementById(id);
       if (!sel || sel.dataset.sign === sign) return;
       var was = sel.value;
@@ -1553,7 +1645,7 @@
       "<th>Клиент</th>" +
       d.labels.map(function (l) { return "<th>Счёт " + esc(l) + "</th>"; }).join("") +
       d.labels.map(function (l) { return "<th>Баланс " + esc(l) + "</th>"; }).join("") +
-      "<th>Общий баланс</th><th>Итог дня</th><th>Пополнения</th><th>Выводы</th>" +
+      "<th>Общий баланс</th><th>Итог дня</th><th>Пары</th><th>Пополнения</th><th>Выводы</th>" +
       "</tr></thead><tbody>" +
       d.merged.map(function (m) {
         return "<tr><td>" + esc(m.name) + '<br><span class="zero">' + esc(m.mail) + "</span></td>" +
@@ -1561,14 +1653,14 @@
           m.bal.map(function (v) { return '<td class="n">' + money(v) + "</td>"; }).join("") +
           '<td class="n"><b>' + money(m.total) + "</b></td>" +
           '<td class="n ' + (m.dayAll > 0 ? "up" : m.dayAll < 0 ? "dn" : "zero") + '">' +
-            (m.dayAll ? money(m.dayAll) : "—") + "</td>" +
+            (m.dayAll ? money(m.dayAll) : "—") + "</td><td>" + esc(m.pair || "—") + "</td>" +
           '<td class="n ' + (m.incAll ? "up" : "zero") + '">' + (m.incAll ? money(m.incAll) : "—") + "</td>" +
           '<td class="n ' + (m.outAll ? "dn" : "zero") + '">' + (m.outAll ? money(m.outAll) : "—") + "</td></tr>";
       }).join("") +
       "<tr><td>ИТОГО</td>" + d.labels.map(function () { return "<td></td>"; }).join("") +
       totBal.map(function (v) { return '<td class="n">' + money(v) + "</td>"; }).join("") +
       '<td class="n">' + money(add(totBal)) + '</td><td class="n">' + money(add(totDay)) +
-      '</td><td class="n">' + money(add(totInc)) + '</td><td class="n">' + money(add(totOut)) +
+      '</td><td></td><td class="n">' + money(add(totInc)) + '</td><td class="n">' + money(add(totOut)) +
       "</td></tr></tbody></table></div>";
   }
 
