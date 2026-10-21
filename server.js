@@ -925,17 +925,17 @@ app.post('/api/admin/day-report.xlsx', requireAdmin, async (req, res) => {
         [{ v: 'Источник: история операций клиентов площадки ' + lb, note: true }],
         [],
         [H('Клиент'), H('Почта'), H('Счёт'), H('Пара'), H('Итог дня'), H('Пополнения'), H('Выводы'),
-         H('Касса за день'), H('Баланс на конец дня'), H('Статус')]
+         H('Баланс на конец дня'), H('Статус')]
       ];
       d.bySite[st].rows.forEach(r => {
         rows.push([r.name, r.mail, r.acct, r.pair || '—', M(r.day), M(r.inc), M(r.out),
-          M(+(r.inc + r.out).toFixed(2)), M(r.balance),
+          M(r.balance),
           r.has ? (r.note || (r.day >= 0 ? 'Прибыль' : 'Убыток')) : 'нет записи за этот день']);
       });
       rows.push([T('ИТОГО'), T(''), T(''), T(''), T(+totDay[i].toFixed(2)), T(+totInc[i].toFixed(2)),
-        T(+totOut[i].toFixed(2)), T(+(totInc[i] + totOut[i]).toFixed(2)), T(+totBal[i].toFixed(2)), T('')]);
+        T(+totOut[i].toFixed(2)), T(+totBal[i].toFixed(2)), T('')]);
       sheets.push({ name: lb.slice(0, 28), freeze: 4,
-        cols: [26, 30, 14, 16, 16, 14, 14, 15, 19, 18], rows });
+        cols: [26, 30, 14, 16, 16, 14, 14, 19, 18], rows });
     });
     const buf = XLSX.buildXlsx(sheets);
     res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
