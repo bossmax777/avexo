@@ -931,17 +931,44 @@
     return (v < 0 ? "-" : "+") + (a === Math.round(a) ? String(Math.round(a)) : a.toFixed(2)) + "$";
   }
 
-  /* построчный текст для копирования:
-     Sergei Shklyaev (ID 08211372) - 05.10.2026 +33$ */
+  /* баланс в тексте отчёта: ровная сумма с долларом впереди */
+  function bal(v) { return "$" + (Number(v) || 0).toFixed(2); }
+
+  /* построчный текст для копирования: по каждому клиенту видно, с какого
+     баланса начинался день, что пришло пополнением, сколько дал торговый день
+     и на какой сумме кошелёк закрылся — цепочкой, чтобы можно было отправлять
+     как есть:
+     Andrei Borisov (ID 4031963) - 21.10.2026 - баланс $99915.35 -
+     пополнение +500$ - баланс после пополнения $100415.35 -
+     +3301.02$ (XAU/USD) - баланс после прибыли $103216.37 */
   function text(list, day) {
-    return list.filter(function (x) { return RP.all || x.has || x.out || x.inc; })
-      .map(function (x) {
-        var line = x.name + " (ID " + x.acct + ") - " + day + " " +
-          (x.has ? short(x.day) + (x.pair ? " (" + x.pair + ")" : "") : "без итога дня");
-        if (x.inc) line += ", пополнение " + short(x.inc);
-        if (x.out) line += ", вывод " + short(x.out);
-        return line;
-      }).join("\n");
+    var shown = list.filter(function (x) { return RP.all || x.has || x.out || x.inc; });
+    var lines = shown.map(function (x) {
+      /* баланс на начало дня — это текущий минус всё, что записано этой датой */
+      var start = +(x.balance - x.inc - x.out - x.day).toFixed(2);
+      var run = start;
+      var line = x.name + " (ID " + x.acct + ") - " + day + " - баланс " + bal(run);
+      if (x.inc) {
+        run = +(run + x.inc).toFixed(2);
+        line += " - пополнение " + short(x.inc) + " - баланс после пополнения " + bal(run);
+      }
+      if (x.out) {
+        run = +(run + x.out).toFixed(2);
+        line += " - вывод " + short(x.out) + " - баланс после вывода " + bal(run);
+      }
+      if (x.has) {
+        run = +(run + x.day).toFixed(2);
+        line += " - " + short(x.day) + (x.pair ? " (" + x.pair + ")" : "") +
+          " - баланс после " + (x.day < 0 ? "убытка " : "прибыли ") + bal(run);
+      } else {
+        line += " - итога дня нет";
+      }
+      return line;
+    });
+    var sum = shown.reduce(function (s, x) { return s + x.day; }, 0);
+    var head = "Отчет BullWaves:\u2705";
+    var foot = "Итого по всем " + shown.length + " счетам за " + day + ": " + money(sum);
+    return lines.length ? head + "\n\n" + lines.join("\n") + "\n\n" + foot : head;
   }
 
   function copy() {
