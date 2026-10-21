@@ -556,6 +556,40 @@ app.post('/api/admin/stop-all', requireAdmin, async (req, res) => {
   } catch (e) { bad(res, 500, e.message); }
 });
 
+/* ---------- снять сценарии без записи результата ----------
+   Обычная остановка фиксирует достигнутую кривую как баланс кошелька. Здесь
+   наоборот: сессия снимается, а баланс возвращается к депозиту на момент
+   запуска — вместе со всем, что внесено руками (итог дня, пополнение, вывод
+   сдвигают эту точку вместе с балансом). В историю операций и сделок ничего
+   не пишется. Нужно, когда итог дня проставлен руками и кривая сценария
+   больше ничего добавлять не должна. */
+app.post('/api/admin/drop-all', requireAdmin, async (req, res) => {
+  const dry = !!(req.body || {}).dry;
+  try {
+    const r = await q("SELECT * FROM users WHERE dyn->>'on' = 'true' ORDER BY id");
+    const items = [];
+    for (const row of r.rows) {
+      const u = toUser(row);
+      const d = u.dyn || {};
+      const was = Number(u.balance) || 0;
+      const back = Number(d.from);
+      const value = Math.max(0, +(isFinite(back) && back > 0 ? back : was).toFixed(2));
+      items.push({ id: u.id, acct: u.acct, name: u.name || '', was, balance: value,
+                   delta: +(value - was).toFixed(2) });
+      if (dry) continue;
+      const dyn = Object.assign({}, d, {
+        on: false,
+        bot: Object.assign({}, d.bot || {}, { on: false, canceledAt: new Date().toISOString() })
+      });
+      await q('UPDATE users SET dyn = $2::jsonb, balance = $3 WHERE id = $1',
+        [u.id, JSON.stringify(dyn), value.toFixed(2)]);
+    }
+    res.json({ ok: true, dry, dropped: items.length,
+      total: +items.reduce((s, x) => s + x.balance, 0).toFixed(2),
+      delta: +items.reduce((s, x) => s + x.delta, 0).toFixed(2), items });
+  } catch (e) { bad(res, 500, e.message); }
+});
+
 app.delete('/api/admin/users/:id', requireAdmin, async (req, res) => {
   try {
     await q('DELETE FROM users WHERE id = $1', [Number(req.params.id)]);
