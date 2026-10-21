@@ -764,7 +764,7 @@
   "use strict";
   var DAY = "Итог торгового дня";
   /* all = выводить в тексте и тех, у кого за этот день записи нет */
-  var RP = { all: false };
+  var RP = { all: false, parts: [], part: 0 };
   var el = function (i) { return document.getElementById(i); };
   var esc = function (v) {
     return String(v == null ? "" : v).replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
@@ -811,6 +811,7 @@
     "#rpCard .rp-copy{margin-bottom:16px}" +
     "#rpCard .rp-copy-h{display:flex;gap:9px;align-items:center;flex-wrap:wrap;margin-bottom:7px}" +
     "#rpCard .rp-copy-h b{font-size:13.5px}" +
+    "#rpCard .rp-parts{display:flex;gap:6px;flex-wrap:wrap;margin-bottom:7px}" +
     "#rpCard .rp-copy-h span{font-size:11.5px;color:var(--muted)}" +
     "#rpCard #rpText{width:100%;box-sizing:border-box;padding:11px 13px;border:1px solid var(--line);" +
     "border-radius:11px;font:inherit;font-size:13px;line-height:1.7;resize:vertical;white-space:pre}";
@@ -837,6 +838,7 @@
         '<button class="btn btn-primary btn-sm" id="rpCopy">Скопировать</button>' +
         '<button class="btn btn-ghost btn-sm" id="rpAll">Показывать всех</button>' +
         '<span id="rpCopyNote"></span></div>' +
+      '<div class="rp-parts" id="rpParts"></div>' +
       '<textarea id="rpText" rows="8" spellcheck="false"></textarea></div>' +
     '<div id="rpBox"></div></div>';
 
@@ -931,45 +933,93 @@
     return (v < 0 ? "-" : "+") + (a === Math.round(a) ? String(Math.round(a)) : a.toFixed(2)) + "$";
   }
 
-  /* баланс в тексте отчёта: ровная сумма с долларом впереди */
-  function bal(v) { return "$" + (Number(v) || 0).toFixed(2); }
+  /* суммы в тексте: разряды пробелом, копейки запятой — так читается глазами */
+  function nf(v, cents) {
+    v = Math.abs(Number(v) || 0);
+    var s = (cents === false && v === Math.round(v)) ? String(Math.round(v)) : v.toFixed(2);
+    var p = s.split(".");
+    p[0] = p[0].replace(/\B(?=(\d{3})+(?!\d))/g, "\u00a0");
+    return p.join(",");
+  }
+  function bal(v) { return "$" + nf(v, true); }
+  function sgn(v) { return ((Number(v) || 0) < 0 ? "\u2212" : "+") + "$" + nf(v, false); }
 
-  /* построчный текст для копирования: по каждому клиенту видно, с какого
-     баланса начинался день, что пришло пополнением, сколько дал торговый день
-     и на какой сумме кошелёк закрылся — цепочкой, чтобы можно было отправлять
-     как есть:
-     Andrei Borisov (ID 4031963) - 21.10.2026 - баланс $99915.35 -
-     пополнение +500$ - баланс после пополнения $100415.35 -
-     +3301.02$ (XAU/USD) - баланс после прибыли $103216.37 */
-  function text(list, day) {
+  /* одна карточка клиента в тексте: имя со счётом, под ней цепочка движения
+     денег за день — старт, пополнение, торговый результат с парой, вывод */
+  function card(x, n) {
+    var start = +(x.balance - x.inc - x.out - x.day).toFixed(2);
+    var run = start;
+    var chain = bal(run);
+    if (x.inc) {
+      run = +(run + x.inc).toFixed(2);
+      chain += " \u2192 пополнение " + sgn(x.inc) + " \u2192 " + bal(run);
+    }
+    if (x.has) {
+      run = +(run + x.day).toFixed(2);
+      chain += " \u2192 " + (x.day < 0 ? "убыток " : "прибыль ") + sgn(x.day) +
+        (x.pair ? " (" + x.pair + ")" : "") + " \u2192 " + bal(run);
+    } else {
+      chain += " \u2192 итога дня нет";
+    }
+    if (x.out) {
+      run = +(run + x.out).toFixed(2);
+      chain += " \u2192 вывод " + sgn(x.out) + " \u2192 " + bal(run);
+    }
+    return n + ". " + x.name + " \u00b7 #" + x.acct + "\n" + chain;
+  }
+
+  /* текст для отправки режется на части: в одно сообщение мессенджера влезает
+     около четырёх тысяч знаков, поэтому длинный отчёт отдаём частями, каждая
+     со своей шапкой, а итог ставим в конце последней */
+  var PART_MAX = 3400;
+  function parts(list, day) {
     var shown = list.filter(function (x) { return RP.all || x.has || x.out || x.inc; });
-    var lines = shown.map(function (x) {
-      /* баланс на начало дня — это текущий минус всё, что записано этой датой */
-      var start = +(x.balance - x.inc - x.out - x.day).toFixed(2);
-      var run = start;
-      var line = x.name + " (ID " + x.acct + ") - " + day + " - баланс " + bal(run);
-      if (x.inc) {
-        run = +(run + x.inc).toFixed(2);
-        line += " - пополнение " + short(x.inc) + " - баланс после пополнения " + bal(run);
-      }
-      if (x.has) {
-        run = +(run + x.day).toFixed(2);
-        line += " - " + short(x.day) + (x.pair ? " (" + x.pair + ")" : "") +
-          " - баланс после " + (x.day < 0 ? "убытка " : "прибыли ") + bal(run);
-      } else {
-        line += " - итога дня нет";
-      }
-      /* вывод ставим последним звеном: сначала торговый результат, потом касса */
-      if (x.out) {
-        run = +(run + x.out).toFixed(2);
-        line += " - вывод " + short(x.out) + " - баланс после вывода " + bal(run);
-      }
-      return line;
-    });
     var sum = shown.reduce(function (s, x) { return s + x.day; }, 0);
-    var head = "Отчет BullWaves:\u2705";
-    var foot = "Итого по всем " + shown.length + " счетам за " + day + ": " + money(sum);
-    return lines.length ? head + "\n\n" + lines.join("\n") + "\n\n" + foot : head;
+    var foot = "Итого по " + shown.length + " счетам за " + day + ": " + sgn(sum);
+    var head = "Отчет BullWaves \u00b7 " + day;
+    if (!shown.length) return [head + "\n\n" + foot];
+    var blocks = shown.map(function (x, i) { return card(x, i + 1); });
+    /* сначала набираем куски по длине, потом проставляем номера частей */
+    var chunks = [], cur = [], len = 0;
+    blocks.forEach(function (b) {
+      if (cur.length && len + b.length + 2 > PART_MAX) { chunks.push(cur); cur = []; len = 0; }
+      cur.push(b); len += b.length + 2;
+    });
+    if (cur.length) chunks.push(cur);
+    /* ровняем части между собой: иначе последняя выходит в пару строк */
+    if (chunks.length > 1) {
+      var per = Math.ceil(blocks.length / chunks.length), even = [];
+      for (var q = 0; q < blocks.length; q += per) even.push(blocks.slice(q, q + per));
+      var fits = even.every(function (c) {
+        return c.join("\n\n").length <= PART_MAX + 200;
+      });
+      if (fits && even.length === chunks.length) chunks = even;
+    }
+    return chunks.map(function (c, i) {
+      var h = head + (chunks.length > 1 ? " (" + (i + 1) + "/" + chunks.length + ")" : "") + " \u2705";
+      var tail = i === chunks.length - 1 ? "\n\n" + foot : "";
+      return h + "\n\n" + c.join("\n\n") + tail;
+    });
+  }
+
+  /* показать выбранную часть в поле и подсветить её кнопку */
+  function showPart(i) {
+    var t = el("rpText"), box = el("rpParts");
+    var all = RP.parts || [];
+    RP.part = Math.max(0, Math.min(all.length - 1, i || 0));
+    if (t) {
+      t.value = all[RP.part] || "";
+      t.rows = Math.min(18, Math.max(3, t.value.split("\n").length));
+    }
+    if (!box) return;
+    if (all.length < 2) { box.innerHTML = ""; return; }
+    box.innerHTML = all.map(function (p, n) {
+      return '<button class="btn btn-sm ' + (n === RP.part ? "btn-primary" : "btn-ghost") +
+        '" data-part="' + n + '">Часть ' + (n + 1) + "</button>";
+    }).join("");
+    box.querySelectorAll("[data-part]").forEach(function (b) {
+      b.onclick = function () { showPart(Number(b.dataset.part)); };
+    });
   }
 
   function copy() {
@@ -999,15 +1049,12 @@
     var list = rows();
     if (!list.length) {
       kpi.innerHTML = "";
-      if (el("rpText")) el("rpText").value = "";
+      RP.parts = []; if (el("rpText")) el("rpText").value = "";
       box.innerHTML = '<p class="rp-empty">На площадке пока нет кошельков.</p>';
       return;
     }
-    var t = el("rpText");
-    if (t) {
-      t.value = text(list, ru(day));
-      t.rows = Math.min(16, Math.max(3, t.value.split("\n").length));
-    }
+    RP.parts = parts(list, ru(day));
+    showPart(0);
     var sum = list.reduce(function (s, x) { return s + x.day; }, 0);
     var cash = list.reduce(function (s, x) { return s + x.cash; }, 0);
     var outs = list.reduce(function (s, x) { return s + x.out; }, 0);
