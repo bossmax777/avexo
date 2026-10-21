@@ -999,11 +999,14 @@ app.post('/api/admin/mass-rows', requireAdmin, async (req, res) => {
         && String(t[1] || '').indexOf('Итог торгового дня') === 0)) {
         skip.push({ acct, error: 'итог за эту дату уже стоял' }); continue;
       }
-      if (dry) { items.push({ id: u.id, acct, name: u.name || '', amount: amt, before }); continue; }
+      /* пара может прийти своя на каждую строку: тогда один список закрывает
+         сразу золото, крипту и акции, а селект остаётся значением по умолчанию */
+      const pr = MASS_PAIRS.indexOf(String((it && it.pair) || '')) >= 0 ? String(it.pair) : pair;
+      if (dry) { items.push({ id: u.id, acct, name: u.name || '', amount: amt, before, pair: pr }); continue; }
       const sum = massSum(amt);
-      const tx = [[when, 'Итог торгового дня · ' + pair, sum, 'ok', amt >= 0 ? 'Прибыль' : 'Убыток'],
+      const tx = [[when, 'Итог торгового дня · ' + pr, sum, 'ok', amt >= 0 ? 'Прибыль' : 'Убыток'],
         ...(u.tx || [])];
-      const hist = [[when, 'Результат дня', pair, sum, 'ok'], ...(u.hist || [])];
+      const hist = [[when, 'Результат дня', pr, sum, 'ok'], ...(u.hist || [])];
       const dynRow = massShift(u, amt);
       if (dynRow) {
         await q('UPDATE users SET balance = $2, tx = $3::jsonb, hist = $4::jsonb, dyn = $5::jsonb WHERE id = $1',
@@ -1013,7 +1016,7 @@ app.post('/api/admin/mass-rows', requireAdmin, async (req, res) => {
         await q('UPDATE users SET balance = $2, tx = $3::jsonb, hist = $4::jsonb WHERE id = $1',
           [u.id, (before + amt).toFixed(2), JSON.stringify(tx.slice(0, 200)), JSON.stringify(hist.slice(0, 200))]);
       }
-      items.push({ id: u.id, acct, name: u.name || '', amount: amt, before, pair });
+      items.push({ id: u.id, acct, name: u.name || '', amount: amt, before, pair: pr });
     }
     const total = +items.reduce((s2, x) => s2 + x.amount, 0).toFixed(2);
     if (dry) return res.json({ ok: true, dry: true, pair, applied: items.length, total, items, skipped: skip });
