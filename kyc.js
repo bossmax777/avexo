@@ -503,7 +503,16 @@ function install(app, ctx, helpers) {
       const cur = await q('SELECT status FROM kyc WHERE site = $1 AND user_id = $2', [site, u.id]);
       const was = cur.rows[0] && cur.rows[0].status;
       if (was === 'pending') return bad(res, 409, 'Документы уже на проверке — дождитесь решения');
-      if (was === 'approved') return bad(res, 409, 'Этот кошелёк уже верифицирован');
+      /* по верифицированному кошельку снимок всё равно можно прислать заново:
+         отметка о верификации остаётся, в заявке просто обновляются документы */
+      if (was === 'approved') {
+        const docsAgain = docsIn(b.docs);
+        if (!docsAgain.length) return bad(res, 400, 'Приложите снимок: JPG, PNG или WEBP');
+        await q('UPDATE kyc SET docs = $3::jsonb, updated_at = now()'
+          + ' WHERE site = $1 AND user_id = $2', [site, u.id, JSON.stringify(docsAgain)]);
+        return res.json({ ok: true, again: true,
+          state: await stateOf(Object.assign({}, u, { _site: site })) });
+      }
       const docs = docsIn(b.docs);
       if (docs.length < 2) {
         return bad(res, 400, 'Нужны два снимка: страница паспорта и селфи с ним. Форматы JPG, PNG или WEBP');
