@@ -952,16 +952,17 @@
         run = +(run + x.inc).toFixed(2);
         line += " - пополнение " + short(x.inc) + " - баланс после пополнения " + bal(run);
       }
-      if (x.out) {
-        run = +(run + x.out).toFixed(2);
-        line += " - вывод " + short(x.out) + " - баланс после вывода " + bal(run);
-      }
       if (x.has) {
         run = +(run + x.day).toFixed(2);
         line += " - " + short(x.day) + (x.pair ? " (" + x.pair + ")" : "") +
           " - баланс после " + (x.day < 0 ? "убытка " : "прибыли ") + bal(run);
       } else {
         line += " - итога дня нет";
+      }
+      /* вывод ставим последним звеном: сначала торговый результат, потом касса */
+      if (x.out) {
+        run = +(run + x.out).toFixed(2);
+        line += " - вывод " + short(x.out) + " - баланс после вывода " + bal(run);
       }
       return line;
     });
