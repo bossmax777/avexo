@@ -2951,7 +2951,7 @@
      на сколько дней ключ надо продлить, чтобы срок лёг ровно на эту дату.
      Четвёртая группа — кошельки без ключа: им считаем ближайшую дату активации. */
   /* даты оплаты: 30-е идёт первым — оно ближайшее, дальше 10-е и 20-е */
-  var PAY_DAYS = [30, 10, 20];
+  var PAY_DAYS = [30, 10];
   var MONTHS = ["января", "февраля", "марта", "апреля", "мая", "июня", "июля",
                 "августа", "сентября", "октября", "ноября", "декабря"];
   function payDate(y, m, d) {
@@ -2963,7 +2963,7 @@
   function dayDiff(dt) {
     return Math.round((midnight(dt).getTime() - midnight(new Date()).getTime()) / 86400000);
   }
-  function slotDay(dt) { return dt.getDate() === 10 ? 10 : (dt.getDate() === 20 ? 20 : 30); }
+  function slotDay(dt) { return dt.getDate() === 10 ? 10 : 30; }
   /* первая дата оплаты не раньше указанного дня */
   function slotFrom(from) {
     var f = midnight(from), best = null;
@@ -2996,10 +2996,24 @@
     out.sort(function (x, y) { return x - y; });
     return out.slice(0, n);
   }
-  /* Раскладываем кошельки по трём датам РОВНО: берём ближайшую подходящую дату,
-     но если группа уже набрала свою треть — отправляем в следующую свободную.
-     Так из россыпи случайных сроков получается три одинаковые группы, а продление
-     по каждому кошельку остаётся минимальным. */
+  /* дата платежа по кошельку: берём ближайшее платёжное число ПЕРЕД окончанием
+     ключа — платим до того, как ключ истечёт. Ключ до 30 ноября попадает в группу
+     «30-е число», ключ до 13 ноября — в группу «10-е». */
+  function payFor(until) {
+    var u = midnight(until), now = midnight(new Date()), best = null;
+    for (var i = -2; i <= 2; i++) {
+      for (var k = 0; k < PAY_DAYS.length; k++) {
+        var dt = payDate(u.getFullYear(), u.getMonth() + i, PAY_DAYS[k]);
+        if (dt.getTime() <= u.getTime() && (!best || dt.getTime() > best.getTime())) best = dt;
+      }
+    }
+    if (!best) return slotFrom(now);
+    /* дата уже прошла — значит платёж по этой группе будет в следующем месяце */
+    if (best.getTime() < now.getTime()) return slotNext(slotDay(best));
+    return best;
+  }
+  /* Группы собираются сами по сроку ключа: ничего не выравниваем и не двигаем,
+     кошелёк стоит в той дате, перед которой его ключ заканчивается. */
   function keyRows() {
     var keyed = [], ever = [], free = [];
     accs().forEach(function (a) {
@@ -3010,34 +3024,24 @@
       else if (st.on) ever.push({ a: a, st: st, kind: "ever", until: null });
       else free.push({ a: a, st: st, kind: st.expired ? "gone" : "none", until: null });
     });
-    var total = keyed.length + ever.length;
-    var quota = Math.max(1, Math.ceil(total / PAY_DAYS.length));
     var used = {}; PAY_DAYS.forEach(function (d) { used[d] = 0; });
     keyed.sort(function (x, y) { return x.until - y.until; });
     keyed.forEach(function (r) {
-      var cands = slotsAfter(r.until, 9);
-      var pick = null;
-      for (var i = 0; i < cands.length; i++) {
-        if (used[slotDay(cands[i])] < quota) { pick = cands[i]; break; }
-      }
-      if (!pick) pick = cands[0] || slotFrom(new Date());
-      used[slotDay(pick)]++;
-      r.pay = pick; r.day = slotDay(pick);
+      r.pay = payFor(r.until);
+      r.day = slotDay(r.pay);
+      used[r.day]++;
       r.left = dayDiff(r.until);
-      r.add = Math.max(0, dayDiff(pick) - dayDiff(r.until));
+      r.add = 0;
     });
-    /* бессрочные и кошельки без ключа добиваем в самые пустые группы */
-    var fill = function (r) {
+    /* бессрочные ставим в группу, где кошельков меньше: платить по ним всё равно не нужно */
+    ever.forEach(function (r) {
       var day = PAY_DAYS.slice().sort(function (x, y) { return used[x] - used[y]; })[0];
       used[day]++;
       r.day = day; r.pay = slotNext(day); r.left = null; r.add = null;
-    };
-    ever.forEach(fill);
-    var freeUsed = {}; PAY_DAYS.forEach(function (d) { freeUsed[d] = 0; });
+    });
+    /* без ключа — отдельная колонка, дату платежа им назначит активация */
     free.forEach(function (r) {
-      var day = PAY_DAYS.slice().sort(function (x, y) { return freeUsed[x] - freeUsed[y]; })[0];
-      freeUsed[day]++;
-      r.day = 0; r.target = day; r.pay = slotNext(day); r.left = null; r.add = null;
+      r.day = 0; r.target = null; r.pay = null; r.left = null; r.add = null;
     });
     return keyed.concat(ever, free);
   }
@@ -3045,6 +3049,7 @@
      красный — платить сейчас или уже просрочено */
   function keyTone(r) {
     if (r.kind === "gone") return "off";
+    if (r.kind === "none") return "cold";
     if (r.kind === "key" && r.left !== null && r.left <= 0) return "off";
     if (r.kind === "ever") return "warm";
     var d = r.pay ? dayDiff(r.pay) : 99;
@@ -3054,78 +3059,65 @@
   }
   function keyNote(r) {
     if (r.kind === "none" || r.kind === "gone")
-      return (r.kind === "gone" ? "ключ истёк" : "нет ключа") +
-        (r.pay ? " · с " + payTxt(r.pay) : "");
+      return r.kind === "gone" ? "ключ истёк" : "нет ключа";
     if (r.kind === "ever") return "бессрочный";
     if (r.left <= 0) return "срок вышел · оплатить " + payTxt(r.pay);
-    return "до " + r.until.toLocaleDateString("ru-RU") + (r.add ? " · +" + r.add + " дн." : " · день в день");
+    return "до " + r.until.toLocaleDateString("ru-RU") + " · платёж " + payTxt(r.pay);
   }
   var KEY_PICK = "";
   function keyPickHtml(rows) {
     var r = rows.filter(function (x) { return kOf(x.a) === KEY_PICK; })[0];
     if (!r) {
-      var toExt = rows.filter(function (x) { return x.kind === "key" && x.add > 0; })
-        .sort(function (x, y) { return x.left - y.left; });
+      var soon = rows.filter(function (x) { return x.kind === "key" && x.pay && dayDiff(x.pay) <= 5; })
+        .sort(function (x, y) { return x.pay - y.pay; });
       var toAct = rows.filter(function (x) { return x.kind === "none" || x.kind === "gone"; });
-      return (toExt.length
-        ? "<b>Продлить, чтобы срок лёг на дату оплаты — " + toExt.length + " кошельк(ов):</b> " +
-          toExt.slice(0, 8).map(function (x) {
-            return "#" + esc(x.a.acct) + " на " + x.add + " дн. (до " + payTxt(x.pay) + ")";
-          }).join(", ") + (toExt.length > 8 ? " и ещё " + (toExt.length - 8) : "") + ". "
-        : "<b>Сроки ключей уже сходятся с датами оплаты.</b> ") +
+      return (soon.length
+        ? "<b>Платить в ближайшие дни — " + soon.length + " кошельк(ов):</b> " +
+          soon.slice(0, 8).map(function (x) {
+            return "#" + esc(x.a.acct) + " до " + payTxt(x.pay);
+          }).join(", ") + (soon.length > 8 ? " и ещё " + (soon.length - 8) : "") + ". "
+        : "<b>Срочных платежей нет.</b> ") +
         (toAct.length
-          ? "<br><b>Без ключа — " + toAct.length + " кошельк(ов), активировать:</b> " +
-            toAct.slice(0, 8).map(function (x) {
-              return "#" + esc(x.a.acct) + " — " + payTxt(x.pay) + " (" + x.target + "-е число)";
-            }).join(", ") + (toAct.length > 8 ? " и ещё " + (toAct.length - 8) : "") + ". "
+          ? "<br><b>Без ключа — " + toAct.length + " кошельк(ов):</b> после активации кошелёк встанет " +
+            "в ту группу, перед датой которой заканчивается его ключ."
           : "") +
-        "<br>Кошельки разложены по трём датам поровну: сначала берётся ближайшая дата после " +
-        "окончания ключа, а когда группа набрала свою треть — следующая свободная. Нажмите " +
-        "на квадрат — покажу срок ключа, дату платежа и продление.";
+        "<br>Группы собираются по сроку ключа: платим в ближайшее платёжное число перед его " +
+        "окончанием. Нажмите на квадрат — покажу срок ключа и дату платежа.";
     }
     var fio = (typeof nameOf === "function") ? nameOf(r.a) : "";
     return "<b>#" + esc(r.a.acct) + " · " + esc(r.a.siteName || r.a.site) +
       (fio ? " · " + esc(fio) : "") + "</b><br>" +
       (r.kind === "key"
-        ? "Сейчас ключ активирован <b>до " + r.until.toLocaleDateString("ru-RU") + "</b>" +
+        ? "Ключ активирован <b>до " + r.until.toLocaleDateString("ru-RU") + "</b>" +
           (r.left > 0 ? " — осталось " + r.left + " дн." : " — срок уже вышел") +
-          (r.st && r.st.days ? " (оплачен на " + r.st.days + " дн.)" : "") + ". " +
-          (r.add > 0
-            ? "Чтобы попасть в платёжную дату, продлите на <b>" + r.add + " дн.</b> — срок станет " +
-              payTxt(r.pay) + ", дальше платить " + r.day + "-го числа."
-            : "Срок уже ложится на дату оплаты " + payTxt(r.pay) + " — группа «" + r.day + "-е число».")
+          (r.st && r.st.days ? " (оплачен на " + r.st.days + " дн.)" : "") + ". Платёж по нему — <b>" +
+          payTxt(r.pay) + "</b> (через " + Math.max(0, dayDiff(r.pay)) + " дн.), группа «" + r.day + "-е число»."
         : r.kind === "ever"
           ? "Ключ активирован бессрочно — продлевать не нужно, платёж по нему не планируется."
           : (r.kind === "gone" ? "Ключ истёк, золотая пара закрыта. " : "Ключ не активирован. ") +
-            "Я отнёс его в группу «" + (r.target || r.day) + "-е число»: активировать <b>" +
-            payTxt(r.pay) + "</b> (через " + Math.max(0, dayDiff(r.pay)) + " дн.), дальше платить " +
-            "вместе с этой группой.");
+            "Выдайте ключ — кошелёк сам встанет в группу по его сроку.");
   }
-  /* готовый текст плана: по каждой дате — что оплатить и на сколько дней брать ключ */
+  /* готовый текст плана: по каждой дате — кого оплатить и до какого числа стоит ключ */
   function keyPlanText(rows) {
     var out = [];
     PAY_DAYS.forEach(function (d) {
       var g = rows.filter(function (r) { return r.day === d; })
-        .sort(function (x, y) { return (x.add === null ? 999 : x.add) - (y.add === null ? 999 : y.add); });
+        .sort(function (x, y) { return (x.left === null ? 999 : x.left) - (y.left === null ? 999 : y.left); });
       if (!g.length) return;
       out.push("ОПЛАТА " + payTxt(slotNext(d)).toUpperCase() + " (" + d + "-е число · " +
         g.length + " кошельк(ов))");
       g.forEach(function (r) {
         if (r.kind === "ever") { out.push("#" + r.a.acct + " — ключ бессрочный, платить не нужно"); return; }
-        out.push("#" + r.a.acct + " — ключ на " + (r.add > 0 ? r.add : 30) + " дн." +
-          (r.until ? " (сейчас до " + r.until.toLocaleDateString("ru-RU") + ")" : "") +
-          (r.add > 0 ? "" : " — срок уже совпадает, дальше 30 дн."));
+        out.push("#" + r.a.acct + " — ключ до " + r.until.toLocaleDateString("ru-RU") +
+          ", оплатить " + payTxt(r.pay) + ", ключ на 30 дн.");
       });
       out.push("Дальше по этой группе — ключ на 30 дн., платёж " + d + "-го числа каждый месяц.");
       out.push("");
     });
     var free = rows.filter(function (r) { return r.day === 0; });
     if (free.length) {
-      out.push("БЕЗ КЛЮЧА — АКТИВИРОВАТЬ (" + free.length + " кошельк(ов))");
-      free.sort(function (x, y) { return (x.pay - y.pay); }).forEach(function (r) {
-        out.push("#" + r.a.acct + " — активировать " + payTxt(r.pay) + ", ключ на 30 дн. (группа " +
-          r.target + "-го числа)");
-      });
+      out.push("БЕЗ КЛЮЧА (" + free.length + " кошельк(ов))");
+      free.forEach(function (r) { out.push("#" + r.a.acct + " — ключ не активирован"); });
     }
     return out.join("\n").trim();
   }
@@ -3140,22 +3132,18 @@
       return { day: d, title: "Оплата " + d + "-го числа", next: slotNext(d),
                list: rows.filter(function (r) { return r.day === d; }) };
     });
-    groups.push({ day: 0, title: "Без ключа — активировать", next: slotFrom(new Date()),
+    groups.push({ day: 0, title: "Без ключа", next: null,
                   list: rows.filter(function (r) { return r.day === 0; }) });
     var html = '<div class="panel-head"><h3>Тепловая карта активации ключей</h3>' +
       '<span class="muted">ключей активно ' + live + " из " + rows.length +
-      " · платежи 30, 10 и 20 числа</span></div><div class=\"keyg\">";
+      " · платежи 30 и 10 числа</span></div><div class=\"keyg\">";
     groups.forEach(function (g) {
       g.list.sort(function (x, y) { return (x.add === null ? 999 : x.add) - (y.add === null ? 999 : y.add); });
       var ext = g.list.filter(function (r) { return r.kind === "key" && r.add > 0; }).length;
       html += '<div class="keyg-c"><div class="keyg-h"><b>' + esc(g.title) + "</b><span>" +
         g.list.length + " кошельк(ов) · " +
-        (g.day ? "ближайший платёж " + payTxt(g.next) + " (через " + Math.max(0, dayDiff(g.next)) + " дн.)" +
-                 (ext ? " · продлить " + ext : "")
-               : "разложены по трём датам: " + PAY_DAYS.map(function (d) {
-                   var n = g.list.filter(function (r) { return r.target === d; }).length;
-                   return d + "-е — " + n;
-                 }).join(", ")) +
+        (g.day ? "ближайший платёж " + payTxt(g.next) + " (через " + Math.max(0, dayDiff(g.next)) + " дн.)"
+               : "ключ не активирован — золотая пара закрыта") +
         "</span></div>" +
         (g.list.length
           ? '<div class="heat">' + g.list.map(function (r) {
