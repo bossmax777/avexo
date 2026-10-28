@@ -1579,6 +1579,36 @@ app.post('/api/hub/stop', async (req, res) => {
 function roomCode(v) {
   return String(v || '').trim().toLowerCase().replace(/[^a-z0-9а-я._-]/gi, '').slice(0, 40);
 }
+/* ---------- добавить кошелёк в состав пульта из админки ----------
+   Состав пульта хранится под кодом комнаты, и каждый кошелёк там записан своим
+   ключом REST API. Чтобы не передавать ключ через чужие руки, админка просит
+   сервер самому взять ключ кошелька и дописать его в список. */
+app.post('/api/admin/hub-room', requireAdmin, async (req, res) => {
+  const b = req.body || {};
+  const code = roomCode(b.code);
+  const site = String(b.site || '').toLowerCase();
+  const acct = String(b.acct || '').replace(/\D/g, '');
+  if (code.length < 5) return bad(res, 400, 'Код пульта короче пяти знаков');
+  if (!HUB_SITES[site]) return bad(res, 400, 'Неизвестная площадка');
+  if (!acct) return bad(res, 400, 'Укажите номер кошелька');
+  try {
+    const u = await q('SELECT acct, apikey FROM ' + HUB_SITES[site].users + ' WHERE acct = $1 LIMIT 1', [acct]);
+    const row = u.rows[0];
+    if (!row) return bad(res, 404, 'Кошелёк не найден на этой площадке');
+    if (!row.apikey) return bad(res, 409, 'У кошелька ещё нет ключа REST API — выпустите его');
+    const r = await q('SELECT data FROM hub_rooms WHERE code = $1', [code]);
+    const cur = (r.rows[0] && r.rows[0].data) || { at: 0, list: [] };
+    const list = (Array.isArray(cur.list) ? cur.list : [])
+      .filter(x => !(x && x.site === site && String(x.acct) === acct));
+    list.push({ site: site, acct: acct, key: row.apikey });
+    const data = { at: Date.now(), list: list.slice(0, HUB_MAX) };
+    await q('INSERT INTO hub_rooms (code, data, updated_at) VALUES ($1, $2::jsonb, now())'
+      + ' ON CONFLICT (code) DO UPDATE SET data = EXCLUDED.data, updated_at = now()',
+      [code, JSON.stringify(data)]);
+    res.json({ ok: true, code: code, size: data.list.length, acct: acct, site: site });
+  } catch (e) { bad(res, 500, e.message); }
+});
+
 app.post('/api/hub/room', async (req, res) => {
   try {
     const b = req.body || {};
