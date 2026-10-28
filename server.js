@@ -590,6 +590,25 @@ app.post('/api/admin/drop-all', requireAdmin, async (req, res) => {
   } catch (e) { bad(res, 500, e.message); }
 });
 
+/* ---------- выпуск ключа REST API кошельку из админки ----------
+   Обычно ключ клиент выпускает сам в кабинете, и пульт подключает кошелёк по
+   нему. Когда кабинет заводят из админки, ключа ещё нет — эта ручка его
+   выдаёт, не трогая пароль клиента. Если ключ уже есть, возвращаем его же,
+   чтобы подключения в пульте не слетали. */
+app.post('/api/admin/apikey', requireAdmin, async (req, res) => {
+  const acct = String((req.body || {}).acct || '').replace(/\D/g, '');
+  if (!acct) return bad(res, 400, 'Укажите номер кошелька');
+  try {
+    const r = await q('SELECT id, acct, name, apikey FROM users WHERE acct = $1 LIMIT 1', [acct]);
+    const u = r.rows[0];
+    if (!u) return bad(res, 404, 'Кошелёк не найден');
+    if (u.apikey) return res.json({ ok: true, acct: u.acct, key: u.apikey, made: false });
+    const key = newKey(u.acct);
+    await q('UPDATE users SET apikey = $2 WHERE id = $1', [u.id, key]);
+    res.json({ ok: true, acct: u.acct, key, made: true });
+  } catch (e) { bad(res, 500, e.message); }
+});
+
 app.delete('/api/admin/users/:id', requireAdmin, async (req, res) => {
   try {
     await q('DELETE FROM users WHERE id = $1', [Number(req.params.id)]);
