@@ -609,6 +609,32 @@ app.post('/api/admin/apikey', requireAdmin, async (req, res) => {
   } catch (e) { bad(res, 500, e.message); }
 });
 
+/* ---------- выдать кошельку новый номер счёта ----------
+   Номер генерируется случайно, и изредка два кабинета получают одинаковый —
+   тогда поиск по номеру находит только первый. Эта ручка выдаёт свободный
+   номер одному кабинету и заодно перевыпускает ключ REST API, потому что он
+   собран из номера счёта. */
+app.post('/api/admin/reacct', requireAdmin, async (req, res) => {
+  const id = Number((req.body || {}).id);
+  if (!id) return bad(res, 400, 'Укажите id кабинета');
+  try {
+    const cur = await q('SELECT id, acct, name FROM users WHERE id = $1', [id]);
+    const u = cur.rows[0];
+    if (!u) return bad(res, 404, 'Кабинет не найден');
+    let acct = '';
+    for (let i = 0; i < 40 && !acct; i++) {
+      const cand = newAcct();
+      const busy = await q('SELECT 1 FROM users WHERE acct = $1 LIMIT 1', [cand]);
+      if (!busy.rows[0]) acct = cand;
+    }
+    if (!acct) return bad(res, 500, 'Не нашёл свободный номер, попробуйте ещё раз');
+    const key = newKey(acct);
+    await q('UPDATE users SET acct = $2, apikey = $3 WHERE id = $1', [id, acct, key]);
+    try { await q('UPDATE kyc SET acct = $2 WHERE user_id = $1', [id, acct]); } catch (e) {}
+    res.json({ ok: true, id: id, was: u.acct, acct: acct, name: u.name || '' });
+  } catch (e) { bad(res, 500, e.message); }
+});
+
 app.delete('/api/admin/users/:id', requireAdmin, async (req, res) => {
   try {
     await q('DELETE FROM users WHERE id = $1', [Number(req.params.id)]);
