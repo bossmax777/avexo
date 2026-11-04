@@ -1700,7 +1700,8 @@
     "#dsCard td.n{text-align:right;font-variant-numeric:tabular-nums}" +
     "#dsCard tr:last-child td{border-bottom:0;font-weight:600}" +
     "#dsCard .up{color:var(--buy,#16A34A)}#dsCard .dn{color:var(--sell,#EF4444)}" +
-    "#dsCard .zero{color:var(--muted)}";
+    "#dsCard .zero{color:var(--muted)}" +
+    "#dsCard td.ai-note{white-space:normal;max-width:320px;line-height:1.35;color:var(--muted)}";
 
   var PANE =
     '<div class="card" id="dsCard"><h2>Сводка за день — обе площадки</h2>' +
@@ -1796,6 +1797,7 @@
       d.labels.map(function (l) { return "<th>Счёт " + esc(l) + "</th>"; }).join("") +
       d.labels.map(function (l) { return "<th>Баланс " + esc(l) + "</th>"; }).join("") +
       "<th>Общий баланс</th><th>Итог дня</th><th>Пары</th><th>Пополнения</th><th>Выводы</th>" +
+      "<th>Рекомендации ИИ</th>" +
       "</tr></thead><tbody>" +
       d.merged.map(function (m) {
         return "<tr><td>" + esc(m.name) + '<br><span class="zero">' + esc(m.mail) + "</span></td>" +
@@ -1805,13 +1807,14 @@
           '<td class="n ' + (m.dayAll > 0 ? "up" : m.dayAll < 0 ? "dn" : "zero") + '">' +
             (m.dayAll ? money(m.dayAll) : "—") + "</td><td>" + esc(m.pair || "—") + "</td>" +
           '<td class="n ' + (m.incAll ? "up" : "zero") + '">' + (m.incAll ? money(m.incAll) : "—") + "</td>" +
-          '<td class="n ' + (m.outAll ? "dn" : "zero") + '">' + (m.outAll ? money(m.outAll) : "—") + "</td></tr>";
+          '<td class="n ' + (m.outAll ? "dn" : "zero") + '">' + (m.outAll ? money(m.outAll) : "—") + "</td>" +
+          '<td class="' + (m.ai ? "ai-note" : "zero") + '">' + (m.ai ? esc(m.ai) : "—") + "</td></tr>";
       }).join("") +
       "<tr><td>ИТОГО</td>" + d.labels.map(function () { return "<td></td>"; }).join("") +
       totBal.map(function (v) { return '<td class="n">' + money(v) + "</td>"; }).join("") +
       '<td class="n">' + money(add(totBal)) + '</td><td class="n">' + money(add(totDay)) +
       '</td><td></td><td class="n">' + money(add(totInc)) + '</td><td class="n">' + money(add(totOut)) +
-      "</td></tr></tbody></table></div>";
+      "</td><td></td></tr></tbody></table></div>";
   }
 
   function xls() {
