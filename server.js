@@ -833,6 +833,13 @@ app.post('/api/admin/fix-day-all', requireAdmin, async (req, res) => {
    .xlsx с тремя вкладками: «Сводка», «BullWaves», вторая площадка. */
 const XLSX = require('./xlsx');
 const DAY_HEAD = 'Итог торгового дня';
+/* Кошельки, которые когда-либо торговали золотом или акциями, — это счета
+   прежнего состава (они работали до того, как завели последнюю партию
+   кабинетов). Для них в отчёте показываем отдельную колонку с рекомендацией
+   ИИ по риск-профилю: коэффициент дохода у них держат ниже. У кабинетов,
+   которые торговали только криптой, колонка пустая. */
+const RISK_INSTR = ['XAU/USD', 'AAPL', 'TSLA', 'NVDA', 'MSFT'];
+const RISK_NOTE = 'Рекомендация ИИ: удерживать доходность в пределах риск-профиля счёта';
 function txSum(v) {
   const n = parseFloat(String(v == null ? '' : v).replace(/[^0-9.,]/g, '').replace(',', '.'));
   if (!isFinite(n)) return 0;
@@ -849,7 +856,13 @@ async function dayReport(date) {
         const u = toUser(row);
         let day = 0, inc = 0, outv = 0, has = false, note = '';
         const pairs = [];
+        /* признак прежнего состава: в истории счёта есть день по золоту или акциям */
+        let legacy = false;
         for (const t of (u.tx || [])) {
+          if (t && String(t[1] || '').indexOf(DAY_HEAD) === 0) {
+            const ip = String(t[1] || '').split('\u00b7')[1];
+            if (ip && RISK_INSTR.indexOf(ip.trim()) >= 0) legacy = true;
+          }
           if (!t || String(t[0]) !== when) continue;
           const v = txSum(t[2]);
           if (String(t[1] || '').indexOf(DAY_HEAD) === 0) {
@@ -865,6 +878,7 @@ async function dayReport(date) {
         rows.push({ name: u.name || u.email || '—', mail: String(u.email || '').toLowerCase(),
           acct: String(u.acct || ''), day: +day.toFixed(2), inc: +inc.toFixed(2),
           out: +outv.toFixed(2), has, note, pair: pairs.join(', '),
+          legacy, ai: legacy ? RISK_NOTE : '',
           balance: +(Number(u.balance) || 0).toFixed(2), cur: u.cur || 'USD' });
       }
     } catch (e) { /* площадки может не быть в этой базе */ }
@@ -877,10 +891,11 @@ async function dayReport(date) {
   for (const site of Object.keys(out)) {
     for (const r of out[site].rows) {
       const k = r.mail || (site + ':' + r.acct);
-      if (!by[k]) { by[k] = { name: r.name, mail: r.mail, acct: {}, bal: {}, day: {}, out: {}, inc: {}, pair: {} }; order.push(k); }
+      if (!by[k]) { by[k] = { name: r.name, mail: r.mail, acct: {}, bal: {}, day: {}, out: {}, inc: {}, pair: {}, legacy: false }; order.push(k); }
       const m = by[k];
       m.acct[site] = r.acct; m.bal[site] = r.balance; m.day[site] = r.day;
       m.out[site] = r.out; m.inc[site] = r.inc; m.pair[site] = r.pair;
+      if (r.legacy) m.legacy = true;
     }
   }
   const sites = Object.keys(HUB_SITES);
@@ -895,7 +910,8 @@ async function dayReport(date) {
       acct: sites.map(st => m.acct[st] || ''), bal: sites.map(st => Number(m.bal[st]) || 0),
       day: sites.map(st => Number(m.day[st]) || 0), total: +sum('bal').toFixed(2),
       pair: prs.join(', '),
-      dayAll: +sum('day').toFixed(2), outAll: +sum('out').toFixed(2), incAll: +sum('inc').toFixed(2) };
+      dayAll: +sum('day').toFixed(2), outAll: +sum('out').toFixed(2), incAll: +sum('inc').toFixed(2),
+      legacy: !!m.legacy, ai: m.legacy ? RISK_NOTE : '' };
   }).sort((a, b) => b.total - a.total);
   return { date, when, sites, labels: sites.map(st => HUB_SITES[st].label), bySite: out, merged };
 }
@@ -940,7 +956,8 @@ app.post('/api/admin/day-report.xlsx', requireAdmin, async (req, res) => {
       .concat(d.labels.map(l => H('Баланс ' + l)))
       .concat([H('Общий баланс')])
       .concat(d.labels.map(l => H('Итог дня ' + l)))
-      .concat([H('Итог дня всего'), H('Пары'), H('Пополнения'), H('Выводы за день')]);
+      .concat([H('Итог дня всего'), H('Пары'), H('Пополнения'), H('Выводы за день'),
+               H('Рекомендации ИИ')]);
     sum.push(headRow);
     const headAt = sum.length;
     d.merged.forEach(m => {
@@ -949,18 +966,19 @@ app.post('/api/admin/day-report.xlsx', requireAdmin, async (req, res) => {
         .concat(m.bal.map(M))
         .concat([M(m.total)])
         .concat(m.day.map(M))
-        .concat([M(m.dayAll), m.pair || '—', M(m.incAll), M(m.outAll)]));
+        .concat([M(m.dayAll), m.pair || '—', M(m.incAll), M(m.outAll), m.ai || '—']));
     });
     const tail = [T('ИТОГО'), T('')]
       .concat(d.labels.map(() => T('')))
       .concat(totBal.map(v => T(+v.toFixed(2))))
       .concat([T(+add2(totBal).toFixed(2))])
       .concat(totDay.map(v => T(+v.toFixed(2))))
-      .concat([T(+add2(totDay).toFixed(2)), T(''), T(+add2(totInc).toFixed(2)), T(+add2(totOut).toFixed(2))]);
+      .concat([T(+add2(totDay).toFixed(2)), T(''), T(+add2(totInc).toFixed(2)), T(+add2(totOut).toFixed(2)),
+               T('')]);
     sum.push(tail);
     sheets.push({ name: 'Сводка', freeze: headAt,
       cols: [26, 30].concat(d.labels.map(() => 15)).concat(d.labels.map(() => 18))
-        .concat([16]).concat(d.labels.map(() => 17)).concat([16, 16, 15, 16]),
+        .concat([16]).concat(d.labels.map(() => 17)).concat([16, 16, 15, 16, 52]),
       rows: sum });
     /* вкладки площадок */
     d.sites.forEach((st, i) => {
@@ -970,17 +988,18 @@ app.post('/api/admin/day-report.xlsx', requireAdmin, async (req, res) => {
         [{ v: 'Источник: история операций клиентов площадки ' + lb, note: true }],
         [],
         [H('Клиент'), H('Почта'), H('Счёт'), H('Пара'), H('Итог дня'), H('Пополнения'), H('Выводы'),
-         H('Баланс на конец дня'), H('Статус')]
+         H('Баланс на конец дня'), H('Статус'), H('Рекомендации ИИ')]
       ];
       d.bySite[st].rows.forEach(r => {
         rows.push([r.name, r.mail, r.acct, r.pair || '—', M(r.day), M(r.inc), M(r.out),
           M(r.balance),
-          r.has ? (r.note || (r.day >= 0 ? 'Прибыль' : 'Убыток')) : 'нет записи за этот день']);
+          r.has ? (r.note || (r.day >= 0 ? 'Прибыль' : 'Убыток')) : 'нет записи за этот день',
+          r.ai || '—']);
       });
       rows.push([T('ИТОГО'), T(''), T(''), T(''), T(+totDay[i].toFixed(2)), T(+totInc[i].toFixed(2)),
-        T(+totOut[i].toFixed(2)), T(+totBal[i].toFixed(2)), T('')]);
+        T(+totOut[i].toFixed(2)), T(+totBal[i].toFixed(2)), T(''), T('')]);
       sheets.push({ name: lb.slice(0, 28), freeze: 4,
-        cols: [26, 30, 14, 16, 16, 14, 14, 19, 18], rows });
+        cols: [26, 30, 14, 16, 16, 14, 14, 19, 18, 52], rows });
     });
     const buf = XLSX.buildXlsx(sheets);
     res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
