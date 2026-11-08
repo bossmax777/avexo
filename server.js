@@ -170,23 +170,21 @@ app.patch('/api/me', async (req, res) => {
 });
 
 /* состояние кошелька: баланс, позиции, история */
+/* Кабинет сохраняет здесь только свои открытые позиции демо-терминала.
+   Баланс, историю операций и историю заявок с клиента НЕ принимаем: раньше
+   страница присылала их вместе с позициями, и любой, кто вошёл в свой кабинет,
+   мог одним запросом выставить себе любой баланс. Деньги меняются только из
+   админки (начисление, массовые разноски, сценарии) — там есть админ-ключ.
+   Поля balance/tx/hist в теле запроса остаются допустимыми, но игнорируются,
+   поэтому старый код страницы работает без изменений. */
 app.put('/api/me/state', async (req, res) => {
   try {
     const me = await sessionUser(req);
     if (!me) return bad(res, 401, 'Нужен вход');
-    const { balance, positions, tx, hist } = req.body || {};
+    const { positions } = req.body || {};
     const r = await q(
-      `UPDATE users SET
-         balance   = COALESCE($2, balance),
-         positions = COALESCE($3, positions),
-         tx        = COALESCE($4, tx),
-         hist      = COALESCE($5, hist)
-       WHERE id = $1 RETURNING *`,
-      [me.id,
-       Number.isFinite(Number(balance)) ? Number(balance) : null,
-       positions ? JSON.stringify(positions.slice(0, 200)) : null,
-       tx ? JSON.stringify(tx.slice(0, 200)) : null,
-       hist ? JSON.stringify(hist.slice(0, 200)) : null]);
+      `UPDATE users SET positions = COALESCE($2, positions) WHERE id = $1 RETURNING *`,
+      [me.id, positions ? JSON.stringify(positions.slice(0, 200)) : null]);
     res.json({ user: toUser(r.rows[0]) });
   } catch (e) { bad(res, 500, e.message); }
 });
