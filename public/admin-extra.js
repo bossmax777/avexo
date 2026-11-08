@@ -1847,3 +1847,140 @@
     document.addEventListener("DOMContentLoaded", function () { setTimeout(boot, 800); });
   } else setTimeout(boot, 800);
 })();
+
+/* ---------- журнал входов ----------
+   Отдельная вкладка в админке: кто и откуда заходил на сайт. Берёт записи из
+   access_log — там видно время, вид события (вход, неудачный вход, регистрация,
+   попытка записать баланс со страницы кабинета), счёт, почта, IP и браузер.
+   Раньше приложение не хранило ничего об источнике запросов, и разобраться,
+   кто щупал сайт, было нечем. */
+(function () {
+  "use strict";
+  function el(id) { return document.getElementById(id); }
+  function esc(s) {
+    return String(s == null ? "" : s).replace(/[&<>"]/g, function (c) {
+      return { "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c];
+    });
+  }
+  function key() {
+    return (window.API && window.API.key) || sessionStorage.getItem("avexo_admin_key") || "";
+  }
+  function when(s) {
+    var d = new Date(s);
+    if (isNaN(d)) return String(s || "");
+    var p = function (n) { return (n < 10 ? "0" : "") + n; };
+    return p(d.getDate()) + "." + p(d.getMonth() + 1) + "." + d.getFullYear()
+      + " " + p(d.getHours()) + ":" + p(d.getMinutes()) + ":" + p(d.getSeconds());
+  }
+  var NAMES = {
+    login: "вход",
+    login_fail: "вход не удался",
+    register: "регистрация",
+    register_closed: "попытка регистрации",
+    balance_try: "попытка записать баланс"
+  };
+  var CSS =
+    "#alCard .al-row{display:flex;gap:10px;flex-wrap:wrap;align-items:flex-end;margin-bottom:12px}" +
+    "#alCard .al-f{display:flex;flex-direction:column;gap:5px}" +
+    "#alCard .al-f label{font-size:11px;color:var(--muted);text-transform:uppercase;letter-spacing:.05em}" +
+    "#alCard .al-scroll{overflow:auto;border:1px solid var(--line);border-radius:11px}" +
+    "#alCard table{border-collapse:collapse;width:100%;font-size:12.5px;min-width:900px}" +
+    "#alCard th,#alCard td{padding:9px 12px;text-align:left;border-bottom:1px solid var(--line);white-space:nowrap}" +
+    "#alCard th{font-size:11px;color:var(--muted);text-transform:uppercase;letter-spacing:.05em}" +
+    "#alCard tr:last-child td{border-bottom:0}" +
+    "#alCard td.ua{white-space:normal;max-width:380px;line-height:1.35;color:var(--muted)}" +
+    "#alCard .warn{color:var(--sell,#EF4444);font-weight:600}" +
+    "#alCard .zero{color:var(--muted)}";
+  var PANE =
+    '<div class="card" id="alCard"><h2>Журнал входов</h2>' +
+    '<p class="sub">Кто и откуда обращался к сайту: вход в кабинет, неудачный вход, ' +
+    'попытка регистрации и попытка записать баланс со страницы. По каждой записи — ' +
+    'время, счёт, почта, IP и браузер. Записи копятся с момента включения журнала.</p>' +
+    '<div class="al-row">' +
+      '<div class="al-f"><label for="alKind">Событие</label><select id="alKind">' +
+        '<option value="">все</option>' +
+        '<option value="login">вход</option>' +
+        '<option value="login_fail">вход не удался</option>' +
+        '<option value="register">регистрация</option>' +
+        '<option value="register_closed">попытка регистрации</option>' +
+        '<option value="balance_try">попытка записать баланс</option>' +
+      '</select></div>' +
+      '<div class="al-f"><label for="alFind">Поиск</label>' +
+        '<input id="alFind" type="text" placeholder="счёт, почта, IP или браузер"></div>' +
+      '<div class="al-f"><label>&nbsp;</label><button class="btn btn-ghost" id="alLoad">Обновить</button></div>' +
+      '<div class="al-f"><label>&nbsp;</label><span class="sub" id="alSay" style="margin:0"></span></div>' +
+    '</div><div id="alBox"></div></div>';
+
+  function build() {
+    if (el("alCard")) return true;
+    var host = document.querySelector('[data-pane="users"]');
+    if (!host || !host.parentNode) return false;
+    var st = document.createElement("style"); st.id = "alCss"; st.textContent = CSS;
+    document.head.appendChild(st);
+    var pane = document.createElement("div");
+    pane.id = "alPane";
+    pane.setAttribute("data-pane", "alog");
+    pane.hidden = true;
+    pane.innerHTML = PANE;
+    host.parentNode.insertBefore(pane, host.nextSibling);
+    var tabs = el("tabs");
+    if (tabs && !tabs.querySelector('[data-tab="alog"]')) {
+      var b = document.createElement("button");
+      b.setAttribute("data-tab", "alog");
+      b.innerHTML = "<i></i>Журнал входов";
+      tabs.appendChild(b);
+    }
+    el("alLoad").onclick = load;
+    el("alKind").onchange = load;
+    el("alFind").onkeydown = function (e) { if (e.key === "Enter") load(); };
+    return true;
+  }
+
+  function load() {
+    var say = el("alSay");
+    if (!say) return;
+    say.textContent = "Загружаем…";
+    var u = "/api/admin/access-log?limit=300";
+    var k = el("alKind").value, f = (el("alFind").value || "").trim();
+    if (k) u += "&kind=" + encodeURIComponent(k);
+    if (f) u += "&find=" + encodeURIComponent(f);
+    fetch(u, { headers: { "X-Admin-Key": key() } })
+      .then(function (r) { return r.json(); })
+      .then(function (j) {
+        if (!j.ok) throw new Error(j.error || "ошибка");
+        render(j);
+        say.textContent = "записей: " + j.rows.length;
+      })
+      .catch(function (e) { say.textContent = e.message; });
+  }
+
+  function render(j) {
+    var box = el("alBox");
+    if (!j.rows.length) {
+      box.innerHTML = '<p class="sub">Пока пусто: журнал пишет только то, что произошло после его включения.</p>';
+      return;
+    }
+    box.innerHTML = '<div class="al-scroll"><table><thead><tr>' +
+      "<th>Время</th><th>Событие</th><th>Счёт</th><th>Почта</th><th>IP</th><th>Браузер</th><th>Примечание</th>" +
+      "</tr></thead><tbody>" +
+      j.rows.map(function (r) {
+        var warn = r.kind === "balance_try" || r.kind === "login_fail" || r.kind === "register_closed";
+        return "<tr><td>" + esc(when(r.at)) + "</td>" +
+          '<td class="' + (warn ? "warn" : "") + '">' + esc(NAMES[r.kind] || r.kind) + "</td>" +
+          "<td>" + (r.acct ? "#" + esc(r.acct) : "—") + "</td>" +
+          "<td>" + esc(r.email || "—") + "</td>" +
+          "<td>" + esc(r.ip || "—") + "</td>" +
+          '<td class="ua">' + esc(r.ua || "—") + "</td>" +
+          '<td class="ua">' + esc(r.note || "—") + "</td></tr>";
+      }).join("") +
+      "</tbody></table></div>";
+  }
+
+  document.addEventListener("click", function (e) {
+    if (e.target.closest && e.target.closest('[data-tab="alog"]')) setTimeout(load, 60);
+  });
+  function boot() { build(); }
+  if (document.readyState === "loading") {
+    document.addEventListener("DOMContentLoaded", function () { setTimeout(boot, 900); });
+  } else setTimeout(boot, 900);
+})();
