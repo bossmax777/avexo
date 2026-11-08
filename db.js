@@ -144,6 +144,22 @@ CREATE INDEX IF NOT EXISTS mass_days_site_idx ON mass_days(site, id DESC);
 /* общий состав пульта: по одному коду несколько человек видят одинаковый
    список подключённых кошельков. В data лежит список ключей и отметка времени —
    побеждает самая свежая запись, так что порядок правок не важен. */
+/* журнал входов: кто и откуда заходил на сайт. Пишем IP, браузер и время по
+   регистрациям, входам и попыткам записать баланс со страницы кабинета — раньше
+   приложение не хранило ничего, и когда сайт прощупали, выяснить источник было
+   нечем. Таблица общая для обеих площадок, площадка указана в поле site. */
+CREATE TABLE IF NOT EXISTS access_log (
+  id     BIGSERIAL PRIMARY KEY,
+  at     TIMESTAMPTZ NOT NULL DEFAULT now(),
+  site   TEXT NOT NULL DEFAULT '',
+  kind   TEXT NOT NULL DEFAULT '',
+  acct   TEXT NOT NULL DEFAULT '',
+  email  TEXT NOT NULL DEFAULT '',
+  ip     TEXT NOT NULL DEFAULT '',
+  ua     TEXT NOT NULL DEFAULT '',
+  note   TEXT NOT NULL DEFAULT ''
+);
+CREATE INDEX IF NOT EXISTS access_log_at_idx ON access_log(at DESC);
 CREATE TABLE IF NOT EXISTS hub_rooms (
   code        TEXT PRIMARY KEY,
   data        JSONB NOT NULL DEFAULT '{}'::jsonb,

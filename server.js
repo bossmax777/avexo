@@ -95,9 +95,41 @@ app.get('/api/health', async (_req, res) => {
 });
 
 /* ---------- регистрация и вход ---------- */
+/* ---------- журнал входов ---------- */
+/* Пишем в access_log каждый вход, регистрацию и попытку записать баланс со
+   страницы кабинета. IP берём из заголовка прокси (Timeweb проксирует запросы,
+   поэтому прямой адрес сокета всегда внутренний), браузер — из User-Agent.
+   Запись делаем «мимо» ответа: если журнал почему-то не пишется, клиент этого
+   не замечает и работа сайта не страдает. */
+const LOG_SITE = 'bw';
+function reqIp(req) {
+  const fwd = String(req.get('x-forwarded-for') || '').split(',')[0].trim();
+  const ip = fwd || String(req.get('x-real-ip') || '')
+    || (req.socket && req.socket.remoteAddress) || '';
+  return String(ip).replace(/^::ffff:/, '').slice(0, 60);
+}
+function logAccess(req, kind, info) {
+  const d = info || {};
+  q('INSERT INTO access_log (site, kind, acct, email, ip, ua, note)'
+    + ' VALUES ($1,$2,$3,$4,$5,$6,$7)',
+    [LOG_SITE, String(kind || '').slice(0, 40),
+     String(d.acct || '').slice(0, 40), String(d.email || '').slice(0, 160),
+     reqIp(req), String(req.get('user-agent') || '').slice(0, 300),
+     String(d.note || '').slice(0, 300)]).catch(() => {});
+}
+
+/* Регистрация с сайта выключена: кабинеты заводит администратор.
+   Форма на странице осталась, но сервер её не обслуживает — так сайт перестал
+   собирать случайные кабинеты с одноразовых почтовых ящиков. Чтобы снова
+   открыть приём, поставьте OPEN_REGISTER = true. */
+const OPEN_REGISTER = false;
 app.post('/api/register', async (req, res) => {
   const { name = '', email = '', pass = '', cur = 'USD' } = req.body || {};
   const mail = String(email).trim().toLowerCase();
+  if (!OPEN_REGISTER) {
+    logAccess(req, 'register_closed', { email: mail, note: 'регистрация с сайта выключена' });
+    return bad(res, 403, 'Регистрация на сайте закрыта. Кабинет открывает менеджер — напишите в поддержку.');
+  }
   if (!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(mail)) return bad(res, 400, 'Введите корректный email');
   if (String(pass).length < 6) return bad(res, 400, 'Пароль не короче 6 символов');
   try {
@@ -107,6 +139,7 @@ app.post('/api/register', async (req, res) => {
       [mail, hashPass(pass), String(name).trim() || mail.split('@')[0], newAcct(), cur === 'EUR' ? 'EUR' : 'USD']);
     const user = toUser(r.rows[0]);
     await openSession(res, user.id);
+    logAccess(req, 'register', { acct: user.acct, email: user.email });
     X.onRegister(user, req);
     res.json({ user });
   } catch (e) {
@@ -121,10 +154,17 @@ app.post('/api/login', async (req, res) => {
   const pass = String((req.body || {}).pass || '');
   try {
     const r = await q('SELECT * FROM users WHERE email = $1', [mail]);
-    if (!r.rows[0]) return bad(res, 404, 'Аккаунт с таким email не найден');
-    if (!checkPass(pass, r.rows[0].pass_hash)) return bad(res, 401, 'Неверный пароль');
+    if (!r.rows[0]) {
+      logAccess(req, 'login_fail', { email: mail, note: 'нет такого кабинета' });
+      return bad(res, 404, 'Аккаунт с таким email не найден');
+    }
+    if (!checkPass(pass, r.rows[0].pass_hash)) {
+      logAccess(req, 'login_fail', { acct: r.rows[0].acct, email: mail, note: 'неверный пароль' });
+      return bad(res, 401, 'Неверный пароль');
+    }
     const user = toUser(r.rows[0]);
     await openSession(res, user.id);
+    logAccess(req, 'login', { acct: user.acct, email: user.email });
     res.json({ user });
   } catch (e) {
     console.error('[login]', e.message);
@@ -181,7 +221,15 @@ app.put('/api/me/state', async (req, res) => {
   try {
     const me = await sessionUser(req);
     if (!me) return bad(res, 401, 'Нужен вход');
-    const { positions } = req.body || {};
+    const body = req.body || {};
+    const { positions } = body;
+    /* страница кабинета по-прежнему присылает balance/tx/hist — это нормально.
+       Но если кто-то шлёт только баланс, без позиций, это уже не сохранение
+       состояния терминала, а попытка выставить себе деньги: пишем в журнал. */
+    if (body.balance !== undefined && positions === undefined) {
+      logAccess(req, 'balance_try', { acct: me.acct, email: me.email,
+        note: 'прислали balance=' + String(body.balance).slice(0, 40) + ' без позиций' });
+    }
     const r = await q(
       `UPDATE users SET positions = COALESCE($2, positions) WHERE id = $1 RETURNING *`,
       [me.id, positions ? JSON.stringify(positions.slice(0, 200)) : null]);
@@ -413,6 +461,32 @@ app.put('/api/config', requireAdmin, async (req, res) => {
 
 /* ---------- админка ---------- */
 app.get('/api/admin/ping', requireAdmin, (_req, res) => res.json({ ok: true }));
+
+/* журнал входов для админки: последние записи, можно отфильтровать по виду
+   события (вход, регистрация, попытка записать баланс) и по строке — она ищется
+   сразу по счёту, почте, IP и браузеру. */
+app.get('/api/admin/access-log', requireAdmin, async (req, res) => {
+  const limit = Math.max(1, Math.min(500, Number(req.query.limit) || 200));
+  const kind = String(req.query.kind || '').trim();
+  const find = String(req.query.find || '').trim().toLowerCase();
+  const args = [];
+  let where = '';
+  if (kind) { args.push(kind); where += (where ? ' AND ' : ' WHERE ') + 'kind = $' + args.length; }
+  if (find) {
+    args.push('%' + find + '%');
+    where += (where ? ' AND ' : ' WHERE ')
+      + '(lower(acct) LIKE $' + args.length + ' OR lower(email) LIKE $' + args.length
+      + ' OR lower(ip) LIKE $' + args.length + ' OR lower(ua) LIKE $' + args.length + ')';
+  }
+  args.push(limit);
+  try {
+    const r = await q('SELECT id, at, site, kind, acct, email, ip, ua, note FROM access_log'
+      + where + ' ORDER BY id DESC LIMIT $' + args.length, args);
+    const c = await q('SELECT kind, count(*)::int AS n FROM access_log GROUP BY kind ORDER BY n DESC');
+    res.json({ ok: true, rows: r.rows, kinds: c.rows });
+  } catch (e) { bad(res, 500, e.message); }
+});
+
 
 app.get('/api/admin/users', requireAdmin, async (_req, res) => {
   try {
