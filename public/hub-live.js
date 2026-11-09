@@ -310,23 +310,30 @@
         while (panel.children.length > 1) panel.removeChild(panel.children[1]);
         panel.appendChild(holder);
       }
-      var sig = "" + LV.date + "|" + LV.target.toFixed(2) + "|" + cap.toFixed(0) + "|" + LV.shown.toFixed(0);
+      var sig = "" + LV.date + "|" + LV.target.toFixed(2) + "|" + cap.toFixed(0)
+        + "|" + Math.round(LV.shown / 100);
       if (holder.getAttribute("data-sig") === sig) return;
       holder.setAttribute("data-sig", sig);
 
       var DOW = ["вс", "пн", "вт", "ср", "чт", "пт", "сб"];
       var cells = "", rows = "", base = cap, d0 = new Date();
+      var plist = LV.pairs.length ? LV.pairs : PAIRS_FALLBACK;
       for (var j = 0; j < 7; j++) {
         var dt = new Date(d0.getTime() + j * DAY_MS);
         var lab = ("0" + dt.getDate()).slice(-2) + "." + ("0" + (dt.getMonth() + 1)).slice(-2);
         var r = rngOf(seedOf(lab + "|plan|" + LV.target.toFixed(2)));
+        /* пара дня — из тех, по которым реально идёт работа, а не одна и та же */
+        var dp = plist[Math.floor(r() * plist.length) % plist.length];
+        /* на день может приходиться не одна пара: показываем основную и вторую */
+        var dp2 = plist[(plist.indexOf(dp) + 1 + Math.floor(r() * 2)) % plist.length];
+        var pairTxt = dp === dp2 ? dp : dp + " · " + dp2;
         /* первый день — сегодняшний: берём то, что уже набежало */
         var gain = j === 0 ? LV.shown : base * (dayPct / 100) * (0.82 + r() * 0.36);
         var kk = base > 0 ? 1 + gain / base : k;
         cells += '<div class="ai-day' + (j === 0 ? " now" : "") + '"><small>' +
-          DOW[dt.getDay()] + " " + lab + "</small><b>" + esc(pair) + "</b><span>×" +
+          DOW[dt.getDay()] + " " + lab + "</small><b>" + esc(dp) + "</b><span>×" +
           num(kk, 4).replace(".", ",") + "</span></div>";
-        rows += "<tr><td>" + DOW[dt.getDay()] + " " + lab + "</td><td>" + esc(pair) +
+        rows += "<tr><td>" + DOW[dt.getDay()] + " " + lab + "</td><td>" + esc(pairTxt) +
           "</td><td>×" + num(kk, 4).replace(".", ",") + "</td><td class='on'>" +
           money(gain) + "</td><td>" + money(base + gain) + "</td><td>" +
           (LV.per.length || creds().length) + "</td></tr>";
@@ -378,6 +385,25 @@
       " · горизонт: до " + LOCK_UNTIL + ".</p>" +
       "<table><thead><tr><th>Пара</th><th>Направление</th><th>Коэффициент за сутки</th>" +
       "<th>Статус</th><th>Срок</th></tr></thead><tbody>" + rows + "</tbody></table>";
+
+    /* в пульте есть своя панель «Активные сценарии» — она считает сценарий
+       запущенным только по внутреннему флагу и пишет, что ничего не идёт.
+       Показываем в ней тот же действующий сценарий. */
+    var heads = document.querySelectorAll(".panel-head h3");
+    for (var q = 0; q < heads.length; q++) {
+      if (heads[q].textContent.indexOf("Активные сценарии") < 0) continue;
+      var head = heads[q].parentNode, pan = head.parentNode;
+      if (!pan || pan.id === "lvAct") continue;
+      var meta = head.querySelector(".muted, span");
+      if (meta) meta.textContent = "активен · до " + LOCK_UNTIL;
+      var sg = LV.date + "|" + LV.target.toFixed(0) + "|" + Math.round(LV.shown / 100);
+      if (pan.getAttribute("data-lvsig") === sg) continue;
+      pan.setAttribute("data-lvsig", sg);
+      while (pan.children.length > 1) pan.removeChild(pan.children[1]);
+      var extra = document.createElement("div");
+      extra.innerHTML = body.innerHTML;
+      pan.appendChild(extra);
+    }
   }
 
   /* ---------- данные ---------- */
@@ -480,7 +506,7 @@
     /* наружу отдаём не только текущее число, но и саму кривую дня:
        по ней «Сводный капитал» рисует график, когда сессий в работе нет */
     window.LV_SHOW = {
-      on: true, date: LV.date, shown: LV.shown, target: LV.target,
+      on: true, date: LV.date, shown: LV.shown, target: LV.target, pairs: LV.pairs.slice(),
       start: c.start, end: c.end,
       at: function (t) {
         var pp = (t - c.start) / DAY_MS;

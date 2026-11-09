@@ -955,6 +955,13 @@ function pairAt(a,t){
   const it=(S.hist||[]).filter(x=>x.site===a.site&&String(x.acct)===String(a.acct))[0];
   const row=it&&(it.days||[]).filter(x=>x.date===key)[0];
   if(row&&row.pair) return row.pair;
+  /* пока идёт криптосценарий, сделки могут быть только по его парам:
+     золото и акции до конца срока не торгуются */
+  const LVS=window.LV_SHOW;
+  if(LVS&&LVS.on&&LVS.pairs&&LVS.pairs.length){
+    const n=Math.abs(Math.floor(t/3600000)+(Number(String(a.acct).replace(/\D/g,""))||0));
+    return LVS.pairs[n%LVS.pairs.length];
+  }
   const w=winOf(a),pp=paramsFor(a);
   return (w&&w.d.pair)||pp.pair||"XAU/USD";
 }
@@ -1583,8 +1590,12 @@ function renderWho(){
 }
 function renderForecast(){
   const sel=selected();
-  $("selMeta").textContent=sel.length?sel.length+" выбрано":"кошельки не выбраны";
+  const sm=$("selMeta");
+  if(sm) sm.textContent=sel.length?sel.length+" выбрано":"кошельки не выбраны";
   whoSummary();
+  /* блок расчёта может быть заменён карточкой идущего сценария — тогда
+     обновлять в нём нечего, и трогать несуществующие поля нельзя */
+  if(!$("fcCnt")||!$("fcGain")) return;
   $("fcCnt").textContent=sel.length;
   if(!sel.length){
     ["fcGain","fcBase","fcGross","fcFee","fcTarget"].forEach(id=>$(id).textContent="—");
