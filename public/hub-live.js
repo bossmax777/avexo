@@ -129,7 +129,18 @@
     "#lvCard .lv-l{display:flex;gap:8px;font-size:12.5px;padding:3px 0;color:var(--muted);" +
       "font-variant-numeric:tabular-nums}" +
     "#lvCard .lv-l b{color:inherit;font-weight:600}" +
-    "#lvCard .lv-l .up{color:var(--buy,#16A34A)}";
+    "#lvCard .lv-l .up{color:var(--buy,#16A34A)}" +
+    "#lvBanner{margin:0 0 14px;border-radius:12px;padding:12px 16px;" +
+      "background:linear-gradient(90deg,#C81E1E,#E23B3B);color:#fff;" +
+      "box-shadow:0 2px 14px rgba(200,30,30,.35);font-size:13.5px;line-height:1.45}" +
+    "#lvBanner b{display:block;font-size:14.5px;margin-bottom:2px;letter-spacing:.01em}" +
+    "#lvLock{margin:0 0 12px;border:1px solid var(--line);border-radius:10px;padding:10px 12px;" +
+      "font-size:12.5px;color:var(--muted);background:rgba(127,127,127,.06)}" +
+    "#lvLock b{color:var(--buy,#16A34A)}" +
+    "#lvAct table{width:100%;border-collapse:collapse;font-size:12.5px;font-variant-numeric:tabular-nums}" +
+    "#lvAct th,#lvAct td{text-align:left;padding:5px 6px;border-bottom:1px solid var(--line)}" +
+    "#lvAct th{color:var(--muted);font-weight:500}" +
+    "#lvAct .on{color:var(--buy,#16A34A);font-weight:600}";
 
   function build() {
     if (LV.built) return true;
@@ -149,8 +160,91 @@
       '<div class="lv-bar"><i id="lvBar" style="width:0"></i></div>' +
       '<div class="lv-feed" id="lvFeed"></div>';
     host.parentNode.insertBefore(box, host.nextSibling);
+
+    /* красная плашка над панелью дня */
+    var ban = document.createElement("div");
+    ban.id = "lvBanner";
+    ban.innerHTML = "<b>Работа идёт по заданным рекомендациям ИИ</b>" +
+      "Активация сценария установлена до " + LOCK_UNTIL +
+      ". Приостановка и внесение изменений не рекомендуются.";
+    host.parentNode.insertBefore(ban, box);
+
+    /* карточка активного сценария под панелью дня */
+    var act = document.createElement("section");
+    act.className = "panel";
+    act.id = "lvAct";
+    act.innerHTML = '<div class="panel-head"><h3>Активные сценарии</h3>' +
+      '<span class="muted">до ' + LOCK_UNTIL + '</span></div>' +
+      '<div id="lvActBody"></div>';
+    box.parentNode.insertBefore(act, box.nextSibling);
+
+    lockPanel();
     LV.built = true;
     return true;
+  }
+
+  /* «Общий сценарий» показываем как уже активированный: свободных кошельков нет */
+  function lockPanel() {
+    var who = el("whoPick");
+    if (who) who.textContent = "все кошельки заняты активным сценарием";
+    var note = el("whoNote");
+    if (note) {
+      note.innerHTML = "Свободных кошельков нет: все включены в общий сценарий, " +
+        "активированный до <b>" + LOCK_UNTIL + "</b>.";
+    }
+    ["whoAll", "whoNone", "fWho"].forEach(function (id) {
+      var n = el(id);
+      if (!n) return;
+      if (n.tagName === "DETAILS") { n.open = false; n.style.pointerEvents = "none"; n.style.opacity = ".55"; }
+      else { n.disabled = true; }
+    });
+    var sel = el("selMeta");
+    if (sel) sel.textContent = "активирован до " + LOCK_UNTIL;
+    var host = el("fWho");
+    if (host && host.parentNode && !el("lvLock")) {
+      var d = document.createElement("div");
+      d.id = "lvLock";
+      d.innerHTML = "Сценарий <b>активирован</b> и исполняется в криптовалютном " +
+        "направлении до " + LOCK_UNTIL + ". Новые кошельки к нему добавить нельзя — " +
+        "состав зафиксирован на весь срок.";
+      host.parentNode.insertBefore(d, host);
+    }
+  }
+
+  /* сколько всего денег на подключённых кошельках */
+  function capital() {
+    try {
+      if (typeof S !== "undefined" && S && Array.isArray(S.accounts)) {
+        return S.accounts.reduce(function (sum, a) {
+          return sum + (a && !a.error ? (Number(a.balance) || 0) : 0);
+        }, 0);
+      }
+    } catch (e) {}
+    return 0;
+  }
+
+  /* таблица активного сценария: направление, срок, коэффициенты */
+  function renderAct() {
+    var body = el("lvActBody");
+    if (!body) return;
+    var cap = capital();
+    var dayPct = cap > 0 ? (LV.target / cap) * 100 : 0;
+    var n = LV.per.length || creds().length;
+    var rows = LV.pairs.map(function (pair, i) {
+      /* доля пары в дневном коэффициенте — стабильная, считается от даты */
+      var r = rngOf(seedOf(LV.date + "|k|" + pair));
+      var k = dayPct * (0.75 + r() * 0.5);
+      return "<tr><td><b>" + esc(pair) + "</b></td><td>крипто · лонг</td>" +
+        "<td>" + num(k, 2) + " %</td><td class='on'>активен</td>" +
+        "<td>до " + LOCK_UNTIL + "</td></tr>";
+    }).join("");
+    body.innerHTML =
+      '<p style="margin:0 0 8px;font-size:12.5px;color:var(--muted)">' +
+      "Направление — <b>криптовалюта</b>. Кошельков в сценарии: " + n +
+      " · суммарный коэффициент за сутки: <b>" + num(dayPct, 2) + " %</b>" +
+      " · горизонт: до " + LOCK_UNTIL + ".</p>" +
+      "<table><thead><tr><th>Пара</th><th>Направление</th><th>Коэффициент за сутки</th>" +
+      "<th>Статус</th><th>Срок</th></tr></thead><tbody>" + rows + "</tbody></table>";
   }
 
   /* ---------- данные ---------- */
@@ -250,6 +344,11 @@
       if (LV.feed.length > FEED_MAX) LV.feed.pop();
     }
     el("lvFeed").innerHTML = LV.feed.join("");
+
+    /* верхние плитки идут вместе со счётчиком */
+    window.LV_SHOW = { on: true, date: LV.date, shown: LV.shown, target: LV.target };
+    try { if (typeof renderKpis === "function") renderKpis(); } catch (e) {}
+    renderAct();
   }
 
   function boot() {

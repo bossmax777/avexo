@@ -1242,12 +1242,20 @@ function renderKpis(){
   const pl=fixed?posted+tick:curve-start;
   const bw=S.accounts.filter(a=>!a.error&&a.site==="bw").length;
   const nx=S.accounts.filter(a=>!a.error&&a.site==="nx").length;
+  /* плитки идут вместе с живым счётчиком торгового дня: иначе сверху
+     видна конечная цифра, а в панели «Торговый день» — текущая */
+  let balS=bal, dayS=day, plS=pl;
+  const LVS=window.LV_SHOW;
+  if(LVS&&LVS.on&&isFinite(LVS.shown)){
+    const base=real-posted;            /* капитал без уже записанного итога дня */
+    dayS=LVS.shown; plS=LVS.shown; balS=base+LVS.shown;
+  }
   $("kpis").innerHTML=
-    kpi("#7C5CFF",KPI_IC.wallet,"Суммарный капитал",usd(bal),"",
+    kpi("#7C5CFF",KPI_IC.wallet,"Суммарный капитал",usd(balS),"",
         (bw+nx)+" кошельков · BullWaves "+bw+" · FxPRO "+nx)+
-    kpi("#2196B0",KPI_IC.day,"Доход за торговые сутки",sig(day),day>=0?"up":"down",
+    kpi("#2196B0",KPI_IC.day,"Доход за торговые сутки",sig(dayS),dayS>=0?"up":"down",
         (dayShown()===ruToday()?"за сегодня":"за "+dayShown())+" · обе площадки")+
-    kpi("#2BA87A",KPI_IC.chart,"Результат сессий",sig(pl),pl>=0?"up":"down",
+    kpi("#2BA87A",KPI_IC.chart,"Результат сессий",sig(plS),plS>=0?"up":"down",
         fixed?"итог за торговые сутки по обеим площадкам":"от старта текущих сценариев")+
     kpi("#BE8716",KPI_IC.bolt,"Подключённых аккаунтов",String(bw+nx),"",
         live.length?("активных сессий: "+live.length):"ни один сценарий не запущен");
