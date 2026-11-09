@@ -12,7 +12,7 @@
   /* ------- настройки, менять здесь ------- */
   var DAY_START_MSK = 3.5;      /* начало торговых суток, часы по Москве (3.5 = 03:30) */
   var FORECAST_K = 0.94;        /* если день ещё не разнесён: вчерашний итог минус 6% */
-  var POLL_MS = 60000;          /* как часто перечитывать итоги из базы */
+  var POLL_MS = 180000;         /* как часто перечитывать итоги из базы */
   var TICK_MS = 2000;           /* как часто двигать счётчик */
   var FEED_STEP_MS = 12000;     /* примерный шаг между строками ленты */
   var FEED_MAX = 40;            /* сколько строк держим в ленте */
@@ -99,12 +99,13 @@
     var r = rngOf(seed);
     /* несколько «волн» разной длины: график дышит, иногда проседает */
     var w = 0;
-    for (var i = 1; i <= 4; i++) {
-      var ph = r() * Math.PI * 2, amp = (0.016 / i);
-      w += amp * Math.sin(p * Math.PI * 2 * i * 3 + ph);
+    for (var i = 1; i <= 6; i++) {
+      var ph = r() * Math.PI * 2, amp = (WAVE / i);
+      w += amp * Math.sin(p * Math.PI * 2 * i * 2.2 + ph);
     }
-    var v = base + w * (1 - Math.abs(0.5 - p) * 1.2);
-    return Math.max(0, Math.min(1, v));
+    /* у краёв суток размах гасим: старт от нуля и приход ровно в итог */
+    var edge = Math.min(1, Math.sin(Math.PI * p) * 1.35);
+    return Math.max(0, Math.min(1, base + w * edge));
   }
 
   /* ---------- состояние ---------- */
@@ -163,32 +164,22 @@
   function pull() {
     var list = creds();
     if (!list.length) return Promise.resolve(false);
-    return fetch("/api/hub/history", {
+    var c = cycle(new Date());
+    var prev = prevDate(c.date);
+    /* лёгкий запрос: только итог за дату и разбивка по кошелькам.
+       Историю операций не запрашиваем — она весит слишком много. */
+    return fetch("/api/hub/day", {
       method: "POST", headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ accounts: list, days: 7 })
+      body: JSON.stringify({ accounts: list, date: c.date, prev: prev })
     }).then(function (r) { return r.json(); }).then(function (j) {
       if (!j || !j.ok) return false;
-      var c = cycle(new Date());
-      var prev = prevDate(c.date);
-      var sum = 0, sumPrev = 0, per = [], pairs = {};
-      (j.items || []).forEach(function (it) {
-        if (!it || it.error) return;
-        var d = (it.days || []).find(function (x) { return x.date === c.date; });
-        var p0 = (it.days || []).find(function (x) { return x.date === prev; });
-        var a = d ? Number(d.amount) || 0 : 0;
-        if (d && d.pair) String(d.pair).split(",").forEach(function (x) {
-          var v = x.trim(); if (v) pairs[v] = true;
-        });
-        if (a > 0) per.push({ acct: it.acct, site: it.site, amount: a });
-        sum += a;
-        sumPrev += p0 ? Number(p0.amount) || 0 : 0;
-      });
+      var sum = Number(j.total) || 0;
       LV.date = c.date;
       LV.forecast = !(sum > 0);
-      LV.target = sum > 0 ? sum : +(sumPrev * FORECAST_K).toFixed(2);
-      LV.pairs = Object.keys(pairs);
+      LV.target = sum > 0 ? sum : +((Number(j.prev) || 0) * FORECAST_K).toFixed(2);
+      LV.pairs = (j.pairs || []).slice();
       if (!LV.pairs.length) LV.pairs = PAIRS_FALLBACK.slice();
-      LV.per = per;
+      LV.per = j.items || [];
       LV.at = Date.now();
       return true;
     }).catch(function () { return false; });

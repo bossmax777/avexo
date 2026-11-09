@@ -1875,7 +1875,7 @@ async function pullHist(){
   if(!S.creds.length) return;
   try{
     const j=await api("/api/hub/history",{method:"POST",
-      body:JSON.stringify({accounts:S.creds,days:60})});
+      body:JSON.stringify({accounts:S.creds,days:30})});
     S.hist=j.items||[];
     renderKpis();
   }catch(e){}
@@ -1954,7 +1954,9 @@ async function refresh(){
     S.loading=false;
     renderAll();
     /* историю итогов тянем раз в минуту: она меняется только после фиксации или разноски */
-    if(!S.histAt||Date.now()-S.histAt>60000){ S.histAt=Date.now(); pullHist(); }
+    /* история тяжёлая: на 240 кошельках это сотни тысяч строк операций.
+       Раз в пять минут достаточно — она меняется только после разноски. */
+    if(!S.histAt||Date.now()-S.histAt>300000){ S.histAt=Date.now(); pullHist(); }
   }catch(e){ S.loading=false; toast(e.message); }
 }
 function credsOf(keys){
