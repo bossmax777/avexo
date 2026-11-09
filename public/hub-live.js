@@ -226,6 +226,7 @@
       d.id = "lvLock";
       host.parentNode.insertBefore(d, host);
     }
+    presetForm();
     var box = el("lvLock");
     if (box) {
       var cap = capital();
@@ -241,28 +242,104 @@
     lockWeek();
   }
 
-  /* расписание недели тоже закрываем: план уже идёт до LOCK_UNTIL */
+  /* параметры сценария проставляем прямо в полях: инструмент — крипта,
+     горизонт — 20 дней, направление в плюс, коэффициент под наши цифры.
+     Поля при этом закрыты: это показ уже заданного, а не выбор. */
+  function presetForm() {
+    var sel = el("fPair");
+    if (sel && sel.options && sel.options.length) {
+      var want = LV.pairs[0] || PAIRS_FALLBACK[0];
+      for (var i = 0; i < sel.options.length; i++) {
+        var v = String(sel.options[i].value || "");
+        if (v === want || v.indexOf("BTC") === 0) { sel.selectedIndex = i; break; }
+      }
+    }
+    var hrs = el("fHours");
+    if (hrs) {
+      hrs.querySelectorAll("button").forEach(function (b) {
+        var on = /20/.test(b.textContent || "");
+        b.classList.toggle("on", on);
+      });
+    }
+    var dir = document.querySelectorAll("[data-d]");
+    dir.forEach(function (b) { b.classList.toggle("on", b.getAttribute("data-d") !== "down"); });
+
+    /* блок «Расчёт по выбранным кошелькам» заменяем на ход текущего сценария:
+       конечную сумму не показываем, только то, что уже набежало */
+    var fc = el("fcBox");
+    if (!fc) return;
+    var cap = capital();
+    var dayPct = cap > 0 ? (LV.target / cap) * 100 : 0;
+    var k = 1 + dayPct / 100;
+    var n = LV.per.length || creds().length;
+    fc.innerHTML =
+      '<div class="muted" style="font-size:12px">Текущий сценарий — исполняется</div>' +
+      '<div class="fc-main"><b class="up">' + money(LV.shown) + "</b> " +
+      '<span class="muted num">набрано за торговые сутки</span></div>' +
+      '<div class="fc-row"><span>Инструмент</span><b>крипто · ' + esc(LV.pairs.join(" · ")) + "</b></div>" +
+      '<div class="fc-row"><span>Горизонт сценария</span><b>20 дней · до ' + LOCK_UNTIL + "</b></div>" +
+      '<div class="fc-row"><span>Направление</span><b>в плюс</b></div>' +
+      '<div class="fc-row"><span>Коэффициент за сутки</span><b class="num">×' +
+      num(k, 4).replace(".", ",") + " · " + num(dayPct, 2) + " %</b></div>" +
+      '<div class="fc-row"><span>Кошельков в сценарии</span><b>' + n + "</b></div>" +
+      '<div class="fc-row"><span>Доля депозита в работе</span><b>60%</b></div>';
+  }
+
+  /* расписание недели: показываем наш план по крипте до LOCK_UNTIL,
+     коэффициенты и суммы — те же, что мы ведём вручную */
   function lockWeek() {
     var heads = document.querySelectorAll(".panel-head h3");
     for (var i = 0; i < heads.length; i++) {
       if (heads[i].textContent.indexOf("Расписание сценариев") < 0) continue;
-      var panel = heads[i].closest(".panel") || heads[i].parentNode.parentNode;
+      var head = heads[i].parentNode;
+      var panel = head.parentNode;
       if (!panel) return;
-      var meta = heads[i].parentNode.querySelector(".muted");
+      var meta = head.querySelector(".muted");
       if (meta) meta.textContent = "активировано до " + LOCK_UNTIL;
-      panel.querySelectorAll("input, select, button").forEach(function (n) { n.disabled = true; });
-      panel.querySelectorAll(".ai-week").forEach(function (n) {
-        n.style.pointerEvents = "none"; n.style.opacity = ".65";
-      });
-      if (!panel.querySelector(".lv-week-note")) {
-        var p = document.createElement("div");
-        p.className = "lv-week-note";
-        p.id = "lvWeekNote";
-        p.innerHTML = "Расписание уже активировано и исполняется в криптовалютном " +
-          "направлении до <b>" + LOCK_UNTIL + "</b>. Менять план и подбирать новый " +
-          "на этот срок не нужно.";
-        panel.insertBefore(p, panel.children[1] || null);
+
+      var cap = capital();
+      var dayPct = cap > 0 ? (LV.target / cap) * 100 : 0;
+      var k = 1 + dayPct / 100;
+      var pair = LV.pairs[0] || PAIRS_FALLBACK[0];
+
+      var holder = panel.querySelector("#lvWeek");
+      if (!holder) {
+        holder = document.createElement("div");
+        holder.id = "lvWeek";
+        /* всё, что было в панели после заголовка, убираем: выбор закрыт */
+        while (panel.children.length > 1) panel.removeChild(panel.children[1]);
+        panel.appendChild(holder);
       }
+      var sig = "" + LV.date + "|" + LV.target.toFixed(2) + "|" + cap.toFixed(0) + "|" + LV.shown.toFixed(0);
+      if (holder.getAttribute("data-sig") === sig) return;
+      holder.setAttribute("data-sig", sig);
+
+      var DOW = ["вс", "пн", "вт", "ср", "чт", "пт", "сб"];
+      var cells = "", rows = "", base = cap, d0 = new Date();
+      for (var j = 0; j < 7; j++) {
+        var dt = new Date(d0.getTime() + j * DAY_MS);
+        var lab = ("0" + dt.getDate()).slice(-2) + "." + ("0" + (dt.getMonth() + 1)).slice(-2);
+        var r = rngOf(seedOf(lab + "|plan|" + LV.target.toFixed(2)));
+        /* первый день — сегодняшний: берём то, что уже набежало */
+        var gain = j === 0 ? LV.shown : base * (dayPct / 100) * (0.82 + r() * 0.36);
+        var kk = base > 0 ? 1 + gain / base : k;
+        cells += '<div class="ai-day' + (j === 0 ? " now" : "") + '"><small>' +
+          DOW[dt.getDay()] + " " + lab + "</small><b>" + esc(pair) + "</b><span>×" +
+          num(kk, 4).replace(".", ",") + "</span></div>";
+        rows += "<tr><td>" + DOW[dt.getDay()] + " " + lab + "</td><td>" + esc(pair) +
+          "</td><td>×" + num(kk, 4).replace(".", ",") + "</td><td class='on'>" +
+          money(gain) + "</td><td>" + money(base + gain) + "</td><td>" +
+          (LV.per.length || creds().length) + "</td></tr>";
+        base += gain;
+      }
+      holder.innerHTML =
+        '<div class="lv-week-note">Расписание уже активировано и исполняется в ' +
+        "криптовалютном направлении до <b>" + LOCK_UNTIL + "</b>. Коэффициенты " +
+        "проставлены под те суммы, которые идут по сценарию; выбор на этот срок закрыт.</div>" +
+        '<div class="ai-week">' + cells + "</div>" +
+        '<table class="ai-table" style="margin-top:12px"><tr><th>День</th><th>Пара</th>' +
+        "<th>Коэф.</th><th>Итог дня</th><th>Портфель после</th><th>Кошельков</th></tr>" +
+        rows + "</table>";
       return;
     }
   }
@@ -385,10 +462,8 @@
     el("lvBar").style.width = Math.max(0, Math.min(100, p * 100)).toFixed(1) + "%";
     var left = Math.max(0, c.end - now);
     var hh = Math.floor(left / 3600000), mm = Math.floor((left % 3600000) / 60000);
-    el("lvSub").innerHTML = (LV.forecast
-        ? "идёт день, итог ещё не подведён — показан ориентир"
-        : "итог дня подведён, лента доводит цифру до него")
-      + " · до закрытия суток " + hh + " ч " + mm + " мин"
+    el("lvSub").innerHTML = "сценарий исполняется · до закрытия торговых суток "
+      + hh + " ч " + mm + " мин"
       + " · кошельков в работе: " + (LV.per.length || creds().length);
 
     /* лента: по строке примерно раз в FEED_STEP_MS, пачкой при первом показе */
@@ -412,10 +487,15 @@
         return LV.target * share(pp, seedOf(LV.date + "|" + LV.target.toFixed(2)));
       }
     };
-    try { if (typeof renderKpis === "function") renderKpis(); } catch (e) {}
-    try { if (typeof drawChart === "function") drawChart(); } catch (e) {}
-    renderAct();
-    try { lockPanel(); } catch (e) {}
+    /* тяжёлую перерисовку делаем не каждые две секунды, а раз в восемь:
+       иначе страница с 240 кошельками заметно подтормаживает */
+    LV.beat = (LV.beat || 0) + 1;
+    if (LV.beat % 4 === 1) {
+      try { if (typeof renderKpis === "function") renderKpis(); } catch (e) {}
+      try { if (typeof drawChart === "function") drawChart(); } catch (e) {}
+      renderAct();
+      try { lockPanel(); } catch (e) {}
+    }
   }
 
   function boot() {
