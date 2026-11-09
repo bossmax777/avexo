@@ -1994,9 +1994,15 @@ async function hubFixAll(force) {
   } finally { fixBusy = false; }
   return out;
 }
-/* проверяем каждые пять минут: сервер мог быть перезапущен или спать */
-setInterval(() => { hubFixAll(false).catch(() => {}); }, 5 * 60000);
-setTimeout(() => { hubFixAll(false).catch(() => {}); }, 90000);
+/* Автоматическая фиксация ОТКЛЮЧЕНА.
+   Результаты дня вносятся вручную через админку, автоматический обход
+   всех кошельков больше не нужен и только грузил приложение.
+   Ручная фиксация через POST /api/hub/fix продолжает работать. */
+const FIX_AUTO = false;
+if (FIX_AUTO) {
+  setInterval(() => { hubFixAll(false).catch(() => {}); }, 5 * 60000);
+  setTimeout(() => { hubFixAll(false).catch(() => {}); }, 90000);
+}
 
 /* ручная фиксация по выбранным кошелькам — для показа, не дожидаясь 21:00 */
 app.post('/api/hub/fix', async (req, res) => {
