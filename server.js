@@ -1369,14 +1369,21 @@ async function hubUser(a) {
 }
 /* пульт присылает до 40 ключей сразу: вытаскиваем их одним запросом на площадку,
    иначе на каждый кошелёк уходит отдельный поход в базу и страница ждёт секунды */
-async function hubUsersBatch(list) {
+/* Колонки для пульта: карточке кошелька нужны только эти поля. Раньше здесь
+   стояло SELECT *, и вместе с каждым кошельком из базы тянулись история
+   операций и история заявок — по две сотни строк на кошелёк. На 240 кошельках
+   это десятки мегабайт и минуты ожидания; списком колонок запрос становится
+   лёгким. История берётся отдельно — там, где она действительно нужна. */
+const HUB_COLS = 'id, email, name, acct, cur, balance, dyn, apikey, payout_addr,'
+  + ' payout_min, created_at, botkey_until, botkey_at';
+async function hubUsersBatch(list, light) {
   const keys = (list || []).map(a => String((a && a.key) || '').trim())
     .filter(k => k.length >= 12).map(k => k.toLowerCase());
   const found = {};
   if (!keys.length) return found;
   for (const site of Object.keys(HUB_SITES)) {
     try {
-      const r = await q('SELECT * FROM ' + HUB_SITES[site].users
+      const r = await q('SELECT ' + (light ? HUB_COLS : '*') + ' FROM ' + HUB_SITES[site].users
         + ' WHERE lower(apikey) = ANY($1::text[])', [keys]);
       r.rows.forEach(u => {
         const k = String(u.apikey || '').toLowerCase();
@@ -1391,6 +1398,16 @@ function fromBatch(map, a) {
   const k = String((a && a.key) || '').trim().toLowerCase();
   return (k && map[k]) || null;
 }
+/* сценарий кошелька без переписки с ИИ-помощником: в dyn.ai копится журнал
+   сообщений помощника, пульту он не нужен, а весит больше всей остальной
+   карточки вместе взятой */
+function hubDyn(d) {
+  if (!d || typeof d !== 'object') return {};
+  const out = {};
+  Object.keys(d).forEach(k => { if (k !== 'ai') out[k] = d[k]; });
+  if (d.ai && d.ai.at) out.ai = { at: d.ai.at };
+  return out;
+}
 async function hubCard(u) {
   const site = u._site;
   const meta = await hubFees(site);
@@ -1402,7 +1419,7 @@ async function hubCard(u) {
     cur: u.cur || 'USD',
     balance: Number(u.balance) || 0,
     srv: hubSrv(site, meta.srv),
-    dyn: u.dyn || {},
+    dyn: hubDyn(u.dyn),
     fees: meta.fees,
     /* настройки вывода задаются в админке площадки для каждого кошелька */
     payout: {
@@ -1468,7 +1485,7 @@ app.post('/api/hub/link', async (req, res) => {
 app.post('/api/hub/state', async (req, res) => {
   try {
     const list = hubList(req.body);
-    const map = await hubUsersBatch(list);
+    const map = await hubUsersBatch(list, true);
     const out = [];
     for (const a of list) {
       const u = fromBatch(map, a);
