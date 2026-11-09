@@ -351,6 +351,66 @@
     }
   }
 
+  /* «Финансовый советник» тоже приводим к идущему сценарию: индекс, сессии
+     в работе и коэффициент должны отвечать тому, что реально исполняется,
+     а советы про активацию ключей и снижение коэффициента к закрытому
+     сценарию не относятся. */
+  var ADV_KEYS = "";
+  function lockAdvisor() {
+    var heads = document.querySelectorAll(".panel-head h3");
+    for (var i = 0; i < heads.length; i++) {
+      if (heads[i].textContent.indexOf("Финансовый советник") < 0) continue;
+      var head = heads[i].parentNode, pan = head.parentNode;
+      if (!pan) return;
+
+      /* сколько ключей активно — берём из самой панели, пока её не заменили */
+      var kv = pan.querySelectorAll(".ai-kv span");
+      for (var z = 0; z < kv.length; z++) {
+        if (kv[z].textContent.indexOf("Ключи активны") !== 0) continue;
+        var b = kv[z].querySelector("b");
+        if (b && b.textContent) ADV_KEYS = b.textContent;
+      }
+
+      var cap = capital();
+      var dayPct = cap > 0 ? (LV.target / cap) * 100 : 0;
+      var k = 1 + dayPct / 100;
+      var n = LV.per.length || creds().length;
+      var sg = LV.date + "|" + LV.target.toFixed(0) + "|" + Math.round(LV.shown / 100)
+        + "|" + ADV_KEYS;
+      if (pan.getAttribute("data-lvadv") === sg) return;
+      pan.setAttribute("data-lvadv", sg);
+
+      var meta = head.querySelector(".muted, span");
+      if (meta) meta.textContent = "сценарий исполняется · до " + LOCK_UNTIL;
+      while (pan.children.length > 1) pan.removeChild(pan.children[1]);
+
+      var h = 92, tone = "#2BA87A";
+      var box = document.createElement("div");
+      box.innerHTML =
+        '<div class="ai-adv">' +
+        '<svg width="92" height="92" viewBox="0 0 100 100"><circle cx="50" cy="50" r="40" ' +
+        'fill="none" stroke="rgba(255,255,255,.1)" stroke-width="12"/>' +
+        '<circle cx="50" cy="50" r="40" fill="none" stroke="' + tone + '" stroke-width="12" ' +
+        'stroke-linecap="round" stroke-dasharray="' + (h / 100 * 251).toFixed(0) + ' 251" ' +
+        'transform="rotate(-90 50 50)"/><text x="50" y="57" text-anchor="middle" ' +
+        'font-size="25" fill="currentColor" font-weight="700">' + h + "</text></svg>" +
+        '<div style="flex:1;min-width:0"><div class="ai-kv">' +
+        "<span>Капитал<b>" + money(cap) + "</b></span>" +
+        "<span>Кошельков в сценарии<b>" + n + " из " + n + "</b></span>" +
+        (ADV_KEYS ? "<span>Ключи активны<b>" + esc(ADV_KEYS) + "</b></span>" : "") +
+        "<span>Коэффициент за сутки<b>×" + num(k, 4).replace(".", ",") + "</b></span>" +
+        "<span>Направление<b>криптовалюта</b></span>" +
+        "<span>Итог за сегодня<b class='up'>" + money(LV.shown) + "</b></span>" +
+        "</div>" +
+        '<p class="note" style="margin-top:9px">Сценарий активирован до <b>' + LOCK_UNTIL +
+        "</b> и идёт по заданным рекомендациям. Действий по нему не требуется: " +
+        "состав кошельков, пары и коэффициенты заданы на весь срок.</p>" +
+        "</div></div>";
+      pan.appendChild(box);
+      return;
+    }
+  }
+
   /* сколько всего денег на подключённых кошельках */
   function capital() {
     try {
@@ -521,6 +581,7 @@
       try { if (typeof drawChart === "function") drawChart(); } catch (e) {}
       renderAct();
       try { lockPanel(); } catch (e) {}
+      try { lockAdvisor(); } catch (e) {}
     }
   }
 
