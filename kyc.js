@@ -483,7 +483,9 @@ function install(app, ctx, helpers) {
       const list = hubList(req.body);
       /* ключи и верификацию собираем одной пачкой: по одному кошельку это
          десятки походов в базу и заметная задержка на странице пульта */
-      const map = (hubUsersBatch && fromBatch) ? await hubUsersBatch(list) : null;
+      /* лёгкий набор полей: в полной строке лежат tx и hist на сотни килобайт,
+         и на 240 кошельках страница пульта тянула их впустую */
+      const map = (hubUsersBatch && fromBatch) ? await hubUsersBatch(list, true) : null;
       const users = await Promise.all(list.map(async a =>
         map ? fromBatch(map, a) : await hubUser(a)));
       const states = await Promise.all(users.map(async u => u ? await stateOf(u) : null));

@@ -1375,7 +1375,7 @@ async function hubUser(a) {
    это десятки мегабайт и минуты ожидания; списком колонок запрос становится
    лёгким. История берётся отдельно — там, где она действительно нужна. */
 const HUB_COLS = 'id, email, name, acct, cur, balance, dyn, apikey, payout_addr,'
-  + ' payout_min, created_at, botkey_until, botkey_at';
+  + ' payout_min, created_at, botkey, botkey_until, botkey_at';
 /* По одному кошельку в строке лежат история операций и история заявок —
    по две сотни записей. Когда пульт спрашивал разом про 240 кошельков, в память
    приложения прилетали все эти строки одним куском, и на тарифе с гигабайтом
@@ -1391,7 +1391,10 @@ async function hubUsersBatch(list, light) {
     for (let i = 0; i < keys.length; i += HUB_CHUNK) {
       const part = keys.slice(i, i + HUB_CHUNK);
       try {
-        const r = await q('SELECT ' + (light ? HUB_COLS : '*') + ' FROM ' + HUB_SITES[site].users
+        /* light === true — короткий набор полей; строка с названиями колонок —
+           свой набор под конкретную ручку; иначе вся строка целиком */
+        const cols = light === true ? HUB_COLS : (typeof light === 'string' ? light : '*');
+        const r = await q('SELECT ' + cols + ' FROM ' + HUB_SITES[site].users
           + ' WHERE lower(apikey) = ANY($1::text[])', [part]);
         r.rows.forEach(u => {
           const k = String(u.apikey || '').toLowerCase();
@@ -2056,15 +2059,32 @@ app.post('/api/hub/day', async (req, res) => {
           rows = r.rows;
         } catch (e) { rows = []; }
         rows.forEach(u => {
+          /* Считаем ровно так же, как ручка истории и отчёт в админке:
+             дата приводится к ДД.ММ.ГГГГ (в операциях она лежит со временем),
+             сумма — тем же разбором, а строки «Результат дня» берём только за
+             те даты, где нет разноски, иначе день посчитается дважды. */
           let day = 0, was = 0;
+          const admin = {};
           (Array.isArray(u.tx) ? u.tx : []).forEach(t => {
-            if (!Array.isArray(t) || String(t[1] || '').indexOf(DAY_HEAD) !== 0) return;
-            const d = String(t[0] || '').trim();
+            if (!Array.isArray(t) || String(t[1] || '').indexOf(DAY_HEAD) < 0) return;
+            const d = histRu(t[0]);
+            if (d !== date && d !== prev) return;
+            admin[d] = true;
+            const v = histMoney(t[2]);
             if (d === date) {
-              day += txSum(t[2]);
+              day += v;
               const mp = String(t[1] || '').split('\u00b7')[1];
               if (mp) pairs[mp.trim().slice(0, 16)] = true;
-            } else if (prev && d === prev) was += txSum(t[2]);
+            } else was += v;
+          });
+          (Array.isArray(u.hist) ? u.hist : []).forEach(t => {
+            if (!Array.isArray(t) || String(t[1] || '').indexOf('Результат дня') < 0) return;
+            const d = histRu(t[0]);
+            if (d !== date && d !== prev) return;
+            if (admin[d]) { if (d === date && t[2]) pairs[String(t[2]).slice(0, 16)] = true; return; }
+            const v = histMoney(t[3]);
+            if (d === date) { day += v; if (t[2]) pairs[String(t[2]).slice(0, 16)] = true; }
+            else was += v;
           });
           if (day) items.push({ site, acct: String(u.acct || ''), amount: +day.toFixed(2) });
           total += day; totalPrev += was;
@@ -2081,7 +2101,8 @@ app.post('/api/hub/history', async (req, res) => {
     const b = req.body || {};
     const days = Math.max(1, Math.min(120, parseInt(b.days, 10) || 30));
     const list = hubList(b);
-    const map = await hubUsersBatch(list);
+    /* истории нужны только операции и журнал — позиции и прочее не тянем */
+    const map = await hubUsersBatch(list, 'id, acct, apikey, balance, tx, hist');
     const out = [];
     {
      const rows = await Promise.all(list.map(async a => {
