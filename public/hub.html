@@ -949,12 +949,29 @@ const TRADES_DAY={calm:9,balance:18,turbo:34};
 /* закрытые сделки кошелька: детерминированы окном сценария, сумма результатов = достигнутой прибыли */
 /* какая пара работала на кошельке в этот день: берём из разнесённых итогов
    кабинета (там записан инструмент), иначе — пара текущей сессии или карточки */
+/* История по кошелькам хранится списком. Искать в нём перебором на каждую
+   сделку — это 240 проходов на строку и под две тысячи строк: страница
+   вставала намертво. Поэтому держим готовый указатель site:acct → запись
+   и пересобираем его только когда история обновилась. */
+function histIdx(){
+  const h=S.hist||[];
+  if(S.__hiSrc===h&&S.__hi) return S.__hi;
+  const m={};
+  h.forEach(x=>{ m[x.site+":"+String(x.acct)]=x; });
+  S.__hi=m; S.__hiSrc=h;
+  return m;
+}
+function histDays(a){
+  const it=histIdx()[a.site+":"+String(a.acct)];
+  if(!it) return null;
+  if(!it.__byDate){
+    const d={};
+    (it.days||[]).forEach(r=>{ d[r.date]=r; });
+    it.__byDate=d;
+  }
+  return it.__byDate;
+}
 function pairAt(a,t){
-  const d=new Date(t),p2=n=>(n<10?"0":"")+n;
-  const key=p2(d.getDate())+"."+p2(d.getMonth()+1)+"."+d.getFullYear();
-  const it=(S.hist||[]).filter(x=>x.site===a.site&&String(x.acct)===String(a.acct))[0];
-  const row=it&&(it.days||[]).filter(x=>x.date===key)[0];
-  if(row&&row.pair) return row.pair;
   /* пока идёт криптосценарий, сделки могут быть только по его парам:
      золото и акции до конца срока не торгуются */
   const LVS=window.LV_SHOW;
@@ -962,6 +979,11 @@ function pairAt(a,t){
     const n=Math.abs(Math.floor(t/3600000)+(Number(String(a.acct).replace(/\D/g,""))||0));
     return LVS.pairs[n%LVS.pairs.length];
   }
+  const d=new Date(t),p2=n=>(n<10?"0":"")+n;
+  const key=p2(d.getDate())+"."+p2(d.getMonth()+1)+"."+d.getFullYear();
+  const by=histDays(a);
+  const row=by&&by[key];
+  if(row&&row.pair) return row.pair;
   const w=winOf(a),pp=paramsFor(a);
   return (w&&w.d.pair)||pp.pair||"XAU/USD";
 }
@@ -999,6 +1021,8 @@ function dealsOf(a,limit){
   const inWin=w?ts.filter(x=>x>=w.st):[];
   const ws={}; let sum=0;
   inWin.forEach((x,i)=>{ const v=0.45+rnd(seed,i+120); ws[x]=v; sum+=v; });
+  /* размер «фоновой» сделки считаем один раз на кошелёк */
+  const unitOut=(Math.abs(dayPosted(a))||bal*0.004)/Math.max(4,perDay);
   const out=[];
   ts.forEach((x,i)=>{
     const sym=syms[i];
@@ -1015,8 +1039,7 @@ function dealsOf(a,limit){
          набирается дневной результат. Ориентир — дневной итог кошелька,
          разнесённый по его сделкам за сутки, плюс крупные плюсы и минусы,
          чтобы рост за день был объяснимым, а не из ровных копеек. */
-      const dayAmt=Math.abs(dayPosted(a))||bal*0.004;
-      const unit=dayAmt/Math.max(4,perDay);
+      const unit=unitOut;
       const sw=(rnd(seed,i+500)-0.5)*2;            /* −1 … 1 */
       const loss=rnd(seed,i+700)<0.38;             /* примерно 4 сделки из 10 в минус */
       pl=unit*(1+sw*2.3)*(loss?-0.85:1);
@@ -1936,9 +1959,8 @@ function dayShown(){
   return (has||!last)?today:last;
 }
 function dayPosted(a){
-  const it=(S.hist||[]).filter(x=>x.site===a.site&&String(x.acct)===String(a.acct))[0];
-  if(!it) return 0;
-  const row=(it.days||[]).filter(x=>x.date===dayShown())[0];
+  const by=histDays(a);
+  const row=by&&by[dayShown()];
   return row?Number(row.amount)||0:0;
 }
 async function pullHist(){
