@@ -1307,9 +1307,13 @@ function accsSig(){
 /* обновление только живых цифр: баланс, итог за сутки, прогресс и остаток времени */
 function tickAccs(){
   const box=$("accs"); if(!box) return;
+  /* обновляем только те карточки, что реально на экране: при 240 кошельках
+     обход всего списка каждую секунду подвешивал страницу */
+  const shown={};
+  box.querySelectorAll('.acc[data-k]').forEach(n=>{ shown[n.getAttribute("data-k")]=n; });
   S.accounts.forEach(a=>{
     if(a.error) return;
-    const el=box.querySelector('.acc[data-k="'+keyOf(a)+'"]'); if(!el) return;
+    const el=shown[keyOf(a)]; if(!el) return;
     const w=winOf(a), cur=valOf(a), day=todayOf(a);
     const from=w?(Number(a.balance)||0):cur, pl=cur-from, pr=w?progOf(a):0;
     const q=n=>el.querySelector('[data-live="'+n+'"]');
@@ -1333,7 +1337,10 @@ function renderAccs(force){
   const sg=accsSig();
   if(!force&&box.__sig===sg){ tickAccs(); return; }
   box.__sig=sg;
-  box.innerHTML=S.accounts.map(a=>{
+  /* список рисуем частями: 240 карточек разом — это долгая отрисовка и фризы */
+  if(!window.ACC_LIMIT) window.ACC_LIMIT=40;
+  const __all=S.accounts, __more=Math.max(0,__all.length-window.ACC_LIMIT);
+  box.innerHTML=__all.slice(0,window.ACC_LIMIT).map(a=>{
     const k=keyOf(a);
     if(a.error) return '<div class="acc"><div class="acc-top"><div class="acc-chk"></div>'+
       '<div class="acc-name"><b>#'+a.acct+' '+siteBadge(a.site)+'</b><small>'+a.error+'</small></div></div></div>';
@@ -1387,6 +1394,13 @@ function renderAccs(force){
         '</div>'+
       '</div></div>';
   }).join("");
+  if(__more>0){
+    box.insertAdjacentHTML("beforeend",
+      '<button class="btn btn-full" id="accMore" style="margin-top:10px">'+
+      'Показать ещё · осталось '+__more+'</button>');
+    const mb=$("accMore");
+    if(mb) mb.onclick=()=>{ window.ACC_LIMIT+=40; renderAccs(true); };
+  }
   box.querySelectorAll("[data-tog]").forEach(el=>el.onclick=e=>{
     const k=el.dataset.tog;
     if(e.target.closest("[data-chk]")){ S.sel.has(k)?S.sel.delete(k):S.sel.add(k); }
