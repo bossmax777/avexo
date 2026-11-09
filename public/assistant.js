@@ -1907,10 +1907,14 @@
       "<span>Средний коэффициент<b>×" + m.avgK.toFixed(2).replace(".", ",") + "</b></span>" +
       "<span>Прогретых кошельков<b class='" + (w.cold.length && w.pct >= 50 ? "down" : "up") + "'>" +
       w.warm.length + " из " + w.n + (w.cold.length ? " · в прогреве " + w.cold.length : "") + "</b></span>" +
-      "<span>Прогноз сценария за сутки<b class='" + (hc.gain > CAP ? "down" : "up") + "'>" +
-      money(hc.gain) + "</b></span>" +
-      "<span>Итог за " + (m.dayDate === ruDay() ? "сегодня" : m.dayDate) +
-      " (факт)<b class='" + (m.day >= 0 ? "up" : "down") + "'>" + sig(m.day) + "</b></span>" +
+      /* прогноз убран: пульт показывает только то, что реально набежало.
+         Итог идёт вместе с живым счётчиком дня, а не сразу конечной цифрой. */
+      (function () {
+        var lv = window.LV_SHOW;
+        var v = (lv && lv.on && isFinite(lv.shown)) ? lv.shown : m.day;
+        return "<span>Итог за " + (m.dayDate === ruDay() ? "сегодня" : m.dayDate) +
+          "<b class='" + (v >= 0 ? "up" : "down") + "'>" + sig(v) + "</b></span>";
+      })() +
       "</div>" +
       (steps.length
         ? "<ol class='ai-steps'>" + steps.map(function (st, i) {

@@ -140,7 +140,10 @@
     "#lvAct table{width:100%;border-collapse:collapse;font-size:12.5px;font-variant-numeric:tabular-nums}" +
     "#lvAct th,#lvAct td{text-align:left;padding:5px 6px;border-bottom:1px solid var(--line)}" +
     "#lvAct th{color:var(--muted);font-weight:500}" +
-    "#lvAct .on{color:var(--buy,#16A34A);font-weight:600}";
+    "#lvAct .on{color:var(--buy,#16A34A);font-weight:600}" +
+    ".lv-week-note{margin:0 0 11px;border:1px solid var(--line);border-radius:10px;" +
+      "padding:9px 12px;font-size:12.5px;color:var(--muted);background:rgba(127,127,127,.06)}" +
+    ".lv-week-note b{color:var(--buy,#16A34A)}";
 
   function build() {
     if (LV.built) return true;
@@ -183,31 +186,84 @@
     return true;
   }
 
-  /* «Общий сценарий» показываем как уже активированный: свободных кошельков нет */
+  /* «Общий сценарий» показываем как уже активированный и закрытый для правок:
+     параметры заданы до LOCK_UNTIL, выбирать и запускать ничего не нужно.
+     Вызывается на каждом тике — панель перерисовывается своим кодом,
+     и блокировку надо накладывать заново. */
   function lockPanel() {
     var who = el("whoPick");
-    if (who) who.textContent = "все кошельки заняты активным сценарием";
+    if (who && who.textContent.indexOf("сценари") < 0) {
+      who.textContent = "все кошельки в активном сценарии";
+    }
     var note = el("whoNote");
     if (note) {
-      note.innerHTML = "Свободных кошельков нет: все включены в общий сценарий, " +
-        "активированный до <b>" + LOCK_UNTIL + "</b>.";
+      note.innerHTML = "Состав сценария зафиксирован до <b>" + LOCK_UNTIL + "</b>: " +
+        "эти кошельки снять нельзя. Новые кошельки добавить можно — " +
+        "они подключатся к тому же сценарию.";
     }
-    ["whoAll", "whoNone", "fWho"].forEach(function (id) {
-      var n = el(id);
-      if (!n) return;
-      if (n.tagName === "DETAILS") { n.open = false; n.style.pointerEvents = "none"; n.style.opacity = ".55"; }
-      else { n.disabled = true; }
-    });
     var sel = el("selMeta");
     if (sel) sel.textContent = "активирован до " + LOCK_UNTIL;
+
     var host = el("fWho");
+    var panel = host ? host.closest(".panel") : null;
+    if (panel) {
+      /* сам блок с параметрами закрываем: всё уже задано */
+      panel.querySelectorAll("input, select, button").forEach(function (n) {
+        if (n.id === "btnFix") return;                 /* ручная фиксация остаётся */
+        n.disabled = true;
+      });
+      panel.querySelectorAll("details").forEach(function (n) {
+        n.open = false; n.style.pointerEvents = "none"; n.style.opacity = ".55";
+      });
+      panel.querySelectorAll(".seg, .chips, input[type=range]").forEach(function (n) {
+        n.style.pointerEvents = "none"; n.style.opacity = ".55";
+      });
+    }
+
+    /* карточка с заданными параметрами — вместо пустых полей выбора */
     if (host && host.parentNode && !el("lvLock")) {
       var d = document.createElement("div");
       d.id = "lvLock";
-      d.innerHTML = "Сценарий <b>активирован</b> и исполняется в криптовалютном " +
-        "направлении до " + LOCK_UNTIL + ". Новые кошельки к нему добавить нельзя — " +
-        "состав зафиксирован на весь срок.";
       host.parentNode.insertBefore(d, host);
+    }
+    var box = el("lvLock");
+    if (box) {
+      var cap = capital();
+      var dayPct = cap > 0 ? (LV.target / cap) * 100 : 0;
+      var n = LV.per.length || creds().length;
+      box.innerHTML =
+        "Сценарий <b>активирован</b> и исполняется до " + LOCK_UNTIL + ". " +
+        "Параметры заданы, выбор закрыт.<br>" +
+        "Направление — <b>криптовалюта</b> (" + esc(LV.pairs.join(" · ")) + ") · " +
+        "кошельков в работе: " + n + " · коэффициент за сутки: <b>" +
+        num(dayPct, 2) + " %</b> · горизонт: до " + LOCK_UNTIL + ".";
+    }
+    lockWeek();
+  }
+
+  /* расписание недели тоже закрываем: план уже идёт до LOCK_UNTIL */
+  function lockWeek() {
+    var heads = document.querySelectorAll(".panel-head h3");
+    for (var i = 0; i < heads.length; i++) {
+      if (heads[i].textContent.indexOf("Расписание сценариев") < 0) continue;
+      var panel = heads[i].closest(".panel") || heads[i].parentNode.parentNode;
+      if (!panel) return;
+      var meta = heads[i].parentNode.querySelector(".muted");
+      if (meta) meta.textContent = "активировано до " + LOCK_UNTIL;
+      panel.querySelectorAll("input, select, button").forEach(function (n) { n.disabled = true; });
+      panel.querySelectorAll(".ai-week").forEach(function (n) {
+        n.style.pointerEvents = "none"; n.style.opacity = ".65";
+      });
+      if (!panel.querySelector(".lv-week-note")) {
+        var p = document.createElement("div");
+        p.className = "lv-week-note";
+        p.id = "lvWeekNote";
+        p.innerHTML = "Расписание уже активировано и исполняется в криптовалютном " +
+          "направлении до <b>" + LOCK_UNTIL + "</b>. Менять план и подбирать новый " +
+          "на этот срок не нужно.";
+        panel.insertBefore(p, panel.children[1] || null);
+      }
+      return;
     }
   }
 
@@ -346,9 +402,20 @@
     el("lvFeed").innerHTML = LV.feed.join("");
 
     /* верхние плитки идут вместе со счётчиком */
-    window.LV_SHOW = { on: true, date: LV.date, shown: LV.shown, target: LV.target };
+    /* наружу отдаём не только текущее число, но и саму кривую дня:
+       по ней «Сводный капитал» рисует график, когда сессий в работе нет */
+    window.LV_SHOW = {
+      on: true, date: LV.date, shown: LV.shown, target: LV.target,
+      start: c.start, end: c.end,
+      at: function (t) {
+        var pp = (t - c.start) / DAY_MS;
+        return LV.target * share(pp, seedOf(LV.date + "|" + LV.target.toFixed(2)));
+      }
+    };
     try { if (typeof renderKpis === "function") renderKpis(); } catch (e) {}
+    try { if (typeof drawChart === "function") drawChart(); } catch (e) {}
     renderAct();
+    try { lockPanel(); } catch (e) {}
   }
 
   function boot() {
