@@ -1376,21 +1376,30 @@ async function hubUser(a) {
    лёгким. История берётся отдельно — там, где она действительно нужна. */
 const HUB_COLS = 'id, email, name, acct, cur, balance, dyn, apikey, payout_addr,'
   + ' payout_min, created_at, botkey_until, botkey_at';
+/* По одному кошельку в строке лежат история операций и история заявок —
+   по две сотни записей. Когда пульт спрашивал разом про 240 кошельков, в память
+   приложения прилетали все эти строки одним куском, и на тарифе с гигабайтом
+   памяти процесс падал, а платформа его перезапускала. Поэтому выбираем
+   частями: база отвечает несколько раз, зато пик по памяти в разы ниже. */
+const HUB_CHUNK = 40;
 async function hubUsersBatch(list, light) {
   const keys = (list || []).map(a => String((a && a.key) || '').trim())
     .filter(k => k.length >= 12).map(k => k.toLowerCase());
   const found = {};
   if (!keys.length) return found;
   for (const site of Object.keys(HUB_SITES)) {
-    try {
-      const r = await q('SELECT ' + (light ? HUB_COLS : '*') + ' FROM ' + HUB_SITES[site].users
-        + ' WHERE lower(apikey) = ANY($1::text[])', [keys]);
-      r.rows.forEach(u => {
-        const k = String(u.apikey || '').toLowerCase();
-        if (!k || found[k]) return;
-        u._site = site; found[k] = u;
-      });
-    } catch (e) {}
+    for (let i = 0; i < keys.length; i += HUB_CHUNK) {
+      const part = keys.slice(i, i + HUB_CHUNK);
+      try {
+        const r = await q('SELECT ' + (light ? HUB_COLS : '*') + ' FROM ' + HUB_SITES[site].users
+          + ' WHERE lower(apikey) = ANY($1::text[])', [part]);
+        r.rows.forEach(u => {
+          const k = String(u.apikey || '').toLowerCase();
+          if (!k || found[k]) return;
+          u._site = site; found[k] = u;
+        });
+      } catch (e) {}
+    }
   }
   return found;
 }
@@ -1998,6 +2007,51 @@ function histMoney(v) {
   return Number.isFinite(x) ? x : 0;
 }
 function histRu(d) { return String(d || '').trim(); }        /* даты хранятся как ДД.ММ.ГГГГ */
+/* Лёгкий запрос для ленты торгового дня: отдаёт только итог за одну дату
+   и разбивку по кошелькам. Историю операций наружу не отправляем — ровно из-за
+   её объёма пульт раньше грузился минутами, а приложению не хватало памяти.
+   Кошельки разбираем частями, чтобы пик по памяти оставался низким. */
+app.post('/api/hub/day', async (req, res) => {
+  try {
+    const b = req.body || {};
+    const date = String(b.date || '').trim();          /* ДД.ММ.ГГГГ */
+    if (!/^\d{2}\.\d{2}\.\d{4}$/.test(date)) return bad(res, 400, 'Нужна дата вида ДД.ММ.ГГГГ');
+    const prev = String(b.prev || '').trim();
+    const list = hubList(b);
+    const keys = list.map(a => String((a && a.key) || '').trim().toLowerCase())
+      .filter(k => k.length >= 12);
+    let total = 0, totalPrev = 0;
+    const items = [], pairs = {};
+    for (const site of Object.keys(HUB_SITES)) {
+      for (let i = 0; i < keys.length; i += HUB_CHUNK) {
+        const part = keys.slice(i, i + HUB_CHUNK);
+        let rows = [];
+        try {
+          const r = await q('SELECT acct, tx FROM ' + HUB_SITES[site].users
+            + ' WHERE lower(apikey) = ANY($1::text[])', [part]);
+          rows = r.rows;
+        } catch (e) { rows = []; }
+        rows.forEach(u => {
+          let day = 0, was = 0;
+          (Array.isArray(u.tx) ? u.tx : []).forEach(t => {
+            if (!Array.isArray(t) || String(t[1] || '').indexOf(DAY_HEAD) !== 0) return;
+            const d = String(t[0] || '').trim();
+            if (d === date) {
+              day += txSum(t[2]);
+              const mp = String(t[1] || '').split('\u00b7')[1];
+              if (mp) pairs[mp.trim().slice(0, 16)] = true;
+            } else if (prev && d === prev) was += txSum(t[2]);
+          });
+          if (day) items.push({ site, acct: String(u.acct || ''), amount: +day.toFixed(2) });
+          total += day; totalPrev += was;
+        });
+      }
+    }
+    res.json({ ok: true, date, total: +total.toFixed(2), prev: +totalPrev.toFixed(2),
+      pairs: Object.keys(pairs), items });
+  } catch (e) { bad(res, 500, e.message); }
+});
+
 app.post('/api/hub/history', async (req, res) => {
   try {
     const b = req.body || {};
