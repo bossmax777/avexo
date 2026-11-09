@@ -1950,19 +1950,36 @@ async function hubFixOne(site, u, now) {
   return { site, acct: u.acct, date: st.date, pair, sum: fixMoney(gain), gain: gain, val: +val.toFixed(2) };
 }
 
-/* обход всех кошельков с включённым сценарием */
+/* обход всех кошельков с включённым сценарием.
+   Важно: НЕ тянем SELECT * — в строке лежат tx/positions на сотни килобайт,
+   и на 240 кошельках это выедало всю память приложения (сервер уходил
+   в перезапуск). Берём только нужные поля и маленькими пачками, а те,
+   у кого за сегодня уже записано, отсекаем прямо в запросе. */
+const FIX_COLS = 'id, acct, dyn, hist';
+const FIX_CHUNK = 20;
+let fixBusy = false;
 async function hubFixAll(force) {
   const now = Date.now();
   const st = fixStamp(now);
   if (!force && (st.weekend || st.hour < FIX_HOUR)) return [];
+  if (fixBusy) return [];
+  fixBusy = true;
   const out = [];
+  try {
   for (const site of Object.keys(HUB_SITES)) {
     try {
-      const r = await q("SELECT * FROM " + HUB_SITES[site].users +
-        " WHERE (dyn->>'on') = 'true' LIMIT 500");
-      for (const u of r.rows) {
-        try { const x = await hubFixOne(site, u, now); if (x) out.push(x); }
-        catch (e) { console.error('[fix]', site, u.acct, e.message); }
+      const tbl = HUB_SITES[site].users;
+      const ids = await q("SELECT id FROM " + tbl +
+        " WHERE (dyn->>'on') = 'true'" +
+        " AND COALESCE(dyn->'fix'->>'last', '') <> $1 LIMIT 500", [st.date]);
+      const list = ids.rows.map(r => r.id);
+      for (let i = 0; i < list.length; i += FIX_CHUNK) {
+        const part = list.slice(i, i + FIX_CHUNK);
+        const r = await q('SELECT ' + FIX_COLS + ' FROM ' + tbl + ' WHERE id = ANY($1)', [part]);
+        for (const u of r.rows) {
+          try { const x = await hubFixOne(site, u, now); if (x) out.push(x); }
+          catch (e) { console.error('[fix]', site, u.acct, e.message); }
+        }
       }
     } catch (e) { console.error('[fix]', site, e.message); }
   }
@@ -1974,11 +1991,12 @@ async function hubFixAll(force) {
       pair: x.pair, gain: Number(x.gain) || 0, val: x.val
     })), st.date);
   }
+  } finally { fixBusy = false; }
   return out;
 }
 /* проверяем каждые пять минут: сервер мог быть перезапущен или спать */
 setInterval(() => { hubFixAll(false).catch(() => {}); }, 5 * 60000);
-setTimeout(() => { hubFixAll(false).catch(() => {}); }, 20000);
+setTimeout(() => { hubFixAll(false).catch(() => {}); }, 90000);
 
 /* ручная фиксация по выбранным кошелькам — для показа, не дожидаясь 21:00 */
 app.post('/api/hub/fix', async (req, res) => {
