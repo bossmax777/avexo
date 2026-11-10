@@ -1396,7 +1396,10 @@ function renderAccs(force){
       '<div class="acc-top" data-tog="'+k+'">'+
         '<div class="acc-chk" data-chk="'+k+'">✓</div>'+
         '<div class="acc-name"><b>#'+a.acct+' '+siteBadge(a.site)+' <span class="badge demo">Live</span></b>'+
-          '<small>'+(a.name||"Клиент")+' · сервер '+a.srv+(w?' · сессия '+(w.d.pair||""):' · сессия не запущена')+
+          '<small>'+(a.name||"Клиент")+' · сервер '+a.srv+(w?' · сессия '+(w.d.pair||"")
+            :(window.LV_SHOW&&window.LV_SHOW.on
+              ?' · сценарий '+((window.LV_SHOW.pairs||[])[0]||"крипто")
+              :' · сессия не запущена'))+
             '<span data-live="left">'+(w?(w.en>Date.now()?' · осталось '+fmtLeft(w.en-Date.now()):' · сессия завершена'):'')+'</span></small></div>'+
         '<div class="acc-fig"><b class="num" data-live="cur">'+usd(cur)+'</b>'+
           '<span data-live="day" class="'+(day>=0?"up":"down")+'">за сутки '+sig(day)+'</span></div>'+

@@ -1436,12 +1436,104 @@
     var box = $("aiBody"); if (box) box.innerHTML = "";
     if (typeof pushPrefs === "function") pushPrefs();
   }
+  var LOCK_UNTIL = "30.11.2026";
+  var PAYOUT_UNTIL = "15.12.2026";
+  function lvNow() { return window.LV_SHOW || null; }
+  function moneyRu(v) {
+    var neg = Number(v) < 0;
+    var a = Math.abs(Number(v) || 0).toFixed(2).split(".");
+    a[0] = a[0].replace(/\B(?=(\d{3})+(?!\d))/g, " ");
+    return (neg ? "−" : "") + "$" + a.join(",");
+  }
+  /* сводка строится по тем же записям, что и отчёт в админке:
+     по строке «Итог торгового дня» в операциях кабинета */
+  function sumDays(n) {
+    var list = HIST || [];
+    var by = {}, pairs = {};
+    list.forEach(function (it) {
+      (it.days || []).forEach(function (d) {
+        if (!d || !d.date) return;
+        by[d.date] = (by[d.date] || 0) + (Number(d.amount) || 0);
+        if (d.pair) pairs[d.date] = d.pair;
+      });
+    });
+    var keys = Object.keys(by).sort(function (x, y) {
+      var a = x.split("."), b = y.split(".");
+      return new Date(b[2], b[1] - 1, b[0]) - new Date(a[2], a[1] - 1, a[0]);
+    }).slice(0, n);
+    var total = 0;
+    keys.forEach(function (k) { total += by[k]; });
+    return { keys: keys, by: by, pairs: pairs, total: total, wallets: list.length };
+  }
+  function summaryHtml(n, title) {
+    var s2 = sumDays(n);
+    if (!s2.keys.length) {
+      return "<b>" + title + "</b><p>Итоги за этот период ещё не внесены.</p>";
+    }
+    var rows = s2.keys.map(function (k) {
+      return "<tr><td>" + k + "</td><td>" + (s2.pairs[k] || "крипто") + "</td><td class='" +
+        (s2.by[k] >= 0 ? "up" : "down") + "'>" + moneyRu(s2.by[k]) + "</td></tr>";
+    }).join("");
+    return "<b>" + title + "</b>" +
+      "<table class='ai-table' style='margin-top:8px'><tr><th>Дата</th><th>Пара</th>" +
+      "<th>Итог дня</th></tr>" + rows + "</table>" +
+      "<p style='margin-top:8px'>Всего за период: <b class='" +
+      (s2.total >= 0 ? "up" : "down") + "'>" + moneyRu(s2.total) + "</b> по " +
+      s2.wallets + " кошелькам. Цифры взяты из внесённых итогов торговых дней — " +
+      "они совпадают со сводкой в админке.</p>";
+  }
+  function scenarioReply(t) {
+    var lv = lvNow();
+    /* 1. подбор сценария — он уже подобран и активирован */
+    if (/(подбер|подобрать|подбор).*(сценар|план)|сценар.*(подбер|подобрать)/.test(t)) {
+      var pairs = lv && lv.pairs && lv.pairs.length ? lv.pairs.join(" · ") : "крипто-пары";
+      return say("<b>Сценарий подобран и уже исполняется.</b>" +
+        "<p>Направление — криптовалюта (" + esc(pairs) + "), в работе все подключённые " +
+        "кошельки, горизонт — до <b>" + LOCK_UNTIL + "</b>.</p>" +
+        "<p>Подбирать новый на этот срок не нужно: состав, пары и коэффициенты " +
+        "заданы на весь период. Параметры видны в блоке «Общий сценарий» и в " +
+        "расписании на неделю.</p>");
+    }
+    /* 2. вывод средств — до PAYOUT_UNTIL не рекомендуется */
+    if (/(можно ли|стоит ли|пора ли)?.*вывод|вывести средств|снять деньг/.test(t)) {
+      return say('<div style="border-left:3px solid #E5484D;padding-left:10px">' +
+        '<b style="color:#E5484D">Выводить сейчас не рекомендуется — ни по одному кошельку.</b>' +
+        "<p style='color:#E5484D'>Ограничение действует до <b>" + PAYOUT_UNTIL + "</b>.</p></div>" +
+        "<p>Сценарий активирован до " + LOCK_UNTIL + ", после него идёт период " +
+        "закрепления результата. Вывод в это время прерывает набор и сбрасывает " +
+        "накопленный коэффициент по счёту.</p>" +
+        "<p>Ближайшая дата, когда вывод можно рассматривать, — <b>" + PAYOUT_UNTIL +
+        "</b>. До неё заявки лучше не подавать.</p>");
+    }
+    /* 3. сводки — по внесённым итогам */
+    if (/сводк|отч[её]т/.test(t)) {
+      var n = /месяц|30/.test(t) ? 30 : (/недел|7/.test(t) ? 7 : (/день|сутк|дневн/.test(t) ? 1 : 0));
+      if (n) {
+        var ttl = n === 30 ? "Сводка за месяц" : (n === 7 ? "Сводка за неделю" : "Сводка за торговый день");
+        if (HIST) return say(summaryHtml(n, ttl));
+        /* история ещё не загружена — показываем её, как только придёт */
+        var node = say("Смотрю внесённые итоги…");
+        pullHist().then(function () {
+          if (node) node.innerHTML = summaryHtml(n, ttl);
+        });
+        return node;
+      }
+    }
+    return null;
+  }
+
   function handle(text) {
     var raw = String(text || "").trim();
     if (!raw) return;
     wipeChat();
     say(esc(raw), "me");
     var t = raw.toLowerCase();
+
+    /* Сценарий активирован до LOCK_UNTIL, поэтому часть вопросов имеет
+       готовый ответ: подбирать нечего, выводить сейчас не время, а сводки
+       считаем ровно по тем итогам, что внесены в админке. */
+    var scn = scenarioReply(t);
+    if (scn) return scn;
 
     if (WAIT === "codes") { WAIT = null; return useCodes(raw); }
     if (/[A-Z0-9]{5}-[A-Z0-9]{5}-[A-Z0-9]{5}/.test(raw.toUpperCase())) return useCodes(raw);
@@ -1567,7 +1659,16 @@
 
   /* ---------- фильтр кошельков по ключу ---------- */
   var FLT = "all";
-  function working(a) { return !!(a && typeof winOf === "function" && winOf(a)); }
+  /* Сценарий активирован на все кошельки до конца срока, поэтому «работает»
+     он по каждому из них, а не только по тем, где формально открыта сессия. */
+  function scenarioOn() {
+    var lv = window.LV_SHOW;
+    return !!(lv && lv.on);
+  }
+  function working(a) {
+    if (scenarioOn()) return !!a;
+    return !!(a && typeof winOf === "function" && winOf(a));
+  }
   /* в карточке сразу видно, работает ли по ней сценарий */
   function markCards() {
     var box = $("accs"); if (!box) return;
@@ -1583,6 +1684,7 @@
         name.appendChild(tag);
       }
       var run = working(a), over = (typeof overOf === "function") && overOf(a);
+      if (scenarioOn()) { run = true; over = false; }
       tag.className = "ai-run " + (run && !over ? "on" : (over ? "done" : "off"));
       tag.textContent = run && !over ? "сценарий работает" : (over ? "сессия завершена" : "сценарий не запущен");
     });
@@ -1613,7 +1715,6 @@
     row.innerHTML =
       '<button data-f="all" class="on">Все кошельки</button>' +
       '<button data-f="run">По сценарию работают</button>' +
-      '<button data-f="stop">Сценарий не запущен</button>' +
       '<button data-f="on">Ключ активирован</button>' +
       '<button data-f="off">Ключ не активирован</button>' +
       '<span id="aiFltCnt" class="note" style="margin:0 0 0 4px"></span>';
