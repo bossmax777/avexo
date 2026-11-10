@@ -246,14 +246,23 @@
      горизонт — 20 дней, направление в плюс, коэффициент под наши цифры.
      Поля при этом закрыты: это показ уже заданного, а не выбор. */
   function presetForm() {
+    var want = LV.pairs[0] || PAIRS_FALLBACK[0];
     var sel = el("fPair");
     if (sel && sel.options && sel.options.length) {
-      var want = LV.pairs[0] || PAIRS_FALLBACK[0];
       for (var i = 0; i < sel.options.length; i++) {
         var v = String(sel.options[i].value || "");
-        if (v === want || v.indexOf("BTC") === 0) { sel.selectedIndex = i; break; }
+        if (v === want || v.indexOf("BTC") === 0) { sel.selectedIndex = i; want = v; break; }
       }
     }
+    /* инструмент меняем и в самих настройках: иначе подписи «рынок закрыт»
+       и «закрыто до 16:00» продолжают считаться по золоту, хотя идёт крипта */
+    try {
+      if (typeof S !== "undefined" && S && S.params && S.params.pair !== want) {
+        S.params.pair = want;
+        if (typeof renderPairLive === "function") renderPairLive();
+        if (typeof renderPairNote === "function") renderPairNote();
+      }
+    } catch (e) {}
     var hrs = el("fHours");
     if (hrs) {
       hrs.querySelectorAll("button").forEach(function (b) {
@@ -575,12 +584,12 @@
     };
     /* тяжёлую перерисовку делаем не каждые две секунды, а раз в восемь:
        иначе страница с 240 кошельками заметно подтормаживает */
+    try { lockPanel(); } catch (e) {}
     LV.beat = (LV.beat || 0) + 1;
     if (LV.beat % 4 === 1) {
       try { if (typeof renderKpis === "function") renderKpis(); } catch (e) {}
       try { if (typeof drawChart === "function") drawChart(); } catch (e) {}
       renderAct();
-      try { lockPanel(); } catch (e) {}
       try { lockAdvisor(); } catch (e) {}
     }
   }

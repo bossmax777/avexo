@@ -995,7 +995,10 @@ function backFor(sym,t,need){
 function dealsOf(a,limit){
   const cap=Math.max(1,limit||40);
   const w=winOf(a), p=paramsFor(a);
-  const nowSym=(w&&w.d.pair)||p.pair||"XAU/USD";
+  /* пока идёт криптосценарий, отсчёт ведём от криптопары: иначе журнал
+     упирался в последнее закрытие биржи по золоту и время сделок замирало,
+     хотя крипта торгуется круглосуточно */
+  const nowSym=pairAt(a,Date.now());
   const seed=((Number(String(a.acct).replace(/\D/g,""))||7)*31)%9973;
   /* частота сделок: у запущенной сессии своя, иначе берём настройку кошелька */
   const risk=w?(w.d.risk||coefRisk(coefOf(w.d.k,nowSym))):coefRisk(coefOf(p.k,nowSym));
@@ -1042,11 +1045,16 @@ function dealsOf(a,limit){
       const unit=unitOut;
       const sw=(rnd(seed,i+500)-0.5)*2;            /* −1 … 1 */
       const loss=rnd(seed,i+700)<0.38;             /* примерно 4 сделки из 10 в минус */
-      pl=unit*(1+sw*2.3)*(loss?-0.85:1);
+      pl=unit*(1+sw*1.8)*(loss?-0.85:1);
       if(!isFinite(pl)) pl=0;
     }
     const open=basePrice(sym,x);
-    const close=open+pl/(vol*c)*(side==="buy"?1:-1);
+    let close=open+pl/(vol*c)*(side==="buy"?1:-1);
+    /* у пар с маленьким шагом цены (XRP и подобные) пересчёт результата в цену
+       давал нереальные значения вроде 0,02 — держим выход рядом со входом */
+    const band=open*0.008;
+    if(close>open+band) close=open+band;
+    if(close<open-band) close=open-band;
     out.push({t:x,sym,side,vol,dec,open,close,pl,acct:a.acct,site:a.site});
   });
   return out;
