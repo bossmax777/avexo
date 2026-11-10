@@ -462,7 +462,7 @@
         ", свободных кошельков нет. Изменения не вносились.";
       tone = "";
     }
-    return '<div class="log-it"><div class="log-ic ' + tone + '">' +
+    return '<div class="log-it" data-lvlog-item="1"><div class="log-ic ' + tone + '">' +
       (tone === "g" ? "✓" : "·") + "</div>" +
       '<div class="log-tx"><b>' + title +
       (acct ? ' <span class="badge ' + site + '">#' + esc(acct) + "</span>" : "") + "</b>" +
@@ -473,7 +473,10 @@
     var box = el("logBox");
     if (!box || !LV.date || !LV.start0) return;
     var bucket = Math.floor((Date.now() - LV.start0) / LOG_STEP_MS);
-    if (box.getAttribute("data-lvlog") === LV.date + "|" + bucket) return;
+    /* страница перерисовывает журнал своим кодом и затирает наши записи —
+       поэтому проверяем не только метку, но и то, что они ещё на месте */
+    var mine = box.querySelector("[data-lvlog-item]");
+    if (mine && box.getAttribute("data-lvlog") === LV.date + "|" + bucket) return;
     box.setAttribute("data-lvlog", LV.date + "|" + bucket);
     var out = [];
     for (var i = bucket; i > bucket - LOG_MAX && i >= 0; i--) out.push(logLine(i));
