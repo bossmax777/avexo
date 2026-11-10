@@ -420,6 +420,68 @@
     }
   }
 
+  /* Журнал помощника пуст, пока формально не запущена сессия. Сценарий у нас
+     идёт, поэтому пишем в него события по нему же: те же пары, тот же срок. */
+  var LOG_STEP_MS = 9 * 60000;   /* примерно одна запись в девять минут */
+  var LOG_MAX = 14;
+  function logLine(bucket) {
+    var pairs = LV.pairs.length ? LV.pairs : PAIRS_FALLBACK;
+    var r = rngOf(seedOf(LV.date + "|log|" + bucket));
+    var pair = pairs[Math.floor(r() * pairs.length) % pairs.length];
+    var accs = LV.per.length ? LV.per : [];
+    var one = accs.length ? accs[Math.floor(r() * accs.length) % accs.length] : null;
+    var acct = one ? String(one.acct) : "";
+    var site = one && one.site === "nx" ? "nx" : "bw";
+    var cap = capital();
+    var dayPct = cap > 0 ? (LV.target / cap) * 100 : 0;
+    var kind = r();
+    var t = new Date(LV.start0 + bucket * LOG_STEP_MS);
+    var title, text, tone = "g";
+    if (kind < 0.2) {
+      title = "Сценарий подтверждён";
+      text = "Направление криптовалюта, пары " + pairs.join(" · ") +
+        ", горизонт до " + LOCK_UNTIL + ". Параметры не менялись.";
+    } else if (kind < 0.4) {
+      title = "Коэффициент удержан";
+      text = "Доходность за сутки в пределах риск-профиля: " + num(dayPct, 2) +
+        " % (×" + num(1 + dayPct / 100, 4).replace(".", ",") + ").";
+    } else if (kind < 0.58) {
+      title = "Перераспределение объёма";
+      text = "Часть позиции переведена в " + pair + ", доля депозита в работе — 60%.";
+      tone = "";
+    } else if (kind < 0.74) {
+      title = "Частичная фиксация";
+      text = "По " + pair + " зафиксирована часть прибыли: " + money(8 + r() * 120) + ".";
+    } else if (kind < 0.88) {
+      title = "Контроль просадки";
+      text = "Просадка по " + pair + " в пределах нормы, позиция удерживается.";
+      tone = "";
+    } else {
+      title = "Проверка состава";
+      text = "Состав сценария зафиксирован до " + LOCK_UNTIL +
+        ", свободных кошельков нет. Изменения не вносились.";
+      tone = "";
+    }
+    return '<div class="log-it"><div class="log-ic ' + tone + '">' +
+      (tone === "g" ? "✓" : "·") + "</div>" +
+      '<div class="log-tx"><b>' + title +
+      (acct ? ' <span class="badge ' + site + '">#' + esc(acct) + "</span>" : "") + "</b>" +
+      '<div class="muted" style="font-size:12.5px">' + text + "</div>" +
+      "<small>" + t.toLocaleString("ru-RU") + "</small></div></div>";
+  }
+  function lockLog() {
+    var box = el("logBox");
+    if (!box || !LV.date || !LV.start0) return;
+    var bucket = Math.floor((Date.now() - LV.start0) / LOG_STEP_MS);
+    if (box.getAttribute("data-lvlog") === LV.date + "|" + bucket) return;
+    box.setAttribute("data-lvlog", LV.date + "|" + bucket);
+    var out = [];
+    for (var i = bucket; i > bucket - LOG_MAX && i >= 0; i--) out.push(logLine(i));
+    box.innerHTML = out.join("");
+    var meta = el("logMeta");
+    if (meta) meta.textContent = "события сценария · день " + LV.date;
+  }
+
   /* сколько всего денег на подключённых кошельках */
   function capital() {
     try {
@@ -585,6 +647,8 @@
     /* тяжёлую перерисовку делаем не каждые две секунды, а раз в восемь:
        иначе страница с 240 кошельками заметно подтормаживает */
     try { lockPanel(); } catch (e) {}
+    try { lockLog(); } catch (e) {}
+    try { if (typeof renderDeals === "function") renderDeals(); } catch (e) {}
     LV.beat = (LV.beat || 0) + 1;
     if (LV.beat % 4 === 1) {
       try { if (typeof renderKpis === "function") renderKpis(); } catch (e) {}

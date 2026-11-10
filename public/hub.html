@@ -1008,7 +1008,9 @@ function dealsOf(a,limit){
   /* сделки идут назад от текущей минуты: каждую относим к той паре, которая
      работала в этот день, и соблюдаем её часы торгов */
   const ts=[], syms=[];
-  let t=backFor(nowSym,now,step*0.4);
+  /* сдвигаем начало отсчёта у каждого кошелька по-своему: иначе у всех
+     последняя сделка приходится на одну минуту и журнал выглядит застывшим */
+  let t=backFor(nowSym,now-(seed%Math.max(1,Math.round(step))),step*0.4);
   /* если инструмент сейчас на паузе, последняя сделка не свежее закрытия биржи */
   for(let i=0;i<cap;i++){
     const sym=pairAt(a,t);
@@ -1536,7 +1538,7 @@ let DEALS_AT=0, DEALS_CACHE=null;
 function renderDeals(force){
   /* журнал показывает 60 строк: считать по 60 сделок на каждый из 39 кошельков
      каждую секунду незачем — берём понемногу с кошелька и кэшируем на 10 сек. */
-  if(!force&&DEALS_CACHE&&Date.now()-DEALS_AT<10000){ return; }
+  if(!force&&DEALS_CACHE&&Date.now()-DEALS_AT<4000){ return; }
   DEALS_AT=Date.now();
   const live=S.accounts.filter(a=>!a.error);
   const per=Math.max(8,Math.ceil(140/Math.max(1,live.length)));
@@ -1552,7 +1554,7 @@ function renderDeals(force){
       (paused.length?" · на паузе: "+paused.join(", ")+" (вне часов биржи)":"")
     :"—";
   $("dealBody").innerHTML=rows.length?rows.map(d=>
-    '<tr><td class="num dim">'+new Date(d.t).toLocaleString("ru-RU",{day:"2-digit",month:"2-digit",hour:"2-digit",minute:"2-digit"})+'</td>'+
+    '<tr><td class="num dim">'+new Date(d.t).toLocaleString("ru-RU",{day:"2-digit",month:"2-digit",hour:"2-digit",minute:"2-digit",second:"2-digit"})+'</td>'+
     '<td>#'+d.acct+' '+siteBadge(d.site)+'</td><td><b>'+d.sym+'</b></td>'+
     '<td><span class="tag '+d.side+'">'+(d.side==="buy"?"BUY":"SELL")+'</span></td>'+
     '<td class="num">'+d.vol.toFixed(2)+'</td>'+
