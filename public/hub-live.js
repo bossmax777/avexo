@@ -231,6 +231,12 @@
       host.parentNode.insertBefore(d, host);
     }
     presetForm();
+    /* renderPairLive снова включает кнопку запуска, когда пара открыта —
+       поэтому закрываем её уже после подстановки параметров */
+    ["btnRun", "btnHalt", "whoAll", "whoNone"].forEach(function (id) {
+      var n = el(id);
+      if (n) n.disabled = true;
+    });
     var box = el("lvLock");
     if (box) {
       var cap = capital();
@@ -284,7 +290,7 @@
     var cap = capital();
     var dayPct = cap > 0 ? (LV.target / cap) * 100 : 0;
     var k = 1 + dayPct / 100;
-    var n = LV.per.length || creds().length;
+    var n = Math.max(LV.per.length, creds().length);
     fc.innerHTML =
       '<div class="muted" style="font-size:12px">Текущий сценарий — исполняется</div>' +
       '<div class="fc-main"><b class="up">' + money(LV.shown) + "</b> " +
@@ -507,7 +513,7 @@
     if (!body) return;
     var cap = capital();
     var dayPct = cap > 0 ? (LV.target / cap) * 100 : 0;
-    var n = LV.per.length || creds().length;
+    var n = Math.max(LV.per.length, creds().length);
     var rows = LV.pairs.map(function (pair, i) {
       /* доля пары в дневном коэффициенте — стабильная, считается от даты */
       var r = rngOf(seedOf(LV.date + "|k|" + pair));
