@@ -992,6 +992,11 @@ function pairAt(a,t){
 function backFor(sym,t,need){
   return allDay(sym)?t-Math.max(0,need):marketBack(t,need);
 }
+/* При каждой загрузке страницы журнал сделок и события помощника должны
+   выглядеть по-новому — иначе видно, что набор всегда один и тот же.
+   Счётчик дня, плитки и коэффициенты этой соли НЕ используют: они должны
+   сходиться с внесёнными цифрами и совпадать на разных компьютерах. */
+window.LOAD_SALT=Math.floor(Math.random()*90000)+1;
 function dealsOf(a,limit){
   const cap=Math.max(1,limit||40);
   const w=winOf(a), p=paramsFor(a);
@@ -999,7 +1004,7 @@ function dealsOf(a,limit){
      упирался в последнее закрытие биржи по золоту и время сделок замирало,
      хотя крипта торгуется круглосуточно */
   const nowSym=pairAt(a,Date.now());
-  const seed=((Number(String(a.acct).replace(/\D/g,""))||7)*31)%9973;
+  const seed=((Number(String(a.acct).replace(/\D/g,""))||7)*31+(window.LOAD_SALT||0))%9973;
   /* частота сделок: у запущенной сессии своя, иначе берём настройку кошелька */
   const risk=w?(w.d.risk||coefRisk(coefOf(w.d.k,nowSym))):coefRisk(coefOf(p.k,nowSym));
   const perDay=TRADES_DAY[risk]||TRADES_DAY.balance;

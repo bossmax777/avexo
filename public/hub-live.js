@@ -426,7 +426,7 @@
   var LOG_MAX = 14;
   function logLine(bucket) {
     var pairs = LV.pairs.length ? LV.pairs : PAIRS_FALLBACK;
-    var r = rngOf(seedOf(LV.date + "|log|" + bucket));
+    var r = rngOf(seedOf(LV.date + "|log|" + bucket + "|" + (window.LOAD_SALT || 0)));
     var pair = pairs[Math.floor(r() * pairs.length) % pairs.length];
     var accs = LV.per.length ? LV.per : [];
     var one = accs.length ? accs[Math.floor(r() * accs.length) % accs.length] : null;
@@ -581,7 +581,8 @@
     return num(v, p[2]);
   }
   function feedLine(bucket) {
-    var r = rngOf(seedOf(LV.date + "|" + bucket + "|" + LV.pairs.join()));
+    var r = rngOf(seedOf(LV.date + "|" + bucket + "|" + LV.pairs.join()
+      + "|" + (window.LOAD_SALT || 0)));
     var pair = LV.pairs[Math.floor(r() * LV.pairs.length)] || PAIRS_FALLBACK[0];
     var t = new Date(LV.start0 + bucket * FEED_STEP_MS);
     var p = function (n) { return (n < 10 ? "0" : "") + n; };
