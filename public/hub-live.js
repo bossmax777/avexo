@@ -143,7 +143,11 @@
     "#lvAct .on{color:var(--buy,#16A34A);font-weight:600}" +
     ".lv-week-note{margin:0 0 11px;border:1px solid var(--line);border-radius:10px;" +
       "padding:9px 12px;font-size:12.5px;color:var(--muted);background:rgba(127,127,127,.06)}" +
-    ".lv-week-note b{color:var(--buy,#16A34A)}";
+    ".lv-week-note b{color:var(--buy,#16A34A)}" +
+    /* закрытые кнопки и поля должны и выглядеть закрытыми, а не активными */
+    ".panel button:disabled,.panel select:disabled,.panel input:disabled{" +
+      "opacity:.42;filter:grayscale(1);cursor:not-allowed;box-shadow:none}" +
+    ".panel button:disabled:hover{border-color:var(--line)}";
 
   function build() {
     if (LV.built) return true;

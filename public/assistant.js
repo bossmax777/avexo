@@ -1479,8 +1479,7 @@
       "<th>Итог дня</th></tr>" + rows + "</table>" +
       "<p style='margin-top:8px'>Всего за период: <b class='" +
       (s2.total >= 0 ? "up" : "down") + "'>" + moneyRu(s2.total) + "</b> по " +
-      s2.wallets + " кошелькам. Цифры взяты из внесённых итогов торговых дней — " +
-      "они совпадают со сводкой в админке.</p>";
+      s2.wallets + " кошелькам.</p>";
   }
   function scenarioReply(t) {
     var lv = lvNow();
