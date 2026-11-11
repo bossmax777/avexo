@@ -396,7 +396,10 @@
       var n = LV.per.length || creds().length;
       var sg = LV.date + "|" + LV.target.toFixed(0) + "|" + Math.round(LV.shown / 100)
         + "|" + ADV_KEYS;
-      if (pan.getAttribute("data-lvadv") === sg) return;
+      /* панель перерисовывается своим кодом и затирает нашу карточку —
+         поэтому смотрим не только на метку, но и на то, что она ещё там */
+      var mine = pan.querySelector("[data-lvadv-body]");
+      if (mine && pan.getAttribute("data-lvadv") === sg) return;
       pan.setAttribute("data-lvadv", sg);
 
       var meta = head.querySelector(".muted, span");
@@ -405,6 +408,7 @@
 
       var h = 92, tone = "#2BA87A";
       var box = document.createElement("div");
+      box.setAttribute("data-lvadv-body", "1");
       box.innerHTML =
         '<div class="ai-adv">' +
         '<svg width="92" height="92" viewBox="0 0 100 100"><circle cx="50" cy="50" r="40" ' +
@@ -541,10 +545,12 @@
       var meta = head.querySelector(".muted, span");
       if (meta) meta.textContent = "активен · до " + LOCK_UNTIL;
       var sg = LV.date + "|" + LV.target.toFixed(0) + "|" + Math.round(LV.shown / 100);
-      if (pan.getAttribute("data-lvsig") === sg) continue;
+      var mineA = pan.querySelector("[data-lvact-body]");
+      if (mineA && pan.getAttribute("data-lvsig") === sg) continue;
       pan.setAttribute("data-lvsig", sg);
       while (pan.children.length > 1) pan.removeChild(pan.children[1]);
       var extra = document.createElement("div");
+      extra.setAttribute("data-lvact-body", "1");
       extra.innerHTML = body.innerHTML;
       pan.appendChild(extra);
     }
@@ -662,13 +668,13 @@
        иначе страница с 240 кошельками заметно подтормаживает */
     try { lockPanel(); } catch (e) {}
     try { lockLog(); } catch (e) {}
+    try { lockAdvisor(); } catch (e) {}
     try { if (typeof renderDeals === "function") renderDeals(); } catch (e) {}
     LV.beat = (LV.beat || 0) + 1;
     if (LV.beat % 4 === 1) {
       try { if (typeof renderKpis === "function") renderKpis(); } catch (e) {}
       try { if (typeof drawChart === "function") drawChart(); } catch (e) {}
       renderAct();
-      try { lockAdvisor(); } catch (e) {}
     }
   }
 

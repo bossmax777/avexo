@@ -411,6 +411,9 @@
      пользователь сам поднял коэффициент или добавил кошельков. */
   var CAP_INIT = false;
   function capTick() {
+    /* сценарий уже активирован на весь срок — подбирать стартовый не нужно
+       и предупреждать о пороге тоже: параметры заданы и закрыты */
+    if (typeof scenarioOn === "function" && scenarioOn()) { CAP_INIT = true; return; }
     if (typeof S === "undefined" || !S.params) return;
     var list = sel();
     if (!list.length) return;
@@ -1720,6 +1723,10 @@
     row.querySelectorAll("[data-f]").forEach(function (b) {
       b.onclick = function () {
         FLT = b.dataset.f;
+        /* пультовому списку нужно знать про фильтр: при нём он рисует
+           все карточки, а не первые сорок */
+        window.AI_FLT = FLT;
+        if (typeof renderAccs === "function") renderAccs(true);
         row.querySelectorAll("[data-f]").forEach(function (x) { x.classList.toggle("on", x === b); });
         applyFilter();
       };
@@ -2732,6 +2739,18 @@
       rec.push("выводить рано: до прогрева не хватает " + money(needSum) +
         (daysLeft ? " и " + daysLeft + " дн." : ""));
     }
+    /* Пока сценарий активирован, вывод закрыт по всем кошелькам до даты
+       раскрытия — разбор по адресам и суммам в это время роли не играет. */
+    if (typeof scenarioOn === "function" && scenarioOn()) {
+      return { tone: "off", tags: ["off"], disp: ["off"],
+        title: "Вывод закрыт до " + PAYOUT_UNTIL,
+        why: "идёт сценарий до " + LOCK_UNTIL + ", вывод закрыт до " + PAYOUT_UNTIL,
+        rec: "выводить нельзя: сценарий активирован до " + LOCK_UNTIL +
+          ", вывод откроется " + PAYOUT_UNTIL,
+        outs: outs, lastOut: lastOut, age: age, bal: bal,
+        daysLeft: daysLeft, newLeft: newLeft, needSum: needSum, gapLeft: gapLeft,
+        ready: false };
+    }
     /* главный статус — самый строгий из найденных */
     var order = ["new", "off", "wait", "cold", "ok", "warm"];
     var tone = order.filter(function (t) { return tags.indexOf(t) >= 0; })[0] || "cold";
@@ -2759,7 +2778,7 @@
     cold: ["Прогрев не завершён", "#E2B23A"],
     wait: ["Недавний вывод", "#A78BFA"],
     new:  ["Новорег — не трогать", "#E06C9F"],
-    off:  ["Вывод закрыт", "#E5484D"]
+    off:  ["Вывод закрыт до " + PAYOUT_UNTIL, "#E5484D"]
   };
   var HEAT_PICK = "";
   function heatCard() {
@@ -3150,13 +3169,14 @@
   }
   /* цвет = срочность платежа: зелёный — время есть, жёлтый — на этой неделе,
      красный — платить сейчас или уже просрочено */
+  /* Цвет считаем по сроку самого ключа, а не по дате платежа: платёж может
+     быть через месяц, а ключ кончается послезавтра — именно это и важно. */
   function keyTone(r) {
     if (r.kind === "gone") return "off";
     if (r.kind === "none") return "cold";
-    if (r.kind === "key" && r.left !== null && r.left <= 0) return "off";
     if (r.kind === "ever") return "warm";
-    var d = r.pay ? dayDiff(r.pay) : 99;
-    if (d <= 1) return "off";
+    var d = (r.left === null || r.left === undefined) ? 99 : r.left;
+    if (d <= 2) return "off";
     if (d <= 5) return "cold";
     return "warm";
   }
@@ -3165,7 +3185,8 @@
       return r.kind === "gone" ? "ключ истёк" : "нет ключа";
     if (r.kind === "ever") return "бессрочный";
     if (r.left <= 0) return "срок вышел · оплатить " + payTxt(r.pay);
-    return "до " + r.until.toLocaleDateString("ru-RU") + " · платёж " + payTxt(r.pay);
+    return "до " + r.until.toLocaleDateString("ru-RU") +
+      " · осталось " + r.left + " дн.";
   }
   var KEY_PICK = "";
   function keyPickHtml(rows) {

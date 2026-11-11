@@ -920,7 +920,10 @@ function valOf(a,t){
 }
 /* доход за сегодня: разница значения сценария от начала суток */
 function todayOf(a){
-  const w=winOf(a); if(!w) return 0;
+  const w=winOf(a);
+  /* сессии формально нет, но итог дня внесён — показываем его,
+     иначе в карточке стояло бы «за сутки +$0,00» */
+  if(!w) return dayPosted(a);
   const d0=new Date(); d0.setHours(0,0,0,0);
   const now=Date.now();
   /* если сегодня торгов не было (выходные), берём последний торговый день */
@@ -1321,7 +1324,8 @@ function renderKpis(){
   $("pillWord").textContent=links===1?"подключённый аккаунт"
     :(links%10>=2&&links%10<=4&&(links%100<10||links%100>=20)?"подключённых аккаунта":"подключённых аккаунтов");
   $("whoSum").textContent=usd(bal);
-  $("whoCnt").textContent=(bw+nx)+" кошельков · "+live.length+" в работе";
+  const inWork=(window.LV_SHOW&&window.LV_SHOW.on)?(bw+nx):live.length;
+  $("whoCnt").textContent=(bw+nx)+" кошельков · "+inWork+" в работе";
 }
 /* вывод по кошельку: порог и привязанный адрес задаёт админка площадки */
 function outOk(a){
@@ -1372,6 +1376,7 @@ function tickAccs(){
     }
   });
 }
+function __allLen(){ return (S.accounts||[]).length; }
 function renderAccs(force){
   const box=$("accs");
   if(!S.accounts.length){
@@ -1384,8 +1389,11 @@ function renderAccs(force){
   box.__sig=sg;
   /* список рисуем частями: 240 карточек разом — это долгая отрисовка и фризы */
   if(!window.ACC_LIMIT) window.ACC_LIMIT=40;
-  const __all=S.accounts, __more=Math.max(0,__all.length-window.ACC_LIMIT);
-  box.innerHTML=__all.slice(0,window.ACC_LIMIT).map(a=>{
+  /* когда включён фильтр, список нужен целиком: иначе «Ключ активирован»
+     отбирает только среди первых сорока карточек и счёт не сходится */
+  const __lim=(window.AI_FLT&&window.AI_FLT!=="all")?__allLen():window.ACC_LIMIT;
+  const __all=S.accounts, __more=Math.max(0,__all.length-__lim);
+  box.innerHTML=__all.slice(0,__lim).map(a=>{
     const k=keyOf(a);
     if(a.error) return '<div class="acc"><div class="acc-top"><div class="acc-chk"></div>'+
       '<div class="acc-name"><b>#'+a.acct+' '+siteBadge(a.site)+'</b><small>'+a.error+'</small></div></div></div>';
