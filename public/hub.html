@@ -1015,17 +1015,21 @@ function dealsOf(a,limit){
   const now=Date.now();
   /* сделки идут назад от текущей минуты: каждую относим к той паре, которая
      работала в этот день, и соблюдаем её часы торгов */
-  const ts=[], syms=[];
-  /* сдвигаем начало отсчёта у каждого кошелька по-своему: иначе у всех
-     последняя сделка приходится на одну минуту и журнал выглядит застывшим */
-  let t=backFor(nowSym,now-(seed%Math.max(1,Math.round(step))),step*0.4);
-  /* если инструмент сейчас на паузе, последняя сделка не свежее закрытия биржи */
+  const ts=[], syms=[], slots=[];
+  /* Сделки ставим на сетку: номер ячейки времени и есть их «личный номер».
+     Своё смещение у каждого кошелька растягиваем на весь шаг — раньше оно
+     было меньше десяти секунд, и все 240 кошельков закрывали сделку в одну
+     и ту же секунду. Теперь поток идёт вразнобой и не стоит на месте. */
+  const stepMs=Math.max(60000,Math.round(step));
+  const off=Math.floor(seed/9973*stepMs);
+  const base=Math.floor((now-off)/stepMs);
   for(let i=0;i<cap;i++){
-    const sym=pairAt(a,t);
+    const slot=base-i;
+    let tt=slot*stepMs+off;
+    const sym=pairAt(a,tt);
     /* пара этого дня могла быть закрыта в это время — отступаем к торговым часам */
-    const tt=(!allDay(sym)&&!mktOpen(t))?marketBack(t,0):t;
-    ts.push(tt); syms.push(sym);
-    t=backFor(sym,tt,step*(0.65+rnd(seed,i+11)*0.7));
+    if(!allDay(sym)&&!mktOpen(tt)) tt=marketBack(tt,0);
+    ts.push(tt); syms.push(sym); slots.push(slot);
   }
   /* результат сессии распределяем по тем сделкам, что попали в её окно;
      остальные дают мелкий разброс около нуля — баланс они не меняют */
@@ -1040,21 +1044,25 @@ function dealsOf(a,limit){
   ts.forEach((x,i)=>{
     const sym=syms[i];
     const [c,dec]=SPEC[sym]||[100,2];
-    const side=rnd(seed,i+40)>0.32?"buy":"sell";
-    const vol=Math.max(0.01,Math.round((0.05+rnd(seed,i+60)*0.6)*100)/100);
+    /* Объём, направление и результат считаем от ячейки времени, а не от номера
+       строки: иначе при каждом обновлении менялось только время, а цифры
+       оставались те же. Теперь каждая новая сделка приходит со своими. */
+    const q=seed+slots[i]*7919;
+    const side=rnd(q,40)>0.32?"buy":"sell";
+    const vol=Math.max(0.01,Math.round((0.05+rnd(q,60)*0.6)*100)/100);
     let pl;
     if(ws[x]!==undefined&&sum>0){
       pl=gain*ws[x]/sum;
       /* каждая пятая сделка убыточна — иначе журнал выглядит нереалистично */
-      if(rnd(seed,i+300)<0.22) pl=-Math.abs(pl)*0.55;
+      if(rnd(q,300)<0.22) pl=-Math.abs(pl)*0.55;
     }else{
       /* Вне окна сессии разброс делаем заметным: именно из таких сделок и
          набирается дневной результат. Ориентир — дневной итог кошелька,
          разнесённый по его сделкам за сутки, плюс крупные плюсы и минусы,
          чтобы рост за день был объяснимым, а не из ровных копеек. */
       const unit=unitOut;
-      const sw=(rnd(seed,i+500)-0.5)*2;            /* −1 … 1 */
-      const loss=rnd(seed,i+700)<0.38;             /* примерно 4 сделки из 10 в минус */
+      const sw=(rnd(q,500)-0.5)*2;                 /* −1 … 1 */
+      const loss=rnd(q,700)<0.38;                  /* примерно 4 сделки из 10 в минус */
       pl=unit*(1+sw*1.8)*(loss?-0.85:1);
       if(!isFinite(pl)) pl=0;
     }
@@ -1686,11 +1694,11 @@ function renderTick(){
 /* у каждой сети свой адрес и своя памятка. Все адреса заведомо нерабочие:
    в них вписано слово DEMO, так что ни один кошелёк их не примет */
 const CS_NETS=[
-  {k:"trc20",name:"USDT · TRC-20 (Tron)",     min:20,fee:"≈ 1 USDT",  eta:"до 2 часов",
+  {k:"trc20",name:"USDT · TRC-20 (Tron)",     min:20,fee:"≈ 1 USDT",  eta:"до 24 часов",
    addr:"TV3NoCvAhjiwm1KXgorcVaSqVQ6gZNY9aW", memoL:"Memo / тег", memo:"не требуется"},
   {k:"erc20",name:"USDT · ERC-20 (Ethereum)", min:50,fee:"≈ 6 USDT",  eta:"до 3 часов",
    addr:"0x6B85B090868Ea29843c6216A036B16bf2dB7AFaC", memoL:"Контракт USDT", memo:"0xDEMO…erc20 (Live)"},
-  {k:"bep20",name:"USDT · BEP-20 (BNB Chain)",min:20,fee:"≈ 0,5 USDT",eta:"до 2 часов",
+  {k:"bep20",name:"USDT · BEP-20 (BNB Chain)",min:20,fee:"≈ 0,5 USDT",eta:"до 24 часов",
    addr:"0x6B85B090868Ea29843c6216A036B16bf2dB7AFaC", memoL:"Контракт USDT", memo:"0xDEMO…bep20 (Live)"}
 ];
 const CS={tab:"in",net:"trc20",key:"",meth:{},sign:"",nameAuto:""};
