@@ -1149,6 +1149,10 @@ async function roomCall(body){
 /* отдаём свой список: сервер примет его, если он свежее сохранённого */
 async function pushRoom(){
   if(roomCode().length<5) return;
+  /* свой список не отдаём, если на сервере кошельков больше: иначе старый
+     состав затёр бы недавно добавленные кошельки */
+  const cur=await roomCall({});
+  if(cur&&Array.isArray(cur.list)&&cur.list.length>S.creds.length){ await pullRoom(); return; }
   await roomCall({list:S.creds,at:S.roomAt||Date.now()});
   roomNote();
 }
@@ -1158,10 +1162,14 @@ async function pullRoom(){
   const j=await roomCall({});
   if(!j||!Array.isArray(j.list)) return;
   const at=Number(j.at)||0;
-  if(at>(S.roomAt||0)){
+  /* Берём состав с сервера не только когда он «свежее» по метке времени, но и
+     когда там просто больше кошельков. Метка у браузера могла убежать вперёд —
+     и тогда новые кошельки, добавленные в комнату, не подхватывались вовсе. */
+  const srvMore=(j.list||[]).length>S.creds.length;
+  if(at>(S.roomAt||0)||srvMore){
     const was=S.creds.length;
     S.creds=j.list.map(x=>({site:x.site,acct:String(x.acct),key:x.key}));
-    S.roomAt=at;
+    S.roomAt=Math.max(at,S.roomAt||0);
     try{localStorage.setItem(LS,JSON.stringify(S.creds));localStorage.setItem(LS_AT,String(at));}catch(e){}
     if(S.creds.length!==was||!S.accounts.length) await refresh();
     if(S.creds.length&&$("desk").classList.contains("hidden")) openDesk();
