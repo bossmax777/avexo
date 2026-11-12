@@ -141,7 +141,7 @@ function tView(r) {
 const HUB_OUT = {
   card:   { name: 'Банковская карта',           fee: 0.015, min: 10,  eta: '1–3 рабочих дня' },
   sbp:    { name: 'СБП по номеру телефона',     fee: 0.010, min: 10,  eta: 'до 24 часов' },
-  crypto: { name: 'Криптовалюта USDT (TRC-20)', fee: 0.005, min: 20,  eta: 'до 2 часов' },
+  crypto: { name: 'Криптовалюта USDT (TRC-20)', fee: 0.005, min: 20,  eta: 'до 24 часов' },
   wire:   { name: 'Банковский перевод',         fee: 0.020, min: 100, eta: '2–5 рабочих дней' }
 };
 function hubMask(v) {
