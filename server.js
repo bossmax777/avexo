@@ -1450,7 +1450,7 @@ async function hubCard(u) {
 /* сколько кошельков пульт может держать подключёнными за раз: раньше предел
    был 40, и после создания новых кабинетов «лишние» просто не возвращались —
    список на странице не менялся */
-const HUB_MAX = 250;
+const HUB_MAX = 400;   /* кошельков в одном пульте: 240 прежних + 120 новых */
 function hubList(body) {
   const arr = (body && Array.isArray(body.accounts)) ? body.accounts : [];
   return arr.slice(0, HUB_MAX);
