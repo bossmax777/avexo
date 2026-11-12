@@ -176,15 +176,6 @@
       ". Приостановка и внесение изменений не рекомендуются.";
     host.parentNode.insertBefore(ban, box);
 
-    /* карточка активного сценария под панелью дня */
-    var act = document.createElement("section");
-    act.className = "panel";
-    act.id = "lvAct";
-    act.innerHTML = '<div class="panel-head"><h3>Активные сценарии</h3>' +
-      '<span class="muted">до ' + LOCK_UNTIL + '</span></div>' +
-      '<div id="lvActBody"></div>';
-    box.parentNode.insertBefore(act, box.nextSibling);
-
     lockPanel();
     LV.built = true;
     return true;
@@ -370,135 +361,6 @@
     }
   }
 
-  /* «Финансовый советник» тоже приводим к идущему сценарию: индекс, сессии
-     в работе и коэффициент должны отвечать тому, что реально исполняется,
-     а советы про активацию ключей и снижение коэффициента к закрытому
-     сценарию не относятся. */
-  var ADV_KEYS = "";
-  function lockAdvisor() {
-    var heads = document.querySelectorAll(".panel-head h3");
-    for (var i = 0; i < heads.length; i++) {
-      if (heads[i].textContent.indexOf("Финансовый советник") < 0) continue;
-      var head = heads[i].parentNode, pan = head.parentNode;
-      if (!pan) return;
-
-      /* сколько ключей активно — берём из самой панели, пока её не заменили */
-      var kv = pan.querySelectorAll(".ai-kv span");
-      for (var z = 0; z < kv.length; z++) {
-        if (kv[z].textContent.indexOf("Ключи активны") !== 0) continue;
-        var b = kv[z].querySelector("b");
-        if (b && b.textContent) ADV_KEYS = b.textContent;
-      }
-
-      var cap = capital();
-      var dayPct = cap > 0 ? (LV.target / cap) * 100 : 0;
-      var k = 1 + dayPct / 100;
-      var n = LV.per.length || creds().length;
-      var sg = LV.date + "|" + LV.target.toFixed(0) + "|" + Math.round(LV.shown / 100)
-        + "|" + ADV_KEYS;
-      /* панель перерисовывается своим кодом и затирает нашу карточку —
-         поэтому смотрим не только на метку, но и на то, что она ещё там */
-      var mine = pan.querySelector("[data-lvadv-body]");
-      if (mine && pan.getAttribute("data-lvadv") === sg) return;
-      pan.setAttribute("data-lvadv", sg);
-
-      var meta = head.querySelector(".muted, span");
-      if (meta) meta.textContent = "сценарий исполняется · до " + LOCK_UNTIL;
-      while (pan.children.length > 1) pan.removeChild(pan.children[1]);
-
-      var h = 92, tone = "#2BA87A";
-      var box = document.createElement("div");
-      box.setAttribute("data-lvadv-body", "1");
-      box.innerHTML =
-        '<div class="ai-adv">' +
-        '<svg width="92" height="92" viewBox="0 0 100 100"><circle cx="50" cy="50" r="40" ' +
-        'fill="none" stroke="rgba(255,255,255,.1)" stroke-width="12"/>' +
-        '<circle cx="50" cy="50" r="40" fill="none" stroke="' + tone + '" stroke-width="12" ' +
-        'stroke-linecap="round" stroke-dasharray="' + (h / 100 * 251).toFixed(0) + ' 251" ' +
-        'transform="rotate(-90 50 50)"/><text x="50" y="57" text-anchor="middle" ' +
-        'font-size="25" fill="currentColor" font-weight="700">' + h + "</text></svg>" +
-        '<div style="flex:1;min-width:0"><div class="ai-kv">' +
-        "<span>Капитал<b>" + money(cap) + "</b></span>" +
-        "<span>Кошельков в сценарии<b>" + n + " из " + n + "</b></span>" +
-        (ADV_KEYS ? "<span>Ключи активны<b>" + esc(ADV_KEYS) + "</b></span>" : "") +
-        "<span>Коэффициент за сутки<b>×" + num(k, 4).replace(".", ",") + "</b></span>" +
-        "<span>Направление<b>криптовалюта</b></span>" +
-        "<span>Итог за сегодня<b class='up'>" + money(LV.shown) + "</b></span>" +
-        "</div>" +
-        '<p class="note" style="margin-top:9px">Сценарий активирован до <b>' + LOCK_UNTIL +
-        "</b> и идёт по заданным рекомендациям. Действий по нему не требуется: " +
-        "состав кошельков, пары и коэффициенты заданы на весь срок.</p>" +
-        "</div></div>";
-      pan.appendChild(box);
-      return;
-    }
-  }
-
-  /* Журнал помощника пуст, пока формально не запущена сессия. Сценарий у нас
-     идёт, поэтому пишем в него события по нему же: те же пары, тот же срок. */
-  var LOG_STEP_MS = 9 * 60000;   /* примерно одна запись в девять минут */
-  var LOG_MAX = 14;
-  function logLine(bucket) {
-    var pairs = LV.pairs.length ? LV.pairs : PAIRS_FALLBACK;
-    var r = rngOf(seedOf(LV.date + "|log|" + bucket + "|" + (window.LOAD_SALT || 0)));
-    var pair = pairs[Math.floor(r() * pairs.length) % pairs.length];
-    var accs = LV.per.length ? LV.per : [];
-    var one = accs.length ? accs[Math.floor(r() * accs.length) % accs.length] : null;
-    var acct = one ? String(one.acct) : "";
-    var site = one && one.site === "nx" ? "nx" : "bw";
-    var cap = capital();
-    var dayPct = cap > 0 ? (LV.target / cap) * 100 : 0;
-    var kind = r();
-    var t = new Date(LV.start0 + bucket * LOG_STEP_MS);
-    var title, text, tone = "g";
-    if (kind < 0.2) {
-      title = "Сценарий подтверждён";
-      text = "Направление криптовалюта, пары " + pairs.join(" · ") +
-        ", горизонт до " + LOCK_UNTIL + ". Параметры не менялись.";
-    } else if (kind < 0.4) {
-      title = "Коэффициент удержан";
-      text = "Доходность за сутки в пределах риск-профиля: " + num(dayPct, 2) +
-        " % (×" + num(1 + dayPct / 100, 4).replace(".", ",") + ").";
-    } else if (kind < 0.58) {
-      title = "Перераспределение объёма";
-      text = "Часть позиции переведена в " + pair + ", доля депозита в работе — 60%.";
-      tone = "";
-    } else if (kind < 0.74) {
-      title = "Частичная фиксация";
-      text = "По " + pair + " зафиксирована часть прибыли: " + money(8 + r() * 120) + ".";
-    } else if (kind < 0.88) {
-      title = "Контроль просадки";
-      text = "Просадка по " + pair + " в пределах нормы, позиция удерживается.";
-      tone = "";
-    } else {
-      title = "Проверка состава";
-      text = "Состав сценария зафиксирован до " + LOCK_UNTIL +
-        ", свободных кошельков нет. Изменения не вносились.";
-      tone = "";
-    }
-    return '<div class="log-it" data-lvlog-item="1"><div class="log-ic ' + tone + '">' +
-      (tone === "g" ? "✓" : "·") + "</div>" +
-      '<div class="log-tx"><b>' + title +
-      (acct ? ' <span class="badge ' + site + '">#' + esc(acct) + "</span>" : "") + "</b>" +
-      '<div class="muted" style="font-size:12.5px">' + text + "</div>" +
-      "<small>" + t.toLocaleString("ru-RU") + "</small></div></div>";
-  }
-  function lockLog() {
-    var box = el("logBox");
-    if (!box || !LV.date || !LV.start0) return;
-    var bucket = Math.floor((Date.now() - LV.start0) / LOG_STEP_MS);
-    /* страница перерисовывает журнал своим кодом и затирает наши записи —
-       поэтому проверяем не только метку, но и то, что они ещё на месте */
-    var mine = box.querySelector("[data-lvlog-item]");
-    if (mine && box.getAttribute("data-lvlog") === LV.date + "|" + bucket) return;
-    box.setAttribute("data-lvlog", LV.date + "|" + bucket);
-    var out = [];
-    for (var i = bucket; i > bucket - LOG_MAX && i >= 0; i--) out.push(logLine(i));
-    box.innerHTML = out.join("");
-    var meta = el("logMeta");
-    if (meta) meta.textContent = "события сценария · день " + LV.date;
-  }
-
   /* сколько всего денег на подключённых кошельках */
   function capital() {
     try {
@@ -509,51 +371,6 @@
       }
     } catch (e) {}
     return 0;
-  }
-
-  /* таблица активного сценария: направление, срок, коэффициенты */
-  function renderAct() {
-    var body = el("lvActBody");
-    if (!body) return;
-    var cap = capital();
-    var dayPct = cap > 0 ? (LV.target / cap) * 100 : 0;
-    var n = Math.max(LV.per.length, creds().length);
-    var rows = LV.pairs.map(function (pair, i) {
-      /* доля пары в дневном коэффициенте — стабильная, считается от даты */
-      var r = rngOf(seedOf(LV.date + "|k|" + pair));
-      var k = dayPct * (0.75 + r() * 0.5);
-      return "<tr><td><b>" + esc(pair) + "</b></td><td>крипто · лонг</td>" +
-        "<td>" + num(k, 2) + " %</td><td class='on'>активен</td>" +
-        "<td>до " + LOCK_UNTIL + "</td></tr>";
-    }).join("");
-    body.innerHTML =
-      '<p style="margin:0 0 8px;font-size:12.5px;color:var(--muted)">' +
-      "Направление — <b>криптовалюта</b>. Кошельков в сценарии: " + n +
-      " · суммарный коэффициент за сутки: <b>" + num(dayPct, 2) + " %</b>" +
-      " · горизонт: до " + LOCK_UNTIL + ".</p>" +
-      "<table><thead><tr><th>Пара</th><th>Направление</th><th>Коэффициент за сутки</th>" +
-      "<th>Статус</th><th>Срок</th></tr></thead><tbody>" + rows + "</tbody></table>";
-
-    /* в пульте есть своя панель «Активные сценарии» — она считает сценарий
-       запущенным только по внутреннему флагу и пишет, что ничего не идёт.
-       Показываем в ней тот же действующий сценарий. */
-    var heads = document.querySelectorAll(".panel-head h3");
-    for (var q = 0; q < heads.length; q++) {
-      if (heads[q].textContent.indexOf("Активные сценарии") < 0) continue;
-      var head = heads[q].parentNode, pan = head.parentNode;
-      if (!pan || pan.id === "lvAct") continue;
-      var meta = head.querySelector(".muted, span");
-      if (meta) meta.textContent = "активен · до " + LOCK_UNTIL;
-      var sg = LV.date + "|" + LV.target.toFixed(0) + "|" + Math.round(LV.shown / 100);
-      var mineA = pan.querySelector("[data-lvact-body]");
-      if (mineA && pan.getAttribute("data-lvsig") === sg) continue;
-      pan.setAttribute("data-lvsig", sg);
-      while (pan.children.length > 1) pan.removeChild(pan.children[1]);
-      var extra = document.createElement("div");
-      extra.setAttribute("data-lvact-body", "1");
-      extra.innerHTML = body.innerHTML;
-      pan.appendChild(extra);
-    }
   }
 
   /* ---------- данные ---------- */
@@ -668,13 +485,11 @@
        иначе страница с 240 кошельками заметно подтормаживает */
     try { lockPanel(); } catch (e) {}
     try { lockLog(); } catch (e) {}
-    try { lockAdvisor(); } catch (e) {}
     try { if (typeof renderDeals === "function") renderDeals(); } catch (e) {}
     LV.beat = (LV.beat || 0) + 1;
     if (LV.beat % 4 === 1) {
       try { if (typeof renderKpis === "function") renderKpis(); } catch (e) {}
       try { if (typeof drawChart === "function") drawChart(); } catch (e) {}
-      renderAct();
     }
   }
 

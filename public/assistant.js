@@ -1992,7 +1992,61 @@
   }
 
   /* ---------- 1. карточка «Финансовый советник» ---------- */
+  /* капитал и коэффициент идущего сценария — для карточек ниже */
+  function seedOf2(str) {
+    var h = 2166136261;
+    for (var i = 0; i < str.length; i++) { h ^= str.charCodeAt(i); h = Math.imul(h, 16777619); }
+    return h >>> 0;
+  }
+  function rngOf(seed) {
+    var a = seed >>> 0;
+    return function () {
+      a = (a + 0x6D2B79F5) >>> 0;
+      var t = Math.imul(a ^ (a >>> 15), 1 | a);
+      t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t;
+      return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+    };
+  }
+  function lvFacts() {
+    var lv = window.LV_SHOW || {};
+    var m = metrics();
+    var cap = m.total || 0;
+    var target = Number(lv.target) || 0;
+    var pct = cap > 0 ? (target / cap) * 100 : 0;
+    return { m: m, cap: cap, pct: pct, k: 1 + pct / 100,
+             shown: Number(lv.shown) || 0,
+             pairs: (lv.pairs && lv.pairs.length ? lv.pairs : ["BTC/USD", "ETH/USD", "SOL/USD", "XRP/USD"]),
+             n: m.list.length };
+  }
   function advCard() {
+    /* Сценарий идёт — показываем его состояние, а не советы по подбору.
+       Раньше эта карточка перерисовывалась своим кодом и мигала поверх. */
+    if (scenarioOn()) {
+      var f = lvFacts();
+      var h2 = 92;
+      return { html:
+        '<div class="panel-head"><h3>Финансовый советник</h3>' +
+        '<span class="muted">сценарий исполняется · до ' + LOCK_UNTIL + "</span></div>" +
+        '<div class="ai-adv">' +
+        '<svg width="92" height="92" viewBox="0 0 100 100"><circle cx="50" cy="50" r="40" fill="none" ' +
+        'stroke="rgba(255,255,255,.1)" stroke-width="12"/><circle cx="50" cy="50" r="40" fill="none" ' +
+        'stroke="#2BA87A" stroke-width="12" stroke-linecap="round" stroke-dasharray="' +
+        (h2 / 100 * 251).toFixed(0) + ' 251" transform="rotate(-90 50 50)"/>' +
+        '<text x="50" y="57" text-anchor="middle" font-size="25" fill="currentColor" ' +
+        'font-weight="700">' + h2 + "</text></svg>" +
+        '<div style="flex:1;min-width:0"><div class="ai-kv">' +
+        "<span>Капитал<b>" + money(f.cap) + "</b></span>" +
+        "<span>Кошельков в сценарии<b>" + f.n + " из " + f.n + "</b></span>" +
+        "<span>Ключи активны<b>" + f.m.keys + " из " + f.n + "</b></span>" +
+        "<span>Коэффициент за сутки<b>×" + f.k.toFixed(4).replace(".", ",") + "</b></span>" +
+        "<span>Направление<b>криптовалюта</b></span>" +
+        "<span>Итог за сегодня<b class='up'>" + money(f.shown) + "</b></span>" +
+        "</div>" +
+        '<p class="note" style="margin-top:9px">Сценарий активирован до <b>' + LOCK_UNTIL +
+        "</b> и идёт по заданным рекомендациям. Действий по нему не требуется: состав " +
+        "кошельков, пары и коэффициенты заданы на весь срок.</p></div></div>",
+        wire: function () {} };
+    }
     var m = metrics(), hc = healthCalc(m), h = hc.score;
     var tone = h >= 70 ? "#2BA87A" : (h >= 45 ? "#E2B23A" : "#E5484D");
     var steps = advSteps(m);
@@ -2098,6 +2152,25 @@
     return d > 0 ? ("осталось " + d + " д " + (h % 24) + " ч") : ("осталось " + h + " ч " + m2 + " мин");
   }
   function runCard() {
+    if (scenarioOn()) {
+      var f2 = lvFacts();
+      var rows2 = f2.pairs.map(function (pair) {
+        var r = rngOf(seedOf2(pair + "|" + f2.pct.toFixed(2)));
+        var kk = f2.pct * (0.75 + r() * 0.5);
+        return "<tr><td><b>" + esc(pair) + "</b></td><td>крипто · лонг</td><td>" +
+          kk.toFixed(2).replace(".", ",") + " %</td><td style='color:#2BA87A;font-weight:600'>активен</td>" +
+          "<td>до " + LOCK_UNTIL + "</td></tr>";
+      }).join("");
+      return { html:
+        '<div class="panel-head"><h3>Активные сценарии</h3>' +
+        '<span class="muted">активен · до ' + LOCK_UNTIL + "</span></div>" +
+        '<p class="note">Направление — <b>криптовалюта</b>. Кошельков в сценарии: ' + f2.n +
+        " · суммарный коэффициент за сутки: <b>" + f2.pct.toFixed(2).replace(".", ",") +
+        " %</b> · горизонт: до " + LOCK_UNTIL + ".</p>" +
+        '<table class="ai-table" style="margin-top:8px"><tr><th>Пара</th><th>Направление</th>' +
+        "<th>Коэффициент за сутки</th><th>Статус</th><th>Срок</th></tr>" + rows2 + "</table>",
+        wire: function () {} };
+    }
     var gs = runGroups();
     var total = gs.reduce(function (s2, g) { return s2 + (g.now - g.base); }, 0);
     var wal = gs.reduce(function (s2, g) { return s2 + g.list.length; }, 0);
