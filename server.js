@@ -923,7 +923,14 @@ async function dayReport(date) {
   for (const site of Object.keys(HUB_SITES)) {
     const rows = [];
     try {
-      const r = await q('SELECT * FROM ' + HUB_SITES[site].users + ' ORDER BY id');
+      /* тянем только нужные поля и порциями: полная выборка с hist/positions
+         съедала всю память контейнера и роняла приложение */
+      const RCOLS = 'id, name, email, acct, cur, balance, tx';
+      const tbl = HUB_SITES[site].users;
+      const ids = (await q('SELECT id FROM ' + tbl + ' ORDER BY id')).rows.map(x => Number(x.id));
+      for (let p0 = 0; p0 < ids.length; p0 += 25) {
+      const part = ids.slice(p0, p0 + 25);
+      const r = await q('SELECT ' + RCOLS + ' FROM ' + tbl + ' WHERE id = ANY($1::int[]) ORDER BY id', [part]);
       for (const row of r.rows) {
         const u = toUser(row);
         let day = 0, inc = 0, outv = 0, has = false, note = '';
@@ -952,6 +959,7 @@ async function dayReport(date) {
           out: +outv.toFixed(2), has, note, pair: pairs.join(', '),
           legacy, ai: legacy ? RISK_NOTE : '',
           balance: +(Number(u.balance) || 0).toFixed(2), cur: u.cur || 'USD' });
+      }
       }
     } catch (e) { /* площадки может не быть в этой базе */ }
     rows.sort((a, b) => b.day - a.day);
@@ -1012,7 +1020,6 @@ app.post('/api/admin/day-report.xlsx', requireAdmin, async (req, res) => {
     const add2 = a => a.reduce((s2, x) => s2 + x, 0);
     const sum = [
       [{ v: 'Общая сводка за ' + d.when + ' — обе площадки', title: true }],
-      [{ v: 'Кабинеты сопоставлены по почте клиента. Данные берутся из истории операций обеих админок.', note: true }],
       []
     ];
     d.labels.forEach((lb, i) => sum.push([{ v: 'Капитал ' + lb, b: true }, M(+totBal[i].toFixed(2))]));
@@ -1020,7 +1027,6 @@ app.post('/api/admin/day-report.xlsx', requireAdmin, async (req, res) => {
     sum.push([{ v: 'Заработано за день', b: true }, M(+add2(totDay).toFixed(2))]);
     sum.push([{ v: 'Пополнения за день', b: true }, M(+add2(totInc).toFixed(2))]);
     sum.push([{ v: 'Выведено за день', b: true }, M(+add2(totOut).toFixed(2))]);
-    sum.push([{ v: 'Клиентов всего', b: true }, d.merged.length]);
     sum.push([]);
     sum.push([{ v: 'По клиентам', b: true }]);
     const headRow = [H('Клиент'), H('Почта')]
@@ -1028,8 +1034,7 @@ app.post('/api/admin/day-report.xlsx', requireAdmin, async (req, res) => {
       .concat(d.labels.map(l => H('Баланс ' + l)))
       .concat([H('Общий баланс')])
       .concat(d.labels.map(l => H('Итог дня ' + l)))
-      .concat([H('Итог дня всего'), H('Пары'), H('Пополнения'), H('Выводы за день'),
-               H('Рекомендации ИИ')]);
+      .concat([H('Итог дня всего'), H('Пары'), H('Пополнения'), H('Выводы за день')]);
     sum.push(headRow);
     const headAt = sum.length;
     d.merged.forEach(m => {
@@ -1038,40 +1043,37 @@ app.post('/api/admin/day-report.xlsx', requireAdmin, async (req, res) => {
         .concat(m.bal.map(M))
         .concat([M(m.total)])
         .concat(m.day.map(M))
-        .concat([M(m.dayAll), m.pair || '—', M(m.incAll), M(m.outAll), m.ai || '—']));
+        .concat([M(m.dayAll), m.pair || '—', M(m.incAll), M(m.outAll)]));
     });
     const tail = [T('ИТОГО'), T('')]
       .concat(d.labels.map(() => T('')))
       .concat(totBal.map(v => T(+v.toFixed(2))))
       .concat([T(+add2(totBal).toFixed(2))])
       .concat(totDay.map(v => T(+v.toFixed(2))))
-      .concat([T(+add2(totDay).toFixed(2)), T(''), T(+add2(totInc).toFixed(2)), T(+add2(totOut).toFixed(2)),
-               T('')]);
+      .concat([T(+add2(totDay).toFixed(2)), T(''), T(+add2(totInc).toFixed(2)), T(+add2(totOut).toFixed(2))]);
     sum.push(tail);
     sheets.push({ name: 'Сводка', freeze: headAt,
       cols: [26, 30].concat(d.labels.map(() => 15)).concat(d.labels.map(() => 18))
-        .concat([16]).concat(d.labels.map(() => 17)).concat([16, 16, 15, 16, 52]),
+        .concat([16]).concat(d.labels.map(() => 17)).concat([16, 16, 15, 16]),
       rows: sum });
     /* вкладки площадок */
     d.sites.forEach((st, i) => {
       const lb = d.labels[i];
       const rows = [
         [{ v: 'Итог торгового дня ' + d.when + ' — ' + lb, title: true }],
-        [{ v: 'Источник: история операций клиентов площадки ' + lb, note: true }],
         [],
         [H('Клиент'), H('Почта'), H('Счёт'), H('Пара'), H('Итог дня'), H('Пополнения'), H('Выводы'),
-         H('Баланс на конец дня'), H('Статус'), H('Рекомендации ИИ')]
+         H('Баланс на конец дня'), H('Статус')]
       ];
       d.bySite[st].rows.forEach(r => {
         rows.push([r.name, r.mail, r.acct, r.pair || '—', M(r.day), M(r.inc), M(r.out),
           M(r.balance),
-          r.has ? (r.note || (r.day >= 0 ? 'Прибыль' : 'Убыток')) : 'нет записи за этот день',
-          r.ai || '—']);
+          r.has ? (r.note || (r.day >= 0 ? 'Прибыль' : 'Убыток')) : 'нет записи за этот день']);
       });
       rows.push([T('ИТОГО'), T(''), T(''), T(''), T(+totDay[i].toFixed(2)), T(+totInc[i].toFixed(2)),
-        T(+totOut[i].toFixed(2)), T(+totBal[i].toFixed(2)), T(''), T('')]);
-      sheets.push({ name: lb.slice(0, 28), freeze: 4,
-        cols: [26, 30, 14, 16, 16, 14, 14, 19, 18, 52], rows });
+        T(+totOut[i].toFixed(2)), T(+totBal[i].toFixed(2)), T('')]);
+      sheets.push({ name: lb.slice(0, 28), freeze: 3,
+        cols: [26, 30, 14, 16, 16, 14, 14, 19, 18], rows });
     });
     const buf = XLSX.buildXlsx(sheets);
     res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
