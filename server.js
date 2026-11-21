@@ -1499,12 +1499,16 @@ app.post('/api/hub/link', async (req, res) => {
 app.post('/api/hub/state', async (req, res) => {
   try {
     const list = hubList(req.body);
-    const map = await hubUsersBatch(list, true);
     const out = [];
-    for (const a of list) {
-      const u = fromBatch(map, a);
-      out.push(u ? await hubCard(u)
-                 : { site: String(a.site || ''), acct: String(a.acct || ''), error: 'Ключ больше не подходит' });
+    /* порциями: карточки всех кошельков разом не держим в памяти */
+    for (let p0 = 0; p0 < list.length; p0 += 40) {
+      const part = list.slice(p0, p0 + 40);
+      const map = await hubUsersBatch(part, true);
+      for (const a of part) {
+        const u = fromBatch(map, a);
+        out.push(u ? await hubCard(u)
+                   : { site: String(a.site || ''), acct: String(a.acct || ''), error: 'Ключ больше не подходит' });
+      }
     }
     res.json({ ok: true, accounts: out, pairs: BOT_PAIRS, risks: BOT_RISK, now: Date.now(),
       market: { open: mktOpenNow(), night: !mktOpenNow(), nightMax: NIGHT_MAX } });
@@ -2103,11 +2107,14 @@ app.post('/api/hub/history', async (req, res) => {
     const b = req.body || {};
     const days = Math.max(1, Math.min(120, parseInt(b.days, 10) || 30));
     const list = hubList(b);
-    /* истории нужны только операции и журнал — позиции и прочее не тянем */
-    const map = await hubUsersBatch(list, 'id, acct, apikey, balance, tx, hist');
     const out = [];
-    {
-     const rows = await Promise.all(list.map(async a => {
+    /* кошельки обрабатываем порциями: раньше в память разом попадали операции
+       и журнал всех 360 кошельков — это и подвешивало приложение */
+    for (let p0 = 0; p0 < list.length; p0 += 40) {
+     const part = list.slice(p0, p0 + 40);
+     /* истории нужны только операции и журнал — позиции и прочее не тянем */
+     const map = await hubUsersBatch(part, 'id, acct, apikey, balance, tx, hist');
+     const rows = await Promise.all(part.map(async a => {
       const u = fromBatch(map, a);
       if (!u) return { site: a.site, acct: a.acct, error: 'Ключ не подходит' };
       /* Главный источник — строка «Итог торгового дня» в операциях кабинета:
