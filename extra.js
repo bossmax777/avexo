@@ -67,7 +67,13 @@ function readPage(name) {
   let html = fs.readFileSync(file, 'utf8');
   const tags = (INJECT[name] || [])
     .filter(src => html.indexOf('"' + src + '"') < 0)
-    .map(src => '<script src="' + src + '"></script>')
+    .map(src => {
+      /* к имени файла дописываем метку времени: браузер держит скрипты в кэше,
+         и без неё после обновления он ещё час показывал бы старую версию */
+      let v = '';
+      try { v = '?v=' + Math.floor(fs.statSync(path.join(CTX.pub, src)).mtimeMs); } catch (e) {}
+      return '<script src="' + src + v + '"></script>';
+    })
     .join('\n');
   if (tags) {
     html = html.indexOf('</body>') >= 0 ? html.replace('</body>', tags + '\n</body>') : html + tags;
