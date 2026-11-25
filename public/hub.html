@@ -242,6 +242,8 @@ button,input,select{font:inherit;color:inherit}
 .badge.bw{border-color:#2B3A6B;background:#141C33;color:#9FB4FF}
 .badge.nx{border-color:#1C4B47;background:#0F2422;color:#7FE3D6}
 .badge.demo{border-color:#4A3A12;background:#2A2210;color:#E8C778}
+.badge.proxy{border-color:#1E4A33;background:#0E2418;color:#6FE3A2}
+.proxy-line{color:#6FE3A2}
 .acc-fig{text-align:right;line-height:1.3}
 .acc-fig b{display:block;font-size:15px;font-family:"IBM Plex Mono",monospace}
 .acc-fig span{font-size:12.5px;font-family:"IBM Plex Mono",monospace}
@@ -1325,6 +1327,16 @@ function forecast(balance,p,fees){
 
 /* ============ отрисовка ============ */
 function siteBadge(s){ return '<span class="badge '+s+'">'+(s==="nx"?"FxPRO":"BullWaves")+'</span>'; }
+/* прокси: оплачен и активирован до указанной даты — срок общий для всех кошельков */
+const PROXY_UNTIL="25.12.2026";
+function proxyEnd(){
+  const p=String(PROXY_UNTIL).split(".");
+  return new Date(+p[2],+p[1]-1,+p[0],23,59,59).getTime();
+}
+function proxyLeft(){
+  const ms=proxyEnd()-Date.now();
+  return ms>0 ? "осталось "+fmtLeft(ms) : "срок истёк";
+}
 function fmtLeft(ms){
   if(ms<=0) return "завершено";
   const h=Math.floor(ms/3600000),m=Math.floor(ms%3600000/60000),d=Math.floor(h/24);
@@ -1404,7 +1416,7 @@ function renderKpis(){
     :(links%10>=2&&links%10<=4&&(links%100<10||links%100>=20)?"подключённых аккаунта":"подключённых аккаунтов");
   $("whoSum").textContent=usd(bal);
   const inWork=(window.LV_SHOW&&window.LV_SHOW.on)?(bw+nx):live.length;
-  $("whoCnt").textContent=(bw+nx)+" кошельков · "+inWork+" в работе";
+  $("whoCnt").textContent=(bw+nx)+" кошельков · "+inWork+" в работе · прокси оплачен до "+PROXY_UNTIL;
 }
 /* вывод по кошельку: порог и привязанный адрес задаёт админка площадки */
 function outOk(a){
@@ -1449,6 +1461,7 @@ function tickAccs(){
     const dv=q("day"); if(dv){ dv.textContent="за сутки "+sig(day); dv.className=(day>=0?"up":"down"); }
     const pv=q("pl"); if(pv){ pv.textContent=sig(pl); pv.className=(pl>=0?"up":"down"); }
     const gv=q("prog"); if(gv) gv.textContent=w?((pr*100<10?(pr*100).toFixed(1):Math.round(pr*100))+"%"):"—";
+    const xv=q("proxy"); if(xv) xv.textContent=proxyLeft();
     const bv=q("bar"); if(bv) bv.style.width=(pr*100).toFixed(1)+"%";
     const lv=q("left"); if(lv){
       lv.textContent=w?(w.en>Date.now()?" · осталось "+fmtLeft(w.en-Date.now()):" · сессия завершена"):"";
@@ -1482,12 +1495,15 @@ function renderAccs(force){
     return '<div class="acc'+(S.sel.has(k)?" sel":"")+(S.open.has(k)?" open":"")+'" data-k="'+k+'">'+
       '<div class="acc-top" data-tog="'+k+'">'+
         '<div class="acc-chk" data-chk="'+k+'">✓</div>'+
-        '<div class="acc-name"><b>#'+a.acct+' '+siteBadge(a.site)+' <span class="badge demo">Live</span></b>'+
+        '<div class="acc-name"><b>#'+a.acct+' '+siteBadge(a.site)+' <span class="badge demo">Live</span>'+
+          ' <span class="badge proxy">Прокси оплачен</span></b>'+
           '<small>'+(a.name||"Клиент")+' · сервер '+a.srv+(w?' · сессия '+(w.d.pair||"")
             :(window.LV_SHOW&&window.LV_SHOW.on
               ?' · сценарий '+((window.LV_SHOW.pairs||[])[0]||"крипто")
               :' · сессия не запущена'))+
-            '<span data-live="left">'+(w?(w.en>Date.now()?' · осталось '+fmtLeft(w.en-Date.now()):' · сессия завершена'):'')+'</span></small></div>'+
+            '<span data-live="left">'+(w?(w.en>Date.now()?' · осталось '+fmtLeft(w.en-Date.now()):' · сессия завершена'):'')+'</span>'+
+            '<span class="proxy-line"> · прокси активен до '+PROXY_UNTIL+' · <span data-live="proxy">'+proxyLeft()+'</span></span>'+
+            '</small></div>'+
         '<div class="acc-fig"><b class="num" data-live="cur">'+usd(cur)+'</b>'+
           '<span data-live="day" class="'+(day>=0?"up":"down")+'">за сутки '+sig(day)+'</span></div>'+
       '</div>'+
