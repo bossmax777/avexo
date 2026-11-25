@@ -2879,7 +2879,7 @@
       '<span class="muted">' + ready.length + " из " + list.length + " готовы к выводу · " +
       money(sum) + (by["new"] ? " · новорегов " + by["new"] : "") + "</span></div>" +
       (list.length
-        ? '<div class="heat">' + cells.map(function (c, i) {
+        ? '<div class="heat">' + cells.slice(0, 96).map(function (c, i) {
             /* если статусов два (например прогрет, но недавно выводили) — красим
                квадрат по диагонали в оба цвета */
             var tg = (c.st.disp || c.st.tags || [c.st.tone]).slice(0, 2);
@@ -2892,7 +2892,9 @@
               esc(c.a.acct) + " · " + tg.map(function (t) { return TONES[t][0]; }).join(" + ") + "\">" +
               "<b>#" + esc(String(c.a.acct).slice(-4)) + "</b>" +
               "<span>" + money(num(c.a.balance)).replace(/,\d\d$/, "") + "</span></button>";
-          }).join("") + "</div>"
+          }).join("") + "</div>" +
+          (cells.length > 96 ? '<p class="note" style="margin:7px 0 0">показаны первые 96 из ' +
+            cells.length + " кошельков — остальные учтены в цифрах выше</p>" : "")
         : '<p class="note">Кошельки не подключены.</p>') +
       '<div class="heat-leg">' + Object.keys(TONES).map(function (t) {
         return '<span class="heat-l ' + t + '"><i></i>' + TONES[t][0] + " — " + (by[t] || 0) + "</span>";
@@ -3349,12 +3351,21 @@
                : "ключ не активирован — золотая пара закрыта") +
         "</span></div>" +
         (g.list.length
-          ? '<div class="heat">' + g.list.map(function (r) {
-              return '<button class="heat-c ' + keyTone(r) + '" data-key="' + esc(kOf(r.a)) +
-                '" title="#' + esc(r.a.acct) + " · " + esc(r.a.siteName || r.a.site) + " · " +
-                esc(keyNote(r)) + (r.pay ? ", платёж " + payTxt(r.pay) : "") + '">' +
-                "<b>#" + esc(String(r.a.acct).slice(-4)) + "</b><span>" + esc(keyNote(r)) + "</span></button>";
-            }).join("") + "</div>"
+          ? (function () {
+              /* в группе могут быть сотни кошельков: если рисовать их все, столбец
+                 вытягивается на десятки тысяч пикселей и страница становится
+                 бесконечной пустой лентой. Показываем первые, остальные считаем. */
+              var LIM = 48;
+              var shown = g.list.slice(0, LIM), more = g.list.length - shown.length;
+              return '<div class="heat">' + shown.map(function (r) {
+                return '<button class="heat-c ' + keyTone(r) + '" data-key="' + esc(kOf(r.a)) +
+                  '" title="#' + esc(r.a.acct) + " · " + esc(r.a.siteName || r.a.site) + " · " +
+                  esc(keyNote(r)) + (r.pay ? ", платёж " + payTxt(r.pay) : "") + '">' +
+                  "<b>#" + esc(String(r.a.acct).slice(-4)) + "</b><span>" + esc(keyNote(r)) + "</span></button>";
+              }).join("") + "</div>" +
+              (more ? '<p class="note" style="margin:7px 0 0">и ещё ' + more +
+                      " кошельк(ов) в этой группе — список целиком в плане платежей ниже</p>" : "");
+            })()
           : '<p class="note" style="margin:0">Пока пусто.</p>') + "</div>";
     });
     html += "</div>";
