@@ -2056,12 +2056,20 @@ function ruToTime(d){
   return isNaN(t)?0:t;
 }
 function dayShown(){
-  const today=ruToday(); let has=false,last="";
-  (S.hist||[]).forEach(it=>(it.days||[]).forEach(x=>{
+  const h=S.hist||[], today=ruToday();
+  /* Раньше эта функция на каждый вызов обходила историю всех кошельков —
+     больше десяти тысяч записей. А вызывалась она для каждого кошелька, то
+     есть несколько миллионов операций каждую секунду. Ответ меняется только
+     при новой истории или смене суток, поэтому считаем один раз. */
+  if(S.__dsSrc===h&&S.__dsDay===today&&S.__ds) return S.__ds;
+  let has=false,last="";
+  h.forEach(it=>(it.days||[]).forEach(x=>{
     if(x.date===today) has=true;
     if(!last||ruToTime(x.date)>ruToTime(last)) last=x.date;
   }));
-  return (has||!last)?today:last;
+  const out=(has||!last)?today:last;
+  S.__ds=out; S.__dsSrc=h; S.__dsDay=today;
+  return out;
 }
 function dayPosted(a){
   const by=histDays(a);
