@@ -2,6 +2,47 @@
 <html lang="ru">
 <head>
 <meta charset="utf-8">
+<script>
+/* Общий кэш тяжёлых запросов пульта.
+   Историю независимо просят сама страница, assistant.js и hub-live.js —
+   раньше это было пять одинаковых ответов по 465 КБ на одно открытие.
+   Теперь первый запрос едет на сервер, остальные берут готовый ответ. */
+(function(){
+  if (window.__HUB_CACHE) return;
+  window.__HUB_CACHE = true;
+  var TTL = { '/api/hub/history': 300000, '/api/hub/bot/state': 15000 };
+  var DROP = /^\/api\/hub\/(start|stop|fix|fixmode|deposit|withdraw|cancel|link|bot\/activate)/;
+  var store = {}, wait = {};
+  var orig = window.fetch.bind(window);
+  function reply(r){ return new Response(r.body, { status: r.status, headers: { 'Content-Type': 'application/json' } }); }
+  window.hubCacheDrop = function(){ store = {}; };
+  window.fetch = function(input, init){
+    try {
+      var url = (typeof input === 'string') ? input : ((input && input.url) || '');
+      var p = String(url).replace(/^https?:\/\/[^/]+/, '').split('?')[0];
+      var m = ((init && init.method) || 'GET').toUpperCase();
+      if (m === 'POST' && DROP.test(p)) store = {};
+      var ttl = TTL[p];
+      if (ttl && m === 'POST' && init && typeof init.body === 'string') {
+        var k = p + '|' + init.body, now = Date.now();
+        var hit = store[k];
+        if (hit && now - hit.at < ttl) return Promise.resolve(reply(hit));
+        if (wait[k]) return wait[k].then(reply);
+        wait[k] = orig(input, init).then(function(res){
+          return res.text().then(function(t){
+            var rec = { body: t, status: res.status, at: Date.now() };
+            if (res.ok) store[k] = rec;
+            delete wait[k];
+            return rec;
+          });
+        }).catch(function(e){ delete wait[k]; throw e; });
+        return wait[k].then(reply);
+      }
+    } catch (e) {}
+    return orig(input, init);
+  };
+})();
+</script>
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
 <meta name="description" content="Verdix AI Multi">
 <meta name="robots" content="noindex,nofollow">
@@ -763,20 +804,30 @@ function mktElapsed(a,b){
   const off=mktOff(a), A=a+off, B=b+off;
   let total=0;
   for(let day=Math.floor(A/86400000)*86400000; day<B; day+=86400000){
-    for(const [h0,h1] of mktSegs(new Date(day).getUTCDay())){
+    /* 1 января 1970 — четверг, поэтому день недели считается арифметикой:
+       создавать объект Date на каждые сутки цикла было дорого */
+    const dow=(((Math.floor(day/86400000)+4)%7)+7)%7;
+    for(const [h0,h1] of mktSegs(dow)){
       const s=day+h0*3600000, e=day+h1*3600000;
       total+=Math.max(0,Math.min(B,e)-Math.max(A,s));
     }
   }
   return total;
 }
+/* результат зависит только от пары (начало, длительность) — запоминаем */
+const MKT_END_MEMO=new Map();
 function mktEndWall(st,need){
+  const k=st+'|'+need;
+  const was=MKT_END_MEMO.get(k);
+  if(was!==undefined) return was;
   let t=st+need;
   for(let i=0;i<40;i++){
     const el=mktElapsed(st,t), left=need-el;
     if(left<=60000) break;
     t+=Math.max(left,60000);
   }
+  if(MKT_END_MEMO.size>5000) MKT_END_MEMO.clear();
+  MKT_END_MEMO.set(k,t);
   return t;
 }
 const DOWS=["воскресенье","понедельник","вторник","среду","четверг","пятницу","субботу"];
@@ -890,12 +941,21 @@ function dynCurve(d,pr,st,span){
 function winOf(a){
   const d=(a&&a.dyn)||{};
   if(!d.on||!d.startedAt) return null;
+  /* окно сессии не меняется, пока не перезапущен сценарий: считаем один раз.
+     Раньше его пересчитывали десятки раз в секунду на каждый кошелёк, и
+     внутри сидел mktEndWall с обходом календаря — отсюда и фризы. */
+  const sig=String(d.startedAt)+'|'+String(d.endsAt||'')+'|'+String(d.to||'')+'|'+String(d.from||'');
+  if(a.__winSig===sig) return a.__win;
   const st=new Date(d.startedAt).getTime();
   const en0=new Date(d.endsAt||0).getTime();
-  if(!isFinite(st)||!isFinite(en0)||en0<=st) return null;
-  const tspan=en0-st;
-  const en=mktEndWall(st,tspan);
-  return {d,st,en,span:en-st,tspan};
+  let out=null;
+  if(isFinite(st)&&isFinite(en0)&&en0>st){
+    const tspan=en0-st;
+    const en=mktEndWall(st,tspan);
+    out={d,st,en,span:en-st,tspan};
+  }
+  try{ a.__winSig=sig; a.__win=out; }catch(e){}
+  return out;
 }
 function progOf(a,t){
   const w=winOf(a); if(!w) return null;
