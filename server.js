@@ -17,6 +17,12 @@ const ADMIN_KEY = process.env.ADMIN_KEY || '';
 const SESSION_DAYS = 30;
 
 app.set('trust proxy', 1);
+/* сжатие ответов: JSON пульта и скрипты едут по сети в 5-8 раз меньше.
+   Модуля может не быть в старой сборке — тогда просто работаем без сжатия. */
+try {
+  const compression = require('compression');
+  app.use(compression({ threshold: 1024 }));
+} catch (e) { console.warn('[avexo] сжатие недоступно:', e.message); }
 app.use(express.json({ limit: '1mb' }));
 app.use(cookieParser());
 
@@ -2273,8 +2279,26 @@ X.install(app, {
 });
 
 /* ---------- статика ---------- */
-app.use(express.static(path.join(__dirname, 'public'), { extensions: ['html'], maxAge: '5m' }));
-app.get('*', (_req, res) => X.sendPage(res, 'index.html'));
+app.use(express.static(path.join(__dirname, 'public'), { extensions: ['html'], maxAge: '1h' }));
+
+/* Иконки вкладки в папке не было, и запрос за ней проваливался в общий
+   обработчик: браузер на каждой загрузке скачивал вместо значка всю главную
+   страницу — четверть мегабайта. Отдаём лёгкий значок и кэшируем на неделю. */
+const FAVICON = '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64">'
+  + '<rect width="64" height="64" rx="14" fill="#0B0E14"/>'
+  + '<path d="M10 40c7 0 7-16 14-16s7 16 14 16 7-16 14-16" fill="none"'
+  + ' stroke="#7C5CFF" stroke-width="6" stroke-linecap="round"/></svg>';
+app.get('/favicon.ico', (_req, res) => {
+  res.type('image/svg+xml').set('Cache-Control', 'public, max-age=604800').send(FAVICON);
+});
+
+app.get('*', (req, res) => {
+  /* запрос за файлом, которого нет, больше не возвращает страницу целиком */
+  if (/\.[a-z0-9]{2,5}$/i.test(String(req.path || ''))) {
+    return res.status(404).type('text/plain').send('Файл не найден');
+  }
+  X.sendPage(res, 'index.html');
+});
 
 /* ---------- старт ---------- */
 (async () => {
