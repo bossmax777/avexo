@@ -496,8 +496,19 @@ app.get('/api/admin/access-log', requireAdmin, async (req, res) => {
 
 app.get('/api/admin/users', requireAdmin, async (_req, res) => {
   try {
-    const r = await q('SELECT * FROM users ORDER BY created_at');
-    res.json({ users: r.rows.map(toUser) });
+    /* Список кошельков — самый тяжёлый запрос админки: это мегабайт данных
+       вместе с операциями и историей. Берём порциями, чтобы в памяти не
+       лежала разом вся таблица: ответ тот же, пик памяти в разы меньше. */
+    const ids = (await q('SELECT id FROM users ORDER BY created_at')).rows.map(x => Number(x.id));
+    const users = [];
+    for (let p0 = 0; p0 < ids.length; p0 += 25) {
+      const part = ids.slice(p0, p0 + 25);
+      const r = await q('SELECT * FROM users WHERE id = ANY($1::int[])', [part]);
+      const by = {};
+      r.rows.forEach(row => { by[Number(row.id)] = row; });
+      part.forEach(id => { if (by[id]) users.push(toUser(by[id])); });
+    }
+    res.json({ users });
   } catch (e) { bad(res, 500, e.message); }
 });
 
