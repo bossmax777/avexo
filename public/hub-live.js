@@ -18,6 +18,7 @@
   var FEED_MAX = 40;            /* сколько строк держим в ленте */
   var WAVE = 0.075;             /* размах колебаний кривой внутри дня */
   var LOCK_UNTIL = "30.11.2026"; /* до какой даты сценарий показан активным */
+  var NEXT_UNTIL = "10.12.2026"; /* следующий сценарий в очереди: на 10 дней */
   var PAIRS_FALLBACK = ["BTC/USD", "ETH/USD", "SOL/USD", "XRP/USD"];
   /* ориентировочные цены для строк ленты: это демонстрация, не котировки */
   var PRICE = {
@@ -133,7 +134,12 @@
     "#lvBanner{margin:0 0 14px;border-radius:12px;padding:12px 16px;" +
       "background:linear-gradient(90deg,#C81E1E,#E23B3B);color:#fff;" +
       "box-shadow:0 2px 14px rgba(200,30,30,.35);font-size:13.5px;line-height:1.45}" +
+    "#lvBanner{margin-bottom:10px}" +
     "#lvBanner b{display:block;font-size:14.5px;margin-bottom:2px;letter-spacing:.01em}" +
+    "#lvNext{margin:0 0 14px;border-radius:12px;padding:12px 16px;" +
+      "background:linear-gradient(90deg,#15803D,#22A75A);color:#fff;" +
+      "box-shadow:0 2px 14px rgba(21,128,61,.35);font-size:13.5px;line-height:1.45}" +
+    "#lvNext b{display:block;font-size:14.5px;margin-bottom:2px;letter-spacing:.01em}" +
     "#lvLock{margin:0 0 12px;border:1px solid var(--line);border-radius:10px;padding:10px 12px;" +
       "font-size:12.5px;color:var(--muted);background:rgba(127,127,127,.06)}" +
     "#lvLock b{color:var(--buy,#16A34A)}" +
@@ -175,6 +181,14 @@
       "Активация сценария установлена до " + LOCK_UNTIL +
       ". Приостановка и внесение изменений не рекомендуются.";
     host.parentNode.insertBefore(ban, box);
+
+    /* зелёная плашка под красной: следующий сценарий уже в очереди */
+    var nxt = document.createElement("div");
+    nxt.id = "lvNext";
+    nxt.innerHTML = "<b>В очереди активирован следующий сценарий</b>" +
+      "Срок — 10 дней, до " + NEXT_UNTIL +
+      ". Он подключится автоматически сразу после текущего, без паузы в работе.";
+    host.parentNode.insertBefore(nxt, box);
 
     lockPanel();
     LV.built = true;
