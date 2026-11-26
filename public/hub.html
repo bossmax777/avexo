@@ -1414,7 +1414,9 @@ function renderKpis(){
   $("pillCnt").textContent=links;
   $("pillWord").textContent=links===1?"подключённый аккаунт"
     :(links%10>=2&&links%10<=4&&(links%100<10||links%100>=20)?"подключённых аккаунта":"подключённых аккаунтов");
-  $("whoSum").textContent=usd(bal);
+  /* в шапке — та же цифра, что и в плитке «Суммарный капитал»: пока идёт
+     торговый день, обе идут по живому счётчику, иначе они расходятся */
+  $("whoSum").textContent=usd(balS);
   const inWork=(window.LV_SHOW&&window.LV_SHOW.on)?(bw+nx):live.length;
   $("whoCnt").textContent=(bw+nx)+" кошельков · "+inWork+" в работе · прокси оплачен до "+PROXY_UNTIL;
 }
