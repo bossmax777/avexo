@@ -19,6 +19,9 @@
   var WAVE = 0.075;             /* размах колебаний кривой внутри дня */
   var LOCK_UNTIL = "30.11.2026"; /* до какой даты сценарий показан активным */
   var NEXT_UNTIL = "10.12.2026"; /* следующий сценарий в очереди: на 10 дней */
+  var SERVER_UNTIL = "23.12.2026"; /* до какого числа оплачен сервер */
+  var PROXY_UNTIL = "25.12.2026";  /* до какого числа оплачены прокси */
+  var WARN_DAYS = 10;              /* за сколько дней плашка краснеет */
   var PAIRS_FALLBACK = ["BTC/USD", "ETH/USD", "SOL/USD", "XRP/USD"];
   /* ориентировочные цены для строк ленты: это демонстрация, не котировки */
   var PRICE = {
@@ -140,6 +143,17 @@
       "background:linear-gradient(90deg,#15803D,#22A75A);color:#fff;" +
       "box-shadow:0 2px 14px rgba(21,128,61,.35);font-size:13.5px;line-height:1.45}" +
     "#lvNext b{display:block;font-size:14.5px;margin-bottom:2px;letter-spacing:.01em}" +
+    "#lvNext{margin-bottom:10px}" +
+    ".lv-pay{margin:0 0 10px;border-radius:12px;padding:11px 16px;font-size:13.5px;" +
+      "line-height:1.45;border:1px solid var(--line);background:rgba(127,127,127,.07);" +
+      "color:var(--muted)}" +
+    ".lv-pay b{display:block;font-size:14px;margin-bottom:2px;color:var(--ink,inherit);" +
+      "letter-spacing:.01em}" +
+    ".lv-pay i{font-style:normal;color:var(--buy,#16A34A);font-weight:600}" +
+    ".lv-pay.warn{border:0;background:linear-gradient(90deg,#C81E1E,#E23B3B);color:#fff;" +
+      "box-shadow:0 2px 14px rgba(200,30,30,.35)}" +
+    ".lv-pay.warn b,.lv-pay.warn i{color:#fff}" +
+    ".lv-pay:last-of-type{margin-bottom:14px}" +
     "#lvLock{margin:0 0 12px;border:1px solid var(--line);border-radius:10px;padding:10px 12px;" +
       "font-size:12.5px;color:var(--muted);background:rgba(127,127,127,.06)}" +
     "#lvLock b{color:var(--buy,#16A34A)}" +
@@ -190,9 +204,59 @@
       ". Он подключится автоматически сразу после текущего, без паузы в работе.";
     host.parentNode.insertBefore(nxt, box);
 
+    /* оплата сервера и прокси: спокойные плашки, за 10 дней до срока — красные */
+    ["lvPayServer", "lvPayProxy"].forEach(function (id) {
+      var d = document.createElement("div");
+      d.id = id; d.className = "lv-pay";
+      host.parentNode.insertBefore(d, box);
+    });
+    payBanners();
+
     lockPanel();
     LV.built = true;
     return true;
+  }
+
+  /* сколько полных суток осталось до конца указанной даты (по Москве) */
+  function daysLeft(label) {
+    var a = String(label).split(".");
+    var endMsk = Date.UTC(+a[2], +a[1] - 1, +a[0]) + DAY_MS;  /* конец этих суток */
+    var left = (endMsk - MSK_OFFSET) - Date.now();
+    return Math.max(0, Math.ceil(left / DAY_MS));
+  }
+  function plural(n, a, b, c) {
+    var n10 = n % 10, n100 = n % 100;
+    if (n10 === 1 && n100 !== 11) return a;
+    if (n10 >= 2 && n10 <= 4 && (n100 < 12 || n100 > 14)) return b;
+    return c;
+  }
+
+  /* две нижние плашки: сервер и прокси. Пока до срока больше WARN_DAYS —
+     спокойная серая строка; ближе к сроку плашка краснеет и просит оплатить. */
+  function payBanners() {
+    [
+      { id: "lvPayServer", name: "Сервер", until: SERVER_UNTIL,
+        okTail: "Площадка и торговый модуль работают без ограничений.",
+        warnTail: "Оплатите заранее: после этой даты работа по сценарию будет приостановлена." },
+      { id: "lvPayProxy", name: "Прокси", until: PROXY_UNTIL,
+        okTail: "Подключение к биржам идёт через оплаченные прокси.",
+        warnTail: "Оплатите заранее: без прокси соединение с биржами прервётся и работа встанет." }
+    ].forEach(function (c) {
+      var node = el(c.id);
+      if (!node) return;
+      var d = daysLeft(c.until);
+      var warn = d <= WARN_DAYS;
+      var sig = c.until + "|" + d + "|" + (warn ? 1 : 0);
+      if (node.getAttribute("data-sig") === sig) return;
+      node.setAttribute("data-sig", sig);
+      node.className = "lv-pay" + (warn ? " warn" : "");
+      var days = d + " " + plural(d, "день", "дня", "дней");
+      node.innerHTML = warn
+        ? "<b>" + c.name + ": подходит срок оплаты — " + c.until + "</b>" +
+          "Осталось <i>" + days + "</i>. " + c.warnTail
+        : "<b>" + c.name + " оплачен до " + c.until + "</b>" +
+          "Осталось <i>" + days + "</i>. " + c.okTail;
+    });
   }
 
   /* «Общий сценарий» показываем как уже активированный и закрытый для правок:
@@ -497,6 +561,7 @@
     };
     /* тяжёлую перерисовку делаем не каждые две секунды, а раз в восемь:
        иначе страница с 240 кошельками заметно подтормаживает */
+    try { payBanners(); } catch (e) {}
     try { lockPanel(); } catch (e) {}
     try { lockLog(); } catch (e) {}
     try { if (typeof renderDeals === "function") renderDeals(); } catch (e) {}
