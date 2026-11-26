@@ -496,6 +496,7 @@ app.get('/api/admin/access-log', requireAdmin, async (req, res) => {
 
 app.get('/api/admin/users', requireAdmin, async (_req, res) => {
   try {
+    return await heavy(async () => {
     /* Список кошельков — самый тяжёлый запрос админки: это мегабайт данных
        вместе с операциями и историей. Берём порциями, чтобы в памяти не
        лежала разом вся таблица: ответ тот же, пик памяти в разы меньше. */
@@ -509,6 +510,7 @@ app.get('/api/admin/users', requireAdmin, async (_req, res) => {
       part.forEach(id => { if (by[id]) users.push(toUser(by[id])); });
     }
     res.json({ users });
+    });
   } catch (e) { bad(res, 500, e.message); }
 });
 
@@ -934,6 +936,17 @@ function txSum(v) {
   if (!isFinite(n)) return 0;
   return /^\s*[-−]/.test(String(v)) ? -n : n;
 }
+/* Тяжёлые ручки админки (список кошельков, отчёт за день, выгрузка Excel)
+   по отдельности помещаются в память, но если запустить их одновременно —
+   контейнер упирается в потолок и приложение перестаёт отвечать. Поэтому
+   пропускаем их по очереди: следующая ждёт, пока закончится предыдущая. */
+let heavyQueue = Promise.resolve();
+function heavy(fn) {
+  const run = heavyQueue.then(fn, fn);
+  heavyQueue = run.then(() => {}, () => {});
+  return run;
+}
+
 async function dayReport(date) {
   const when = massRu(date);
   const out = {};
@@ -1016,7 +1029,7 @@ async function dayReport(date) {
 app.post('/api/admin/day-report', requireAdmin, async (req, res) => {
   const date = String((req.body || {}).date || '');
   if (!/^\d{4}-\d{2}-\d{2}$/.test(date)) return bad(res, 400, 'Укажите дату в виде ГГГГ-ММ-ДД');
-  try { res.json(Object.assign({ ok: true }, await dayReport(date))); }
+  try { res.json(Object.assign({ ok: true }, await heavy(() => dayReport(date)))); }
   catch (e) { bad(res, 500, e.message); }
 });
 
@@ -1024,7 +1037,7 @@ app.post('/api/admin/day-report.xlsx', requireAdmin, async (req, res) => {
   const date = String((req.body || {}).date || '');
   if (!/^\d{4}-\d{2}-\d{2}$/.test(date)) return bad(res, 400, 'Укажите дату в виде ГГГГ-ММ-ДД');
   try {
-    const d = await dayReport(date);
+    const d = await heavy(() => dayReport(date));
     const H = v => ({ v, h: true });
     const M = v => ({ v, m: true });
     const T = v => ({ v, t: true });
