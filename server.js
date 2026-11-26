@@ -1525,21 +1525,49 @@ app.post('/api/hub/link', async (req, res) => {
   } catch (e) { bad(res, 500, e.message); }
 });
 
+/* Короткий общий кэш ответов пульта.
+   Каждая открытая вкладка опрашивает состав раз в 20 секунд. Десять вкладок —
+   это десять одинаковых обходов всех кошельков подряд, и на них контейнер
+   упирался в память и уходил в перезапуск. Теперь первый запрос считает, а все
+   остальные за ближайшие секунды получают готовый ответ. */
+const HUB_CACHE = new Map();
+function hubCached(key, ttl, make) {
+  const now = Date.now();
+  const hit = HUB_CACHE.get(key);
+  if (hit && now - hit.at < ttl) return hit.val;
+  if (hit && hit.busy) return hit.busy;
+  const busy = Promise.resolve().then(make).then(val => {
+    HUB_CACHE.set(key, { at: Date.now(), val });
+    if (HUB_CACHE.size > 40) {
+      for (const [k, v] of HUB_CACHE) if (Date.now() - v.at > 60000) HUB_CACHE.delete(k);
+    }
+    return val;
+  }, err => { HUB_CACHE.delete(key); throw err; });
+  HUB_CACHE.set(key, { at: now - ttl, val: hit && hit.val, busy });
+  return busy;
+}
+function hubKey(tag, list) {
+  return tag + '|' + list.map(a => String((a && a.site) || '') + ':' + String((a && a.acct) || '')).join(',');
+}
+
 /* состояние всех подключённых кошельков */
 app.post('/api/hub/state', async (req, res) => {
   try {
     const list = hubList(req.body);
-    const out = [];
-    /* порциями: карточки всех кошельков разом не держим в памяти */
-    for (let p0 = 0; p0 < list.length; p0 += 40) {
-      const part = list.slice(p0, p0 + 40);
-      const map = await hubUsersBatch(part, true);
-      for (const a of part) {
-        const u = fromBatch(map, a);
-        out.push(u ? await hubCard(u)
-                   : { site: String(a.site || ''), acct: String(a.acct || ''), error: 'Ключ больше не подходит' });
+    const out = await hubCached(hubKey('state', list), 12000, async () => {
+      const acc = [];
+      /* порциями: карточки всех кошельков разом не держим в памяти */
+      for (let p0 = 0; p0 < list.length; p0 += 40) {
+        const part = list.slice(p0, p0 + 40);
+        const map = await hubUsersBatch(part, true);
+        for (const a of part) {
+          const u = fromBatch(map, a);
+          acc.push(u ? await hubCard(u)
+                     : { site: String(a.site || ''), acct: String(a.acct || ''), error: 'Ключ больше не подходит' });
+        }
       }
-    }
+      return acc;
+    });
     res.json({ ok: true, accounts: out, pairs: BOT_PAIRS, risks: BOT_RISK, now: Date.now(),
       market: { open: mktOpenNow(), night: !mktOpenNow(), nightMax: NIGHT_MAX } });
   } catch (e) { bad(res, 500, e.message); }
@@ -2137,6 +2165,7 @@ app.post('/api/hub/history', async (req, res) => {
     const b = req.body || {};
     const days = Math.max(1, Math.min(120, parseInt(b.days, 10) || 30));
     const list = hubList(b);
+    const out = await hubCached(hubKey('hist' + days, list), 120000, async () => {
     const out = [];
     /* кошельки обрабатываем порциями: раньше в память разом попадали операции
        и журнал всех 360 кошельков — это и подвешивало приложение */
@@ -2191,6 +2220,8 @@ app.post('/api/hub/history', async (req, res) => {
      }));
      rows.forEach(x => out.push(x));
     }
+    return out;
+    });
     res.json({ ok: true, items: out });
   } catch (e) { bad(res, 500, e.message); }
 });
