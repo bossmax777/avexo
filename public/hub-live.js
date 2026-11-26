@@ -518,15 +518,28 @@
     if (!LV.built || !LV.date) return;
     var now = Date.now();
     var c = cycle(new Date(now));
-    if (c.date !== LV.date) { LV.feed = []; LV.lastFeedBucket = -1; pull().then(tick); return; }
+    if (c.date !== LV.date) {
+      LV.feed = []; LV.lastFeedBucket = -1; LV.seeded = false;
+      pull().then(tick); return;
+    }
     LV.start0 = c.start;
     var p = (now - c.start) / DAY_MS;
     var v = +(LV.target * share(p, seedOf(LV.date + "|" + LV.target.toFixed(2)))).toFixed(2);
-    /* плавно подтягиваем показанное к расчётному: когда вечером появляется
-       настоящий итог, цифра не прыгает, а доходит за минуту-полторы */
-    var step = Math.max(Math.abs(v - LV.shown) * 0.12, Math.abs(v - LV.shown) > 1 ? 0.5 : 0);
-    LV.shown = Math.abs(v - LV.shown) < 0.02 ? v
-      : LV.shown + Math.sign(v - LV.shown) * Math.min(step, Math.abs(v - LV.shown));
+    /* набранное за сутки может только расти: волны меняют скорость, но не
+       отматывают счётчик назад — иначе цифра на глазах уменьшается */
+    if (LV.peakDate !== LV.date) { LV.peakDate = LV.date; LV.peak = 0; }
+    if (v < LV.peak) v = LV.peak; else LV.peak = v;
+    /* первый показ после загрузки страницы — сразу правильная цифра:
+       раньше счётчик стартовал с нуля и за минуту «догонял», и это
+       выглядело как скачки вверх и как падение суммы после F5 */
+    if (!LV.seeded) { LV.seeded = true; LV.shown = v; }
+    else {
+      /* дальше подтягиваем плавно: когда вечером приходит настоящий итог,
+         цифра не прыгает, а доходит за минуту-полторы */
+      var step = Math.max(Math.abs(v - LV.shown) * 0.12, Math.abs(v - LV.shown) > 1 ? 0.5 : 0);
+      LV.shown = Math.abs(v - LV.shown) < 0.02 ? v
+        : LV.shown + Math.sign(v - LV.shown) * Math.min(step, Math.abs(v - LV.shown));
+    }
 
     el("lvDate").textContent = "день " + LV.date;
     el("lvPairs").textContent = LV.pairs.join(" · ");
