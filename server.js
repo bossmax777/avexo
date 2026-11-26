@@ -19,9 +19,23 @@ const SESSION_DAYS = 30;
 app.set('trust proxy', 1);
 /* сжатие ответов: JSON пульта и скрипты едут по сети в 5-8 раз меньше.
    Модуля может не быть в старой сборке — тогда просто работаем без сжатия. */
+/* brotli в Node держит на каждый ответ по 16-32 МБ буферов: при 500 кошельках
+   и нескольких открытых вкладках это съедало всю память и приложение падало.
+   Поэтому brotli отключаем и сжимаем gzip — он занимает сотни килобайт. */
+app.use(function (req, res, next) {
+  const ae = req.headers['accept-encoding'];
+  if (ae) {
+    const clean = String(ae).split(',')
+      .map(function (v) { return v.trim(); })
+      .filter(function (v) { return v && !/^br\b/i.test(v); })
+      .join(', ');
+    req.headers['accept-encoding'] = clean || 'gzip';
+  }
+  next();
+});
 try {
   const compression = require('compression');
-  app.use(compression({ threshold: 1024 }));
+  app.use(compression({ threshold: 1024, level: 6, memLevel: 7 }));
 } catch (e) { console.warn('[avexo] сжатие недоступно:', e.message); }
 app.use(express.json({ limit: '1mb' }));
 app.use(cookieParser());
