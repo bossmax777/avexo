@@ -2879,7 +2879,8 @@
       '<span class="muted">' + ready.length + " из " + list.length + " готовы к выводу · " +
       money(sum) + (by["new"] ? " · новорегов " + by["new"] : "") + "</span></div>" +
       (list.length
-        ? '<div class="heat">' + cells.slice(0, 96).map(function (c, i) {
+        ? '<details class="fold"><summary>Показать карту по кошелькам</summary>' +
+          '<div class="heat">' + cells.slice(0, 96).map(function (c, i) {
             /* если статусов два (например прогрет, но недавно выводили) — красим
                квадрат по диагонали в оба цвета */
             var tg = (c.st.disp || c.st.tags || [c.st.tone]).slice(0, 2);
@@ -2894,7 +2895,7 @@
               "<span>" + money(num(c.a.balance)).replace(/,\d\d$/, "") + "</span></button>";
           }).join("") + "</div>" +
           (cells.length > 96 ? '<p class="note" style="margin:7px 0 0">показаны первые 96 из ' +
-            cells.length + " кошельков — остальные учтены в цифрах выше</p>" : "")
+            cells.length + " кошельков — остальные учтены в цифрах выше</p>" : "") + "</details>"
         : '<p class="note">Кошельки не подключены.</p>') +
       '<div class="heat-leg">' + Object.keys(TONES).map(function (t) {
         return '<span class="heat-l ' + t + '"><i></i>' + TONES[t][0] + " — " + (by[t] || 0) + "</span>";
@@ -3110,6 +3111,15 @@
     "border:1px solid var(--line);background:var(--surface-2);color:var(--text)}" +
     ".ai-cmds button:hover{border-color:var(--accent)}" +
     ".heat{display:grid;grid-template-columns:repeat(auto-fill,minmax(74px,1fr));gap:8px}" +
+    ".fold{margin-top:4px}" +
+    ".fold>summary{cursor:pointer;list-style:none;display:inline-flex;align-items:center;gap:8px;" +
+    "padding:8px 13px;border:1px solid var(--line);border-radius:999px;background:var(--surface-2);" +
+    "font-size:12px;color:var(--muted);user-select:none}" +
+    ".fold>summary::-webkit-details-marker{display:none}" +
+    ".fold>summary:hover{color:var(--text);border-color:var(--accent,#7C5CFF)}" +
+    ".fold>summary:after{content:\"\\25BE\";font-size:10px}" +
+    ".fold[open]>summary:after{content:\"\\25B4\"}" +
+    ".fold[open]>summary{margin-bottom:10px}" +
     ".heat-c{font:inherit;cursor:pointer;border-radius:11px;padding:9px 6px;display:flex;transition:transform .15s,box-shadow .15s;" +
     "flex-direction:column;gap:3px;align-items:center;border:1px solid var(--line);background:var(--surface-2);color:var(--text)}" +
     ".heat-c b{font-size:12px}.heat-c span{font-size:10.5px;color:var(--muted)}" +
@@ -3341,7 +3351,8 @@
                   list: rows.filter(function (r) { return r.day === 0; }) });
     var html = '<div class="panel-head"><h3>Тепловая карта активации ключей</h3>' +
       '<span class="muted">ключей активно ' + live + " из " + rows.length +
-      " · платежи 30 и 10 числа</span></div><div class=\"keyg\">";
+      " · платежи 30 и 10 числа</span></div>" +
+      '<details class="fold"><summary>Показать карту по кошелькам</summary><div class="keyg">';
     groups.forEach(function (g) {
       g.list.sort(function (x, y) { return (x.add === null ? 999 : x.add) - (y.add === null ? 999 : y.add); });
       var ext = g.list.filter(function (r) { return r.kind === "key" && r.add > 0; }).length;
@@ -3368,7 +3379,7 @@
             })()
           : '<p class="note" style="margin:0">Пока пусто.</p>') + "</div>";
     });
-    html += "</div>";
+    html += "</div></details>";
     var byTone = { warm: 0, cold: 0, off: 0 };
     rows.forEach(function (r) { byTone[keyTone(r)] = (byTone[keyTone(r)] || 0) + 1; });
     html += '<div class="heat-leg" style="margin-top:10px">' +

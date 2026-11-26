@@ -1661,8 +1661,7 @@ function renderDeals(force){
   /* когда биржа закрыта, новые сделки идут только по крипте — остальное на паузе */
   const paused=[...new Set(all.map(d=>d.sym))].filter(x=>!allDay(x)&&!mktOpen());
   $("dealMeta").textContent=all.length
-    ?all.length+" закрытых сделок по всем кошелькам"+
-      (paused.length?" · на паузе: "+paused.join(", ")+" (вне часов биржи)":"")
+    ?(paused.length?"На паузе: "+paused.join(", ")+" (вне часов биржи)":"")
     :"—";
   $("dealBody").innerHTML=rows.length?rows.map(d=>
     '<tr><td class="num dim">'+new Date(d.t).toLocaleString("ru-RU",{day:"2-digit",month:"2-digit",hour:"2-digit",minute:"2-digit",second:"2-digit"})+'</td>'+
