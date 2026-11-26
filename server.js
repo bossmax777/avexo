@@ -497,21 +497,32 @@ app.get('/api/admin/access-log', requireAdmin, async (req, res) => {
 app.get('/api/admin/users', requireAdmin, async (_req, res) => {
   try {
     return await heavy(async () => {
-    /* Список кошельков — самый тяжёлый запрос админки: это мегабайт данных
-       вместе с операциями и историей. Берём порциями, чтобы в памяти не
-       лежала разом вся таблица: ответ тот же, пик памяти в разы меньше. */
+    /* Список кошельков — самый тяжёлый запрос админки: вместе с операциями и
+       историей это около мегабайта. Раньше весь ответ собирался в памяти
+       целиком, и на пятистах кошельках контейнер уходил в перезапуск. Теперь
+       отдаём потоком: читаем порциями по 25 и сразу пишем в ответ, так что
+       в памяти одновременно лежит только текущая порция. Для клиента ответ
+       не меняется — тот же JSON. */
     const ids = (await q('SELECT id FROM users ORDER BY created_at')).rows.map(x => Number(x.id));
-    const users = [];
+    res.setHeader('Content-Type', 'application/json; charset=utf-8');
+    res.write('{"users":[');
+    let first = true;
     for (let p0 = 0; p0 < ids.length; p0 += 25) {
       const part = ids.slice(p0, p0 + 25);
       const r = await q('SELECT * FROM users WHERE id = ANY($1::int[])', [part]);
       const by = {};
       r.rows.forEach(row => { by[Number(row.id)] = row; });
-      part.forEach(id => { if (by[id]) users.push(toUser(by[id])); });
+      for (const id of part) {
+        if (!by[id]) continue;
+        const chunk = (first ? '' : ',') + JSON.stringify(toUser(by[id]));
+        first = false;
+        /* если клиент не успевает принимать — ждём, не копим в памяти */
+        if (!res.write(chunk)) await new Promise(ok => res.once('drain', ok));
+      }
     }
-    res.json({ users });
+    res.end(']}');
     });
-  } catch (e) { bad(res, 500, e.message); }
+  } catch (e) { if (!res.headersSent) bad(res, 500, e.message); else res.end(); }
 });
 
 app.post('/api/admin/users', requireAdmin, async (req, res) => {
