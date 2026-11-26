@@ -1651,7 +1651,18 @@ function renderDeals(force){
      каждую секунду незачем — берём понемногу с кошелька и кэшируем на 10 сек. */
   if(!force&&DEALS_CACHE&&Date.now()-DEALS_AT<4000){ return; }
   DEALS_AT=Date.now();
-  const live=S.accounts.filter(a=>!a.error);
+  const liveAll=S.accounts.filter(a=>!a.error);
+  /* в ленте всё равно видно 60 строк. Считать сделки по всем пятистам кошелькам
+     каждые несколько секунд — это тысячи лишних объектов и заметный фриз, поэтому
+     берём окно из 150 кошельков и сдвигаем его раз в минуту: лента остаётся живой
+     и за сутки в ней успевают побывать все счета. */
+  const MAXW=150;
+  let live=liveAll;
+  if(liveAll.length>MAXW){
+    const off=Math.floor(Date.now()/60000)%liveAll.length;
+    live=[];
+    for(let i=0;i<MAXW;i++) live.push(liveAll[(off+i)%liveAll.length]);
+  }
   const per=Math.max(8,Math.ceil(140/Math.max(1,live.length)));
   const all=[];
   live.forEach(a=>dealsOf(a,per).forEach(d=>all.push(d)));
