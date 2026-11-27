@@ -1088,10 +1088,6 @@
         return "в прогреве · не хватает " + money(st.needSum) +
           " — пока сумма не набрана, прогрев не наступит";
       };
-      /* ближайшая дата прогрева по всему парку: только те счета, где сумма есть */
-      var etaDays = rows.filter(function (r) {
-        return !r.st.ready && !r.st.needSum && r.st.daysLeft;
-      }).map(function (r) { return r.st.daysLeft; }).sort(function (x, y) { return x - y; });
       var keyTxt = function (r) {
         if (!r.keyOn) return "ключа нет";
         if (r.days === null) return "бессрочный";
@@ -1117,12 +1113,6 @@
             esc(r.a.siteName || r.a.site) + " · ×" + String(r.k).replace(".", ",") + "</span></td><td>" +
             esc(warmTxt(r)) + "</td><td>" + keyTxt(r) + "</td><td>" + esc(kycTxt(r)) + "</td></tr>";
         }).join("") + "</table>" +
-        (etaDays.length
-          ? "<br><b>Ближайший прогрев — " + dateIn(etaDays[0]) + "</b> (через " + etaDays[0] +
-            " дн.). Раньше этой даты не прогреется ни один кошелёк: остальным либо не хватает " +
-            money(WARM_SUM) + " на счёте, либо срок после последнего вывода истекает позже."
-          : "<br><b>Прогретых в ближайшее время не будет:</b> ни на одном счёте нет " +
-            money(WARM_SUM) + " с выдержанным сроком.") +
         "<br><b>Коротко:</b> прогретых " + (rows.length - cold) + " из " + rows.length +
         (news ? ", новорегов " + news : "") +
         (soon.length ? ", ключ заканчивается у " + soon.length : "") +
