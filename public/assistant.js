@@ -307,7 +307,8 @@
         "коэффициент выше.";
     }
     return "Прогрев: " + w.cold.length + " из " + w.n + " " + kind + " ещё в прогреве — " +
-      "на счёте нет " + money(WARM_SUM) + " или не прошло " + WARM_DAYS + " дней с регистрации. " +
+      "на счёте нет " + money(WARM_SUM) + " или не прошло " + WARM_DAYS +
+      " дней с регистрации либо с последнего вывода. " +
       "Торгуют они так же, как остальные, но коэффициент по ним держим в минимальных ступенях " +
       "(до ×" + String(COLD_MAX).replace(".", ",") + "): резкий рост на молодом счёте — главная " +
       "причина проверок." + (w.warm.length
@@ -342,7 +343,7 @@
       (wi.cold.length
         ? '<p class="cap-warm">Плюс к этому ' + wi.cold.length + " из " + wi.n +
           " кошельков ещё в прогреве: нет " + money(WARM_SUM) + " на счёте или не прошло " +
-          WARM_DAYS + " дней с регистрации. Работать ими можно, но коэффициент по таким счетам " +
+          WARM_DAYS + " дней с регистрации либо с последнего вывода. Работать ими можно, но коэффициент по таким счетам " +
           "лучше держать в минимальных ступенях — резкий рост на молодом аккаунте и приводит " +
           "к проверке.</p>"
         : "") +
@@ -1227,8 +1228,8 @@
         (no.length ? "Не трогать " + no.length + " кошельк(ов): " + no.slice(0, 6).map(function (r) {
           return "#" + esc(r.a.acct) + " (" + esc(r.st.title.toLowerCase()) + ")"; }).join(", ") + "."
           : "") +
-        "<br>Прогретым считаю счёт от " + money(WARM_SUM) + " и старше " + WARM_DAYS +
-        " дней; заявка создаётся кнопкой «Вывести средства» в карточке кошелька.");
+        "<br>Прогретым считаю счёт от " + money(WARM_SUM) + ", у которого " + WARM_DAYS +
+        " дней не было выводов; любой вывод раньше срока обнуляет отсчёт. Заявка создаётся кнопкой «Вывести средства» в карточке кошелька.");
     });
   }
   /* имя клиента берём из истории кабинета: в карточке пульта его может не быть */
@@ -1903,7 +1904,7 @@
     var warmP = 22 * (w.n ? w.warm.length / w.n : 0); v += warmP;
     if (w.cold.length) {
       up.push(["прогреть " + w.cold.length + " кошельк(ов): до " + money(WARM_SUM) + " на счёте и " +
-        WARM_DAYS + " дней с регистрации", 22 - warmP]);
+        WARM_DAYS + " дней без выводов", 22 - warmP]);
     }
     var outP = 6 * (m.out / n); v += outP;
     if (m.out < n) up.push(["открыть вывод " + (n - m.out) + " кошельк(ам)", 6 - outP]);
@@ -2778,7 +2779,11 @@
     }).filter(function (x) { return x.ago !== null; }).sort(function (x, y) { return x.ago - y.ago; });
     var lastOut = outs.length ? outs[0].ago : null;
     var open = (typeof outOk === "function") ? outOk(a) : false;
-    var daysLeft = (age === null) ? null : Math.max(0, WARM_DAYS - age);
+    /* Отсчёт прогрева идёт не от регистрации, а от последнего вывода:
+       любая заявка раньше 90 дней обнуляет срок полностью. Поэтому берём
+       ту дату, которая ближе к сегодняшнему дню. */
+    var warmAge = (lastOut !== null && (age === null || lastOut < age)) ? lastOut : age;
+    var daysLeft = (warmAge === null) ? null : Math.max(0, WARM_DAYS - warmAge);
     var newLeft = (age === null) ? null : Math.max(0, NEW_DAYS - age);
     var needSum = Math.max(0, WARM_SUM - bal);
     var gapLeft = (lastOut !== null && lastOut <= OUT_GAP) ? Math.max(0, OUT_GAP + 1 - lastOut) : null;
@@ -2826,7 +2831,7 @@
         why: "идёт сценарий до " + LOCK_UNTIL + ", вывод закрыт до " + PAYOUT_UNTIL,
         rec: "выводить нельзя: сценарий активирован до " + LOCK_UNTIL +
           ", вывод откроется " + PAYOUT_UNTIL,
-        outs: outs, lastOut: lastOut, age: age, bal: bal,
+        outs: outs, lastOut: lastOut, age: age, warmAge: warmAge, bal: bal,
         daysLeft: daysLeft, newLeft: newLeft, needSum: needSum, gapLeft: gapLeft,
         ready: false };
     }
@@ -2846,7 +2851,7 @@
     if (!disp.length) disp = [tone];
     return { tone: tone, tags: tags, disp: disp, title: titles[tone],
              why: why.join("; "), rec: rec.join(". "),
-             outs: outs, lastOut: lastOut, age: age, bal: bal,
+             outs: outs, lastOut: lastOut, age: age, warmAge: warmAge, bal: bal,
              daysLeft: daysLeft, newLeft: newLeft, needSum: needSum, gapLeft: gapLeft,
              /* к выводу готов только прогретый счёт без оговорок */
              ready: tags.indexOf("warm") >= 0 && tags.length === 1 };
@@ -2905,7 +2910,8 @@
       "(например счёт прогрет, но вывод был пару дней назад). Новорег — кошелёк первой недели " +
       "(до " + NEW_DAYS + " дней): такие лучше не трогать вовсе. " +
       "почему именно такой статус. Прогретым считаю счёт от " + money(WARM_SUM) +
-      "; свежим — моложе " + WARM_DAYS + " дней; выводы учитываю по истории кабинета, " +
+      "; срок прогрева — " + WARM_DAYS + " дней от регистрации или от последнего вывода, "
+      + "смотря что позже; выводы учитываю по истории кабинета, " +
       "включая разнесённые из админки.</div>";
     return { html: html, wire: function (box) {
       function show(c, box2) {
@@ -2916,8 +2922,10 @@
               ? "Счёт прогрет: на нём " + money(st.bal) + ", это выше " + money(WARM_SUM) + "."
               : "До прогрева: не хватает " + money(st.needSum) +
                 (st.daysLeft === null ? "" : (st.daysLeft > 0
-                  ? ", срок с регистрации — ещё " + st.daysLeft + " дн. из " + WARM_DAYS
-                  : ", срок с регистрации уже выдержан")) + ".";
+                  ? ", срок прогрева — ещё " + st.daysLeft + " дн. из " + WARM_DAYS +
+                    (st.lastOut !== null && st.lastOut < (st.age === null ? 1e9 : st.age)
+                      ? " (отсчёт с последнего вывода, " + st.lastOut + " дн. назад)" : "")
+                  : ", срок прогрева уже выдержан")) + ".";
             info.className = "note" + (st.tone === "off" || st.tone === "cold" || st.tone === "wait"
               ? " pair-warn" : "");
             info.innerHTML = "<b>#" + esc(c.a.acct) + " · " + esc(c.a.siteName || c.a.site) + " — " +
@@ -2973,8 +2981,8 @@
         return "<tr><td>" + esc(TONES[t][0]) + "</td><td>" + n2 + "</td><td>" + ex +
           (n2 > 4 ? " и ещё " + (n2 - 4) : "") + "</td></tr>";
       }).join("") + "</table>" +
-      "<br>Прогретым считаю счёт от " + money(WARM_SUM) + "; моложе " + WARM_DAYS +
-      " дней — ещё в прогреве; вывод 3–4 дня назад — подряд заявки лучше не подавать." +
+      "<br>Прогретым считаю счёт от " + money(WARM_SUM) + ", у которого " + WARM_DAYS +
+      " дней не было выводов; любой вывод раньше срока обнуляет отсчёт; вывод 3–4 дня назад — подряд заявки лучше не подавать." +
       "<br>" + warmNote(sel()));
   }
 
