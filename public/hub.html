@@ -1392,19 +1392,28 @@ function renderKpis(){
   const nx=S.accounts.filter(a=>!a.error&&a.site==="nx").length;
   /* плитки идут вместе с живым счётчиком торгового дня: иначе сверху
      видна конечная цифра, а в панели «Торговый день» — текущая */
-  let balS=bal, dayS=day, plS=pl;
+  let balS=bal, dayS=day, plS=pl, waiting=false;
   const LVS=window.LV_SHOW;
   if(LVS&&LVS.on&&isFinite(LVS.shown)){
     const base=real-posted;            /* капитал без уже записанного итога дня */
     dayS=LVS.shown; plS=LVS.shown; balS=base+LVS.shown;
+  }else if(fixed){
+    /* итог дня уже записан в базе, но живой счётчик ещё не стартовал: если
+       показать сумму сразу, сверху будет конечная цифра, а в панели «Торговый
+       день» — ноль. Поэтому первые секунды держим прочерк и ждём счётчик. */
+    if(!window.__kpiWait) window.__kpiWait=Date.now();
+    if(Date.now()-window.__kpiWait<25000) waiting=true;
   }
+  const uw=v=>waiting?"—":usd(v), sw=v=>waiting?"—":sig(v);
   $("kpis").innerHTML=
-    kpi("#7C5CFF",KPI_IC.wallet,"Суммарный капитал",usd(balS),"",
+    kpi("#7C5CFF",KPI_IC.wallet,"Суммарный капитал",uw(balS),"",
         (bw+nx)+" кошельков · BullWaves "+bw+" · FxPRO "+nx)+
-    kpi("#2196B0",KPI_IC.day,"Доход за торговые сутки",sig(dayS),dayS>=0?"up":"down",
-        (dayShown()===ruToday()?"за сегодня":"за "+dayShown())+" · обе площадки")+
-    kpi("#2BA87A",KPI_IC.chart,"Результат сессий",sig(plS),plS>=0?"up":"down",
-        fixed?"итог за торговые сутки по обеим площадкам":"от старта текущих сценариев")+
+    kpi("#2196B0",KPI_IC.day,"Доход за торговые сутки",sw(dayS),dayS>=0?"up":"down",
+        waiting?"считаем ход дня…"
+          :((dayShown()===ruToday()?"за сегодня":"за "+dayShown())+" · обе площадки"))+
+    kpi("#2BA87A",KPI_IC.chart,"Результат сессий",sw(plS),plS>=0?"up":"down",
+        waiting?"считаем ход дня…"
+          :(fixed?"итог за торговые сутки по обеим площадкам":"от старта текущих сценариев"))+
     kpi("#BE8716",KPI_IC.bolt,"Подключённых аккаунтов",String(bw+nx),"",
         /* пока идёт общий сценарий, в работе весь парк — так и пишем,
            иначе плитка говорит «ни один сценарий не запущен» при 500 рабочих кошельках */
@@ -1419,7 +1428,7 @@ function renderKpis(){
     :(links%10>=2&&links%10<=4&&(links%100<10||links%100>=20)?"подключённых аккаунта":"подключённых аккаунтов");
   /* в шапке — та же цифра, что и в плитке «Суммарный капитал»: пока идёт
      торговый день, обе идут по живому счётчику, иначе они расходятся */
-  $("whoSum").textContent=usd(balS);
+  $("whoSum").textContent=uw(balS);
   const inWork=(window.LV_SHOW&&window.LV_SHOW.on)?(bw+nx):live.length;
   $("whoCnt").textContent=(bw+nx)+" кошельков · "+inWork+" в работе · прокси оплачен до "+PROXY_UNTIL;
 }

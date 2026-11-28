@@ -588,11 +588,15 @@
 
   function boot() {
     if (!build()) { setTimeout(boot, 1000); return; }
-    pull().then(function (ok) { if (ok) tick(); });
+    /* данные тянем сразу: пока счётчик не стартовал, верхние плитки стоят
+       с прочерком, и затягивать этот момент незачем */
+    pull().then(function (ok) { if (ok) tick(); else setTimeout(boot2, 1500); });
     setInterval(function () { if (!document.hidden) tick(); }, TICK_MS);
     setInterval(function () { if (!document.hidden) pull(); }, POLL_MS);
   }
+  /* вторая попытка, если первый запрос не прошёл: сервер мог быть занят */
+  function boot2() { pull().then(function (ok) { if (ok) tick(); }); }
   if (document.readyState === "loading") {
-    document.addEventListener("DOMContentLoaded", function () { setTimeout(boot, 1200); });
-  } else setTimeout(boot, 1200);
+    document.addEventListener("DOMContentLoaded", function () { setTimeout(boot, 300); });
+  } else setTimeout(boot, 300);
 })();
