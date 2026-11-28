@@ -60,11 +60,21 @@
     "#dpBox .dp-prev{margin-top:10px;font-size:13px;line-height:1.5}" +
     "#dpBox .dp-prev b{font-size:15px}";
 
+  /* дата берётся из того поля, что стоит на открытой странице */
+  function dateEl() { return el("rpDate") || el("mdDate"); }
+
   function build() {
     if (el("dpBox")) return true;
-    var anchor = el("mdRowList") || el("mdDate");
-    if (!anchor) return false;
-    var host = anchor.closest(".card") || anchor.closest("section") || anchor.parentNode;
+    /* ставим карточку в раздел «Отчёт», сразу под его шапкой: там же выбирается
+       дата, и именно туда заходят за итогом дня */
+    var host = el("rpCard");
+    var after = true;
+    if (!host) {
+      var anchor = el("mdRowList") || el("mdDate");
+      if (!anchor) return false;
+      host = anchor.closest(".card") || anchor.closest("section") || anchor.parentNode;
+      after = false;
+    }
     if (!host || !host.parentNode) return false;
 
     var st = document.createElement("style");
@@ -78,8 +88,8 @@
       '<h3 style="margin:0 0 4px">Итог дня в один клик</h3>' +
       '<div class="muted" style="font-size:12.5px;margin-bottom:10px">' +
       "Берёт вчерашний итог по каждому кошельку и пересчитывает его на заданный " +
-      "процент. Дата берётся из поля выше. Пары и пропорции между кошельками " +
-      "остаются прежними.</div>" +
+      "процент. Дата берётся из поля «Дата» на этой странице. Пары и пропорции " +
+      "между кошельками остаются прежними.</div>" +
       '<div class="dp-row">' +
         '<label>Процент к вчерашнему дню</label>' +
         '<input id="dpPct" type="text" inputmode="decimal" placeholder="например 3,2 или -4,7">' +
@@ -87,7 +97,8 @@
       "</div>" +
       '<div class="dp-say" id="dpSay"></div>' +
       '<div class="dp-prev" id="dpPrev" hidden></div>';
-    host.parentNode.insertBefore(box, host);
+    if (after) host.parentNode.insertBefore(box, host.nextSibling);
+    else host.parentNode.insertBefore(box, host);
     el("dpGo").addEventListener("click", run);
     return true;
   }
@@ -100,8 +111,8 @@
     PLAN = null;
 
     if (!key()) { say.textContent = "Сначала введите ключ администратора."; return; }
-    var iso = ((el("mdDate") || {}).value || "").trim();
-    if (!iso) { say.textContent = "Укажите дату операции в поле выше."; return; }
+    var iso = ((dateEl() || {}).value || "").trim();
+    if (!iso) { say.textContent = "Укажите дату в поле «Дата» на этой странице."; return; }
     var pct = Number(String((el("dpPct") || {}).value || "").replace(",", ".").replace("+", ""));
     if (!isFinite(pct) || pct === 0) { say.textContent = "Укажите процент, например 3,2 или -4,7"; return; }
 
